@@ -1,0 +1,18 @@
+{
+  "name": "Lingtin 桌访管理",
+  "short_name": "Lingtin",
+  "description": "智能桌访录音与数据分析系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

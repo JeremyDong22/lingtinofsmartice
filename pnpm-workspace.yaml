@@ -1,0 +1,6 @@
+# Lingtin Monorepo Workspace Configuration
+# v1.0
+
+packages:
+  - 'apps/*'
+  - 'packages/*'

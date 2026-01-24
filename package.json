@@ -1,0 +1,25 @@
+{
+  "name": "lingtinofsmartice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lingtin - Smart table visit management system for restaurants",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:web": "pnpm --filter @lingtin/web dev",
+    "dev:api": "pnpm --filter @lingtin/api dev",
+    "build": "pnpm -r run build",
+    "build:web": "pnpm --filter @lingtin/web build",
+    "build:api": "pnpm --filter @lingtin/api build",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r run clean && rm -rf node_modules",
+    "supabase:types": "supabase gen types typescript --local > packages/types/database.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
