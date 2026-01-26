@@ -1,9 +1,16 @@
 // Supabase Service - Database and Storage Client
-// v1.5 - Changed insert to upsert to prevent duplicate records
+// v1.6 - Fixed: Use China timezone (Asia/Shanghai) for visit_date instead of UTC
 
 import { Injectable, Logger } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+
+// Helper: Get current date in China timezone (Asia/Shanghai)
+function getChinaDateString(): string {
+  const now = new Date();
+  // Format as YYYY-MM-DD in China timezone
+  return now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+}
 
 // Default restaurant ID for demo/testing
 const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
@@ -85,8 +92,8 @@ export class SupabaseService {
       ? record.restaurant_id
       : DEFAULT_RESTAURANT_ID;
 
-    // Set visit_date to today if not provided
-    const visitDate = record.visit_date || new Date().toISOString().split('T')[0];
+    // Set visit_date to today in China timezone if not provided
+    const visitDate = record.visit_date || getChinaDateString();
 
     const insertRecord = {
       id: visitId,
