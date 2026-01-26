@@ -1,0 +1,117 @@
+// SWR Provider - Global data fetching configuration with localStorage persistence
+// v1.1 - Fixed auth token key to match AuthContext
+
+'use client';
+
+import { SWRConfig, Cache, State } from 'swr';
+import { ReactNode, useEffect, useState } from 'react';
+
+// Cache key for localStorage
+const CACHE_KEY = 'lingtin-swr-cache';
+
+// SWR Cache type
+type SWRCache = Cache<State<unknown, unknown>>;
+
+// Create localStorage-based cache provider for SWR persistence
+function createLocalStorageProvider(): SWRCache {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let cachedData: [string, any][] = [];
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(CACHE_KEY);
+      if (stored) {
+        cachedData = JSON.parse(stored);
+      }
+    } catch {
+      // Ignore parse errors, start fresh
+    }
+  }
+
+  const map = new Map(cachedData);
+
+  // Save to localStorage before page unload
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+      try {
+        const entries = Array.from(map.entries());
+        // Only cache dashboard-related data, limit size
+        const filteredEntries = entries.filter(([key]) =>
+          key.includes('/api/dashboard/') || key.includes('/api/audio/')
+        ).slice(0, 50);
+        localStorage.setItem(CACHE_KEY, JSON.stringify(filteredEntries));
+      } catch {
+        // Ignore storage errors
+      }
+    });
+  }
+
+  return map as SWRCache;
+}
+
+// Auth token key (must match AuthContext.tsx)
+const AUTH_TOKEN_KEY = 'lingtin_auth_token';
+
+// Global fetcher function with auth headers
+export async function fetcher<T>(url: string): Promise<T> {
+  const token = typeof window !== 'undefined'
+    ? localStorage.getItem(AUTH_TOKEN_KEY)
+    : null;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(url, { headers });
+
+  if (!res.ok) {
+    const error = new Error('API request failed');
+    (error as Error & { status: number }).status = res.status;
+    throw error;
+  }
+
+  return res.json();
+}
+
+interface SWRProviderProps {
+  children: ReactNode;
+}
+
+export function SWRProvider({ children }: SWRProviderProps) {
+  const [provider, setProvider] = useState<SWRCache | null>(null);
+
+  // Initialize provider on client side only
+  useEffect(() => {
+    setProvider(createLocalStorageProvider());
+  }, []);
+
+  // Don't render SWRConfig until provider is ready (SSR safety)
+  if (!provider) {
+    return <>{children}</>;
+  }
+
+  return (
+    <SWRConfig
+      value={{
+        provider: () => provider,
+        fetcher,
+        // Stale-while-revalidate: show cached data immediately, fetch in background
+        revalidateOnFocus: true,
+        revalidateOnReconnect: true,
+        // Deduplicate requests within 2 seconds
+        dedupingInterval: 2000,
+        // Keep previous data while loading new data (smooth transitions)
+        keepPreviousData: true,
+        // Retry on error
+        errorRetryCount: 2,
+        errorRetryInterval: 3000,
+      }}
+    >
+      {children}
+    </SWRConfig>
+  );
+}

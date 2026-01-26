@@ -1,10 +1,14 @@
 // Dashboard Page - Business metrics and analytics
-// v1.9 - Fixed date timezone issue, changed dropdown to horizontal tabs
+// v2.2 - Fixed: Popover positioning now has consistent 16px margins on both sides
+// v2.1 - Added: SWR for stale-while-revalidate caching
+//        Clickable feedback bubbles with conversation popover
+//        Hidden: Dish ranking section (marked out per user request)
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth, getAuthHeaders } from '@/contexts/AuthContext';
+import { useState, useEffect, useRef } from 'react';
+import useSWR from 'swr';
+import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 
 // Types for API responses
@@ -16,17 +20,20 @@ interface CoveragePeriod {
   status: 'good' | 'warning' | 'critical';
 }
 
-interface DishRanking {
-  dish_name: string;
-  mention_count: number;
-  positive: number;
-  negative: number;
-  neutral: number;
+// Conversation context for feedback popover
+interface FeedbackContext {
+  text: string;
+  visitId: string;
+  tableId: string;
+  managerQuestions: string[];
+  customerAnswers: string[];
+  transcript: string;
 }
 
 interface SentimentFeedback {
   text: string;
   count: number;
+  contexts?: FeedbackContext[];
 }
 
 interface SentimentSummary {
@@ -60,70 +67,62 @@ function getDateForSelection(selection: string): string {
   return `${year}-${month}-${day}`;
 }
 
+// Response types for SWR
+interface CoverageResponse {
+  periods: CoveragePeriod[];
+}
+
+interface HighlightsResponse {
+  questions: ManagerQuestion[];
+}
+
 export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState('今日');
-  const [loading, setLoading] = useState(true);
+  // State for feedback popover
+  const [selectedFeedback, setSelectedFeedback] = useState<{
+    feedback: SentimentFeedback;
+    type: 'positive' | 'negative';
+    rect: DOMRect;
+  } | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   // Get user's restaurant ID from auth context
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
 
-  // API data states
-  const [coverage, setCoverage] = useState<{ periods: CoveragePeriod[] }>({ periods: [] });
-  const [dishes, setDishes] = useState<{ dishes: DishRanking[] }>({ dishes: [] });
-  const [sentiment, setSentiment] = useState<SentimentSummary | null>(null);
-  const [managerQuestions, setManagerQuestions] = useState<ManagerQuestion[]>([]);
+  // Build query params for API calls
+  const date = getDateForSelection(selectedDate);
+  const params = restaurantId
+    ? new URLSearchParams({ restaurant_id: restaurantId, date }).toString()
+    : null;
 
-  // Fetch all dashboard data
+  // SWR hooks for data fetching with stale-while-revalidate
+  const { data: coverageData, isLoading: coverageLoading } = useSWR<CoverageResponse>(
+    params ? `/api/dashboard/coverage?${params}` : null
+  );
+  const { data: sentimentData, isLoading: sentimentLoading } = useSWR<SentimentSummary>(
+    params ? `/api/dashboard/sentiment-summary?${params}` : null
+  );
+  const { data: highlightsData, isLoading: highlightsLoading } = useSWR<HighlightsResponse>(
+    params ? `/api/dashboard/speech-highlights?${params}` : null
+  );
+
+  // Derived data with defaults
+  const coverage = coverageData ?? { periods: [] };
+  const sentiment = sentimentData ?? null;
+  const managerQuestions = highlightsData?.questions ?? [];
+  const loading = coverageLoading || sentimentLoading || highlightsLoading;
+
+  // Close popover when clicking outside
   useEffect(() => {
-    const fetchData = async () => {
-      if (!restaurantId) return;
-
-      setLoading(true);
-      const date = getDateForSelection(selectedDate);
-      const params = new URLSearchParams({
-        restaurant_id: restaurantId,
-        date,
-      });
-
-      try {
-        const headers = getAuthHeaders();
-        // Fetch all data in parallel
-        const [coverageRes, dishesRes, sentimentRes, highlightsRes] = await Promise.all([
-          fetch(`/api/dashboard/coverage?${params}`, { headers }),
-          fetch(`/api/dashboard/dish-ranking?${params}&limit=5`, { headers }),
-          fetch(`/api/dashboard/sentiment-summary?${params}`, { headers }),
-          fetch(`/api/dashboard/speech-highlights?${params}`, { headers }),
-        ]);
-
-        if (coverageRes.ok) {
-          const data = await coverageRes.json();
-          setCoverage(data);
-        }
-
-        if (dishesRes.ok) {
-          const data = await dishesRes.json();
-          setDishes(data);
-        }
-
-        if (sentimentRes.ok) {
-          const data = await sentimentRes.json();
-          setSentiment(data);
-        }
-
-        if (highlightsRes.ok) {
-          const data = await highlightsRes.json();
-          setManagerQuestions(data.questions || []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-      } finally {
-        setLoading(false);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setSelectedFeedback(null);
       }
     };
-
-    fetchData();
-  }, [selectedDate, restaurantId]);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -217,40 +216,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Dish Ranking */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">菜品提及 TOP 5</h2>
-          <div className="space-y-3">
-            {dishes.dishes.length === 0 && !loading && (
-              <div className="text-center py-4 text-gray-400">暂无数据</div>
-            )}
-            {dishes.dishes.map((dish, i) => (
-              <div
-                key={dish.dish_name}
-                className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg w-6">
-                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
-                  </span>
-                  <div>
-                    <span className="text-gray-900 font-medium">{dish.dish_name}</span>
-                    <span className="text-gray-400 text-xs ml-2">
-                      {dish.mention_count}次提及
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="text-green-600">{dish.positive}👍</span>
-                  {dish.negative > 0 && (
-                    <span className="text-red-500">{dish.negative}👎</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Sentiment Summary */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h2 className="text-sm font-medium text-gray-700 mb-3">情绪概览</h2>
@@ -289,9 +254,13 @@ export default function DashboardPage() {
                       <div className="text-xs text-gray-500 mb-2">正面评价</div>
                       <div className="flex flex-wrap gap-1.5">
                         {sentiment.positive_feedbacks.map((fb: SentimentFeedback, i: number) => (
-                          <span
+                          <button
                             key={i}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700"
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setSelectedFeedback({ feedback: fb, type: 'positive', rect });
+                            }}
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 hover:bg-green-100 hover:ring-2 hover:ring-green-300 transition-all cursor-pointer"
                             style={{
                               fontSize: `${Math.min(12 + fb.count * 2, 16)}px`,
                               opacity: Math.max(0.6, 1 - i * 0.1),
@@ -301,7 +270,7 @@ export default function DashboardPage() {
                             {fb.count > 1 && (
                               <span className="ml-1 text-green-500">×{fb.count}</span>
                             )}
-                          </span>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -313,9 +282,13 @@ export default function DashboardPage() {
                       <div className="text-xs text-gray-500 mb-2">负面评价</div>
                       <div className="flex flex-wrap gap-1.5">
                         {sentiment.negative_feedbacks.map((fb: SentimentFeedback, i: number) => (
-                          <span
+                          <button
                             key={i}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-600"
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setSelectedFeedback({ feedback: fb, type: 'negative', rect });
+                            }}
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-600 hover:bg-red-100 hover:ring-2 hover:ring-red-300 transition-all cursor-pointer"
                             style={{
                               fontSize: `${Math.min(12 + fb.count * 2, 16)}px`,
                               opacity: Math.max(0.6, 1 - i * 0.1),
@@ -325,7 +298,7 @@ export default function DashboardPage() {
                             {fb.count > 1 && (
                               <span className="ml-1 text-red-400">×{fb.count}</span>
                             )}
-                          </span>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -359,6 +332,98 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+
+      {/* Feedback Conversation Popover */}
+      {selectedFeedback && (
+        <div
+          ref={popoverRef}
+          className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 max-w-sm animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            top: Math.min(selectedFeedback.rect.bottom + 8, window.innerHeight - 300),
+            // Ensure 16px margin on both left and right (max-w-sm = 384px)
+            left: Math.max(16, Math.min(selectedFeedback.rect.left, window.innerWidth - 384 - 16)),
+          }}
+        >
+          {/* Close button */}
+          <button
+            onClick={() => setSelectedFeedback(null)}
+            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* Header with feedback text highlighted */}
+          <div className={`inline-block px-2 py-1 rounded-full text-sm font-medium mb-3 ${
+            selectedFeedback.type === 'positive'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-red-100 text-red-700'
+          }`}>
+            {selectedFeedback.feedback.text}
+          </div>
+
+          {/* Conversation contexts */}
+          {selectedFeedback.feedback.contexts && selectedFeedback.feedback.contexts.length > 0 ? (
+            <div className="space-y-3 max-h-60 overflow-y-auto">
+              {selectedFeedback.feedback.contexts.map((ctx, idx) => (
+                <div key={idx} className="border-l-2 border-gray-200 pl-3">
+                  <div className="text-xs text-gray-400 mb-1">{ctx.tableId}桌</div>
+
+                  {/* Manager question */}
+                  {ctx.managerQuestions.length > 0 && (
+                    <div className="mb-2">
+                      <div className="text-xs text-blue-500 mb-0.5">店长:</div>
+                      <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-2 py-1">
+                        {ctx.managerQuestions.join(' ')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer answer with keyword highlighted */}
+                  {ctx.customerAnswers.length > 0 && (
+                    <div>
+                      <div className="text-xs text-gray-500 mb-0.5">顾客:</div>
+                      <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-2 py-1">
+                        {ctx.customerAnswers.map((answer, ansIdx) => {
+                          // Highlight the feedback keyword in the answer
+                          const keyword = selectedFeedback.feedback.text;
+                          const parts = answer.split(new RegExp(`(${keyword})`, 'gi'));
+                          return (
+                            <span key={ansIdx}>
+                              {parts.map((part, partIdx) =>
+                                part.toLowerCase() === keyword.toLowerCase() ? (
+                                  <mark
+                                    key={partIdx}
+                                    className={`px-0.5 rounded ${
+                                      selectedFeedback.type === 'positive'
+                                        ? 'bg-green-200'
+                                        : 'bg-red-200'
+                                    }`}
+                                  >
+                                    {part}
+                                  </mark>
+                                ) : (
+                                  <span key={partIdx}>{part}</span>
+                                )
+                              )}
+                              {ansIdx < ctx.customerAnswers.length - 1 && ' '}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400 text-center py-2">
+              暂无对话详情
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
