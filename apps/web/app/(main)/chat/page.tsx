@@ -13,10 +13,10 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const quickQuestions = [
-    '今天投诉最多的菜',
-    '本周情绪最低的桌',
-    '退菜原因分析',
-    '午市覆盖率如何',
+    '最近有哪些客诉',
+    '员工都问了哪些问题',
+    '每天桌访情况如何',
+    '客人对菜品评价如何',
   ];
 
   // Auto-scroll to bottom when new messages arrive
