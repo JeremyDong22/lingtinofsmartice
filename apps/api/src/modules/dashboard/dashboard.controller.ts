@@ -1,5 +1,5 @@
 // Dashboard Controller - API endpoints for analytics
-// v1.0
+// v1.1 - Added sentiment summary and speech highlights endpoints
 
 import { Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
@@ -43,6 +43,30 @@ export class DashboardController {
     return this.dashboardService.getSentimentTrend(
       restaurantId,
       parseInt(days || '7', 10),
+    );
+  }
+
+  // GET /api/dashboard/sentiment-summary
+  @Get('sentiment-summary')
+  async getSentimentSummary(
+    @Query('restaurant_id') restaurantId: string,
+    @Query('date') date?: string,
+  ) {
+    return this.dashboardService.getSentimentSummary(
+      restaurantId,
+      date || new Date().toISOString().split('T')[0],
+    );
+  }
+
+  // GET /api/dashboard/speech-highlights
+  @Get('speech-highlights')
+  async getSpeechHighlights(
+    @Query('restaurant_id') restaurantId: string,
+    @Query('date') date?: string,
+  ) {
+    return this.dashboardService.getSpeechHighlights(
+      restaurantId,
+      date || new Date().toISOString().split('T')[0],
     );
   }
 }

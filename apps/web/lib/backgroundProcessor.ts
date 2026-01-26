@@ -1,12 +1,17 @@
 // Background Processor - Handles async upload and AI pipeline
-// v1.3 - Added: retryPendingFromDatabase() to recover interrupted processing on page load
+// v1.5 - Added: Request timeouts, better error handling
 
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
+import { getAuthHeaders } from '@/contexts/AuthContext';
 
 interface ProcessingCallbacks {
   onStatusChange: (id: string, status: RecordingStatus, data?: Partial<Recording>) => void;
   onError: (id: string, error: string) => void;
 }
+
+// Timeout constants
+const UPLOAD_TIMEOUT_MS = 30000;   // 30 seconds for upload
+const PROCESS_TIMEOUT_MS = 120000; // 2 minutes for AI processing
 
 // Logger prefix for easy filtering
 const LOG_PREFIX = '[Lingtin Pipeline]';
@@ -17,6 +22,26 @@ function log(message: string, data?: unknown) {
 
 function logError(message: string, error?: unknown) {
   console.error(`${LOG_PREFIX} ERROR: ${message}`, error || '');
+}
+
+// Fetch with timeout
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // Convert base64 to Blob
@@ -36,10 +61,12 @@ function base64ToBlob(base64: string): Blob {
 
 export async function processRecordingInBackground(
   recording: Recording,
-  callbacks: ProcessingCallbacks
+  callbacks: ProcessingCallbacks,
+  restaurantId?: string
 ) {
   const { id, tableId, audioData } = recording;
   const startTime = Date.now();
+  const authHeaders = getAuthHeaders();
 
   log(`Starting pipeline for recording ${id} (table: ${tableId})`);
 
@@ -61,13 +88,16 @@ export async function processRecordingInBackground(
     formData.append('file', audioBlob, `${tableId}_${Date.now()}.webm`);
     formData.append('table_id', tableId);
     formData.append('recording_id', id);
-    formData.append('restaurant_id', 'demo-restaurant-id');
+    if (restaurantId) {
+      formData.append('restaurant_id', restaurantId);
+    }
 
     const uploadStartTime = Date.now();
-    const uploadResponse = await fetch('/api/audio/upload', {
+    const uploadResponse = await fetchWithTimeout('/api/audio/upload', {
       method: 'POST',
+      headers: authHeaders,
       body: formData,
-    });
+    }, UPLOAD_TIMEOUT_MS);
 
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();
@@ -87,16 +117,16 @@ export async function processRecordingInBackground(
     const processStartTime = Date.now();
     // Use visit_id (UUID from database) instead of frontend recording ID
     // This ensures the AI results can be saved to the correct database record
-    const processResponse = await fetch('/api/audio/process', {
+    const processResponse = await fetchWithTimeout('/api/audio/process', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         recording_id: uploadResult.visit_id,
         audio_url: uploadResult.audioUrl,
         table_id: tableId,
-        restaurant_id: 'demo-restaurant-id',
+        restaurant_id: restaurantId,
       }),
-    });
+    }, PROCESS_TIMEOUT_MS);
 
     if (!processResponse.ok) {
       const errorText = await processResponse.text();
@@ -126,7 +156,14 @@ export async function processRecordingInBackground(
     });
 
   } catch (error) {
-    const message = error instanceof Error ? error.message : '处理失败';
+    let message = '处理失败';
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        message = '请求超时，请检查网络后重试';
+      } else {
+        message = error.message;
+      }
+    }
     logError(`Pipeline failed for ${id}`, error);
     callbacks.onError(id, message);
     callbacks.onStatusChange(id, 'error', { errorMessage: message });
@@ -155,10 +192,13 @@ export async function retryPendingFromDatabase(
 
   let processed = 0;
   let failed = 0;
+  const authHeaders = getAuthHeaders();
 
   try {
     // Fetch pending records from API
-    const response = await fetch('/api/audio/pending');
+    const response = await fetchWithTimeout('/api/audio/pending', {
+      headers: authHeaders,
+    }, UPLOAD_TIMEOUT_MS);
 
     if (!response.ok) {
       logError(`Failed to fetch pending records: ${response.status}`);
@@ -181,16 +221,16 @@ export async function retryPendingFromDatabase(
         log(`Processing pending record: ${record.id} (table: ${record.table_id})`);
         onProgress?.(`正在处理 ${record.table_id} 桌录音...`);
 
-        const processResponse = await fetch('/api/audio/process', {
+        const processResponse = await fetchWithTimeout('/api/audio/process', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({
             recording_id: record.id,
             audio_url: record.audio_url,
             table_id: record.table_id,
-            restaurant_id: record.restaurant_id || 'demo-restaurant-id',
+            restaurant_id: record.restaurant_id,
           }),
-        });
+        }, PROCESS_TIMEOUT_MS);
 
         if (processResponse.ok) {
           log(`Successfully processed: ${record.id}`);

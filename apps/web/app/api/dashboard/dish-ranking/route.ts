@@ -1,5 +1,5 @@
 // Dashboard Dish Ranking API Route - Proxy to NestJS backend
-// v1.2 - Fixed restaurant ID to match backend default
+// v1.3 - Added: Forward Authorization header for authentication
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -13,13 +13,20 @@ export async function GET(request: NextRequest) {
     const restaurantId = searchParams.get('restaurant_id') || DEMO_RESTAURANT_ID;
     const date = searchParams.get('date');
     const limit = searchParams.get('limit') || '5';
+    const authHeader = request.headers.get('Authorization');
 
     const url = new URL(`${API_URL}/api/dashboard/dish-ranking`);
     url.searchParams.set('restaurant_id', restaurantId);
     url.searchParams.set('limit', limit);
     if (date) url.searchParams.set('date', date);
 
-    const response = await fetch(url.toString());
+    // Build headers with auth
+    const headers: HeadersInit = {};
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+
+    const response = await fetch(url.toString(), { headers });
 
     if (!response.ok) {
       return NextResponse.json(

@@ -1,8 +1,9 @@
 // Root Layout
-// v1.0
+// v1.1 - Added AuthProvider for authentication
 
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 export const metadata: Metadata = {
   title: 'Lingtin 桌访管理',
@@ -33,7 +34,9 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
       </head>
-      <body className="min-h-screen bg-gray-50">{children}</body>
+      <body className="min-h-screen bg-gray-50">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

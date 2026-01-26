@@ -1,5 +1,5 @@
 // Recording Store - Local-first storage with background sync
-// v1.0 - Manages recordings in localStorage with status tracking
+// v1.1 - Added: localStorage quota handling, error callbacks, cleanup on quota exceeded
 
 import { useState, useEffect, useCallback } from 'react';
 
@@ -40,12 +40,56 @@ function getStoredRecordings(): Recording[] {
   }
 }
 
-// Helper: Save recordings to localStorage
-function saveRecordings(recordings: Recording[]) {
-  if (typeof window === 'undefined') return;
+// Helper: Save recordings to localStorage with quota handling
+function saveRecordings(recordings: Recording[]): { success: boolean; error?: string } {
+  if (typeof window === 'undefined') return { success: true };
+
   // Keep only recent recordings to manage storage
-  const trimmed = recordings.slice(0, MAX_LOCAL_RECORDINGS);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  let trimmed = recordings.slice(0, MAX_LOCAL_RECORDINGS);
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    return { success: true };
+  } catch (error) {
+    // Handle quota exceeded error
+    if (error instanceof DOMException && (
+      error.code === 22 || // Legacy quota exceeded
+      error.code === 1014 || // Firefox quota exceeded
+      error.name === 'QuotaExceededError' ||
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    )) {
+      console.warn('[RecordingStore] localStorage quota exceeded, cleaning up old data');
+
+      // Strategy 1: Remove audioData from completed recordings
+      trimmed = trimmed.map(rec =>
+        rec.status === 'completed' && rec.audioUrl
+          ? { ...rec, audioData: undefined }
+          : rec
+      );
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+        return { success: true };
+      } catch {
+        // Strategy 2: Keep only the most recent 5 recordings
+        console.warn('[RecordingStore] Still over quota, keeping only 5 recent recordings');
+        trimmed = trimmed.slice(0, 5);
+
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+          return { success: true };
+        } catch {
+          // Strategy 3: Clear all and save only the newest
+          console.error('[RecordingStore] Critical: clearing all recordings');
+          localStorage.removeItem(STORAGE_KEY);
+          return { success: false, error: '存储空间不足，已清理旧录音' };
+        }
+      }
+    }
+
+    console.error('[RecordingStore] Failed to save:', error);
+    return { success: false, error: '保存失败' };
+  }
 }
 
 // Helper: Convert Blob to Base64

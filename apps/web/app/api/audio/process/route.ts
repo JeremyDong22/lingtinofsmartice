@@ -1,5 +1,5 @@
 // Audio Processing API Route - Orchestrates STT and AI tagging pipeline
-// v1.0 - Integrates 讯飞 STT + Gemini (via PackyAPI) for correction/tagging
+// v1.1 - Added: Forward Authorization header for authentication
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -9,11 +9,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { recording_id, audio_url, table_id, restaurant_id } = body;
+    const authHeader = request.headers.get('Authorization');
+
+    // Build headers with auth
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
 
     // Forward to NestJS backend for processing
     const response = await fetch(`${API_URL}/api/audio/process`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         recording_id,
         audio_url,

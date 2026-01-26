@@ -1,5 +1,5 @@
 // Chat API Route - Streaming proxy to NestJS backend
-// v1.1 - Added debug logging for troubleshooting
+// v1.2 - Added: Forward Authorization header for authentication
 
 import { NextRequest } from 'next/server';
 
@@ -12,16 +12,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { message, restaurant_id, session_id } = body;
+    const authHeader = request.headers.get('Authorization');
 
     console.log('[Chat Route] Request body:', { message, restaurant_id, session_id });
+
+    // Build headers with auth
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
 
     // Create streaming response from backend
     console.log('[Chat Route] Calling backend:', `${API_URL}/api/chat/message`);
     const response = await fetch(`${API_URL}/api/chat/message`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         message,
         restaurant_id: restaurant_id || 'demo-restaurant-id',

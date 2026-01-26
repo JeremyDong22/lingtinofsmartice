@@ -1,5 +1,5 @@
 // Chat Service - AI assistant with tool use for database queries
-// v2.2 - Updated schema with new structured labels (dishes, service, other)
+// v2.4 - Enhanced SQL validation to prevent injection attacks
 // IMPORTANT: Never return raw_transcript to avoid context explosion
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -131,6 +131,10 @@ export class ChatService {
         iteration++;
         this.logger.log(`[Iteration ${iteration}] Calling Claude API...`);
 
+        // Send thinking status to client before API call
+        const thinkingMessage = iteration === 1 ? '正在思考...' : '正在整理答案...';
+        res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingMessage })}\n\n`);
+
         const response = await this.callClaudeAPI(systemPrompt, messages);
 
         if (!response.choices || response.choices.length === 0) {
@@ -154,6 +158,20 @@ export class ChatService {
 
           // Process each tool call
           for (const toolCall of assistantMessage.tool_calls) {
+            // Parse tool arguments to get purpose for thinking status
+            let thinkingStatus = '正在查询数据...';
+            try {
+              const args = JSON.parse(toolCall.function.arguments);
+              if (args.purpose) {
+                thinkingStatus = `正在${args.purpose.slice(0, 20)}...`;
+              }
+            } catch {
+              // Use default thinking status
+            }
+
+            // Send thinking status BEFORE executing tool
+            res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingStatus })}\n\n`);
+
             const result = await this.executeToolCall(toolCall, restaurantId);
 
             // Add tool result to messages
@@ -163,7 +181,7 @@ export class ChatService {
               content: JSON.stringify(result),
             });
 
-            // Stream a status update to the client
+            // Stream a status update to the client (tool completed)
             res.write(`data: ${JSON.stringify({
               type: 'tool_use',
               tool: toolCall.function.name,
@@ -284,20 +302,45 @@ export class ChatService {
 
   /**
    * Execute SQL query against the database
+   * Security: Only allows read-only SELECT queries on allowed tables
    */
   private async executeQuery(sql: string, restaurantId: string): Promise<any[]> {
-    // Security: Only allow SELECT queries
-    const normalizedSql = sql.trim().toLowerCase();
-    if (!normalizedSql.startsWith('select')) {
+    // Normalize SQL for validation
+    const normalizedSql = sql.trim().toLowerCase().replace(/\s+/g, ' ');
+
+    // Security: Only allow SELECT queries (must start with SELECT)
+    if (!normalizedSql.startsWith('select ')) {
       throw new Error('Only SELECT queries are allowed');
     }
 
-    // Security: Block dangerous keywords
-    const dangerousKeywords = ['drop', 'delete', 'update', 'insert', 'alter', 'truncate', 'grant', 'revoke'];
+    // Security: Block dangerous keywords that could modify data or schema
+    const dangerousKeywords = [
+      'drop', 'delete', 'update', 'insert', 'alter', 'truncate',
+      'grant', 'revoke', 'create', 'exec', 'execute', 'call',
+      'into', 'set', 'merge', 'replace', 'upsert',
+      'pg_', 'information_schema', 'pg_catalog',
+      '--', '/*', '*/', ';', 'union all select',
+    ];
     for (const keyword of dangerousKeywords) {
       if (normalizedSql.includes(keyword)) {
         throw new Error(`Query contains forbidden keyword: ${keyword}`);
       }
+    }
+
+    // Security: Only allow queries on specific tables
+    const allowedTables = ['lingtin_visit_records', 'lingtin_dish_mentions', 'lingtin_table_sessions'];
+    const tablePattern = /from\s+([a-z_]+)/gi;
+    const matches = [...sql.matchAll(tablePattern)];
+    for (const match of matches) {
+      const tableName = match[1].toLowerCase();
+      if (!allowedTables.includes(tableName)) {
+        throw new Error(`Query on table '${tableName}' is not allowed. Allowed tables: ${allowedTables.join(', ')}`);
+      }
+    }
+
+    // Security: Block subqueries that might access other tables
+    if ((normalizedSql.match(/select/g) || []).length > 1) {
+      throw new Error('Subqueries are not allowed for security reasons');
     }
 
     const client = this.supabase.getClient();

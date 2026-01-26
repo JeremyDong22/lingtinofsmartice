@@ -1,5 +1,5 @@
 // Dashboard Speech Highlights API Route - Proxy to NestJS backend
-// v1.1 - Fixed restaurant ID to match backend default
+// v1.2 - Added: Forward Authorization header for authentication
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -12,12 +12,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const restaurantId = searchParams.get('restaurant_id') || DEMO_RESTAURANT_ID;
     const date = searchParams.get('date');
+    const authHeader = request.headers.get('Authorization');
 
     const url = new URL(`${API_URL}/api/dashboard/speech-highlights`);
     url.searchParams.set('restaurant_id', restaurantId);
     if (date) url.searchParams.set('date', date);
 
-    const response = await fetch(url.toString());
+    // Build headers with auth
+    const headers: HeadersInit = {};
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+
+    const response = await fetch(url.toString(), { headers });
 
     if (!response.ok) {
       return NextResponse.json(

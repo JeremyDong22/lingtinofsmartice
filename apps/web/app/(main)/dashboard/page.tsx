@@ -1,9 +1,10 @@
 // Dashboard Page - Business metrics and analytics
-// v1.2 - Fixed restaurant ID to match backend default
+// v1.3 - Added Authorization header for authenticated API calls
 
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getAuthHeaders } from '@/contexts/AuthContext';
 
 // Must match DEFAULT_RESTAURANT_ID in backend supabase.service.ts
 const DEMO_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
@@ -79,12 +80,13 @@ export default function DashboardPage() {
       });
 
       try {
+        const headers = getAuthHeaders();
         // Fetch all data in parallel
         const [coverageRes, dishesRes, sentimentRes, highlightsRes] = await Promise.all([
-          fetch(`/api/dashboard/coverage?${params}`),
-          fetch(`/api/dashboard/dish-ranking?${params}&limit=5`),
-          fetch(`/api/dashboard/sentiment-summary?${params}`),
-          fetch(`/api/dashboard/speech-highlights?${params}`),
+          fetch(`/api/dashboard/coverage?${params}`, { headers }),
+          fetch(`/api/dashboard/dish-ranking?${params}&limit=5`, { headers }),
+          fetch(`/api/dashboard/sentiment-summary?${params}`, { headers }),
+          fetch(`/api/dashboard/speech-highlights?${params}`, { headers }),
         ]);
 
         if (coverageRes.ok) {

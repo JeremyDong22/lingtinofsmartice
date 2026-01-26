@@ -1,11 +1,12 @@
 // Recorder Page - Store manager records table visits with local-first approach
-// v2.1 - Added: Auto-retry pending records from database on page load
+// v2.2 - Added: Auth context integration, pass restaurantId to background processor
 
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useRecordingStore } from '@/hooks/useRecordingStore';
+import { useAuth } from '@/contexts/AuthContext';
 import { TableSelector } from '@/components/recorder/TableSelector';
 import { WaveformVisualizer } from '@/components/recorder/WaveformVisualizer';
 import { RecordButton } from '@/components/recorder/RecordButton';
@@ -23,6 +24,9 @@ export default function RecorderPage() {
   const [tableId, setTableId] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
+
+  const { user } = useAuth();
+  const restaurantId = user?.restaurantId;
 
   const [recorderState, recorderActions] = useAudioRecorder();
   const { isRecording, duration, audioBlob, error, analyserData } = recorderState;
@@ -100,7 +104,7 @@ export default function RecorderPage() {
           onError: (id, errorMsg) => {
             console.error(`Recording ${id} failed:`, errorMsg);
           },
-        });
+        }, restaurantId);
       };
 
       processAsync();
@@ -123,7 +127,7 @@ export default function RecorderPage() {
           showToast('重试失败', 'error');
           console.error(`Recording ${recId} retry failed:`, errorMsg);
         },
-      });
+      }, restaurantId);
     }
   }, [recordings, updateRecording, showToast]);
 

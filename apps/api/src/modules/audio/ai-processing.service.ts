@@ -1,5 +1,5 @@
 // AI Processing Service - Handles STT and AI tagging pipeline
-// v3.0 - Simplified MVP: 5 dimensions only (summary, sentiment, keywords, manager_questions, customer_answers)
+// v3.1 - Added: Duplicate processing prevention with status check and lock
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -22,6 +22,8 @@ interface ProcessingResult {
 @Injectable()
 export class AiProcessingService {
   private readonly logger = new Logger(AiProcessingService.name);
+  // In-memory lock to prevent concurrent processing of the same recording
+  private processingLocks = new Set<string>();
 
   constructor(
     private readonly supabase: SupabaseService,
@@ -30,6 +32,7 @@ export class AiProcessingService {
 
   /**
    * Main processing pipeline
+   * Includes duplicate prevention: checks status and uses in-memory lock
    */
   async processAudio(
     recordingId: string,
@@ -37,47 +40,116 @@ export class AiProcessingService {
     tableId: string,
     restaurantId: string,
   ): Promise<ProcessingResult> {
-    const startTime = Date.now();
-    this.logger.log(`========== PIPELINE START ==========`);
-    this.logger.log(`Recording: ${recordingId} | Table: ${tableId}`);
-    this.logger.log(`Audio URL: ${audioUrl}`);
+    // Check if already being processed (in-memory lock)
+    if (this.processingLocks.has(recordingId)) {
+      this.logger.warn(`Recording ${recordingId} is already being processed (locked)`);
+      throw new Error('Recording is already being processed');
+    }
 
-    // Step 1: Get dish names for correction reference
-    this.logger.log(`[Step 1/4] Loading dish names...`);
-    const dishNames = await this.getDishNames(restaurantId);
-    this.logger.log(`[Step 1/4] Loaded ${dishNames.length} dish names`);
+    // Check database status to prevent re-processing completed records
+    const currentStatus = await this.getRecordingStatus(recordingId);
+    if (currentStatus === 'processed' || currentStatus === 'processing') {
+      this.logger.warn(`Recording ${recordingId} already has status: ${currentStatus}`);
+      throw new Error(`Recording already ${currentStatus}`);
+    }
 
-    // Step 2: Speech-to-Text (讯飞)
-    this.logger.log(`[Step 2/4] Starting STT (讯飞)...`);
-    const sttStart = Date.now();
-    const rawTranscript = await this.transcribeAudio(audioUrl);
-    this.logger.log(`[Step 2/4] STT complete in ${Date.now() - sttStart}ms`);
-    this.logger.log(`[Step 2/4] Transcript: "${rawTranscript}"`);
+    // Acquire lock
+    this.processingLocks.add(recordingId);
+    this.logger.log(`Lock acquired for recording ${recordingId}`);
 
-    // Step 3: Correction + Tagging (Gemini)
-    this.logger.log(`[Step 3/4] Starting Gemini AI processing...`);
-    const aiStart = Date.now();
-    const aiResult = await this.processWithGemini(rawTranscript, dishNames);
-    this.logger.log(`[Step 3/4] Gemini complete in ${Date.now() - aiStart}ms`);
-    this.logger.log(`[Step 3/4] Summary: "${aiResult.aiSummary}"`);
-    this.logger.log(`[Step 3/4] Score: ${aiResult.sentimentScore}, Keywords: ${aiResult.keywords.length}`);
+    try {
+      // Update status to 'processing' in database
+      await this.updateRecordingStatus(recordingId, 'processing');
 
-    // Step 4: Save results to database
-    this.logger.log(`[Step 4/4] Saving to database...`);
-    await this.saveResults(recordingId, {
-      rawTranscript,
-      ...aiResult,
-    });
-    this.logger.log(`[Step 4/4] Saved successfully`);
+      const startTime = Date.now();
+      this.logger.log(`========== PIPELINE START ==========`);
+      this.logger.log(`Recording: ${recordingId} | Table: ${tableId}`);
+      this.logger.log(`Audio URL: ${audioUrl}`);
 
-    const totalTime = Date.now() - startTime;
-    this.logger.log(`========== PIPELINE COMPLETE ==========`);
-    this.logger.log(`Total time: ${totalTime}ms`);
+      // Step 1: Get dish names for correction reference
+      this.logger.log(`[Step 1/4] Loading dish names...`);
+      const dishNames = await this.getDishNames(restaurantId);
+      this.logger.log(`[Step 1/4] Loaded ${dishNames.length} dish names`);
 
-    return {
-      transcript: rawTranscript,
-      ...aiResult,
-    };
+      // Step 2: Speech-to-Text (讯飞)
+      this.logger.log(`[Step 2/4] Starting STT (讯飞)...`);
+      const sttStart = Date.now();
+      const rawTranscript = await this.transcribeAudio(audioUrl);
+      this.logger.log(`[Step 2/4] STT complete in ${Date.now() - sttStart}ms`);
+      this.logger.log(`[Step 2/4] Transcript: "${rawTranscript}"`);
+
+      // Step 3: Correction + Tagging (Gemini)
+      this.logger.log(`[Step 3/4] Starting Gemini AI processing...`);
+      const aiStart = Date.now();
+      const aiResult = await this.processWithGemini(rawTranscript, dishNames);
+      this.logger.log(`[Step 3/4] Gemini complete in ${Date.now() - aiStart}ms`);
+      this.logger.log(`[Step 3/4] Summary: "${aiResult.aiSummary}"`);
+      this.logger.log(`[Step 3/4] Score: ${aiResult.sentimentScore}, Keywords: ${aiResult.keywords.length}`);
+
+      // Step 4: Save results to database
+      this.logger.log(`[Step 4/4] Saving to database...`);
+      await this.saveResults(recordingId, {
+        rawTranscript,
+        ...aiResult,
+      });
+      this.logger.log(`[Step 4/4] Saved successfully`);
+
+      const totalTime = Date.now() - startTime;
+      this.logger.log(`========== PIPELINE COMPLETE ==========`);
+      this.logger.log(`Total time: ${totalTime}ms`);
+
+      return {
+        transcript: rawTranscript,
+        ...aiResult,
+      };
+    } finally {
+      // Always release lock when done
+      this.processingLocks.delete(recordingId);
+      this.logger.log(`Lock released for recording ${recordingId}`);
+    }
+  }
+
+  /**
+   * Get current status of a recording from database
+   */
+  private async getRecordingStatus(recordingId: string): Promise<string | null> {
+    if (this.supabase.isMockMode()) {
+      return null;
+    }
+
+    const client = this.supabase.getClient();
+    const { data, error } = await client
+      .from('lingtin_visit_records')
+      .select('status')
+      .eq('id', recordingId)
+      .single();
+
+    if (error) {
+      this.logger.warn(`Failed to get status for ${recordingId}: ${error.message}`);
+      return null;
+    }
+
+    return data?.status || null;
+  }
+
+  /**
+   * Update recording status in database
+   */
+  private async updateRecordingStatus(recordingId: string, status: string): Promise<void> {
+    if (this.supabase.isMockMode()) {
+      this.logger.log(`[MOCK] Would update status to ${status} for ${recordingId}`);
+      return;
+    }
+
+    const client = this.supabase.getClient();
+    const { error } = await client
+      .from('lingtin_visit_records')
+      .update({ status })
+      .eq('id', recordingId);
+
+    if (error) {
+      this.logger.error(`Failed to update status for ${recordingId}: ${error.message}`);
+    }
   }
 
   /**

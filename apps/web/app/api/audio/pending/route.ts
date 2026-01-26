@@ -1,15 +1,23 @@
 // Audio Pending API Route - Get pending records for recovery after page refresh
-// v1.0 - Fetches pending records from backend for automatic retry
+// v1.1 - Added: Forward Authorization header for authentication
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const authHeader = request.headers.get('Authorization');
+
+    // Build headers with auth
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+
     const response = await fetch(`${API_URL}/api/audio/pending`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
     });
 
     if (!response.ok) {

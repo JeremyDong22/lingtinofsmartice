@@ -1,13 +1,15 @@
 // Chat Stream Hook - Handle streaming chat responses with session persistence
-// v1.2 - Added sessionStorage persistence for tab switching
+// v1.4 - Added Authorization header for authenticated API calls
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { getAuthHeaders } from '@/contexts/AuthContext';
 
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   isStreaming?: boolean;
+  thinkingStatus?: string;  // 显示思考步骤，如 "正在查询数据库..."
 }
 
 interface UseChatStreamReturn {
@@ -114,7 +116,10 @@ export function useChatStream(): UseChatStreamReturn {
       console.log('[useChatStream] Sending fetch to /api/chat');
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           message: content,
           restaurant_id: '684f98e6-293a-4362-a0e1-e388483bf89c', // Demo restaurant with test data
@@ -169,11 +174,28 @@ export function useChatStream(): UseChatStreamReturn {
             try {
               const parsed = JSON.parse(data);
               console.log('[useChatStream] Parsed data:', parsed);
-              if (parsed.type === 'text') {
+
+              if (parsed.type === 'thinking') {
+                // Update thinking status (shown while AI is processing)
+                setMessages(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, thinkingStatus: parsed.content }
+                    : msg
+                ));
+              } else if (parsed.type === 'tool_use') {
+                // Tool is being used, show status
+                const toolName = parsed.tool === 'query_database' ? '查询数据库' : parsed.tool;
+                setMessages(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, thinkingStatus: `正在${toolName}...` }
+                    : msg
+                ));
+              } else if (parsed.type === 'text') {
+                // Clear thinking status when actual content arrives
                 fullContent += parsed.content;
                 setMessages(prev => prev.map(msg =>
                   msg.id === assistantMessageId
-                    ? { ...msg, content: fullContent }
+                    ? { ...msg, content: fullContent, thinkingStatus: undefined }
                     : msg
                 ));
               } else if (parsed.type === 'error') {
