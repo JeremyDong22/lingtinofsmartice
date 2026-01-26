@@ -1,4 +1,5 @@
 // Chat Page - AI-powered analytics assistant with streaming support
+// v2.2 - Added: Gray italic style for stopped messages
 // v2.1 - Fixed: Remove query param from URL after processing to prevent re-send on refresh
 // v2.0 - Fixed: Wait for hook initialization before processing URL query parameter
 // v1.9 - Added: Support for pre-filled question via URL query parameter (?q=...)
@@ -118,6 +119,9 @@ export default function ChatPage() {
               ) : msg.thinkingStatus ? (
                 // Show thinking status with animated indicator
                 <ThinkingIndicator status={msg.thinkingStatus} />
+              ) : msg.isStopped ? (
+                // Stopped message - same style as ThinkingIndicator
+                <div className="text-gray-500 text-sm">{msg.content}</div>
               ) : msg.content ? (
                 <MarkdownRenderer content={msg.content} />
               ) : msg.isStreaming ? (

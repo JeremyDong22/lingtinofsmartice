@@ -1,4 +1,5 @@
 // Chat Stream Hook - Handle streaming chat responses with session persistence
+// v2.2 - Fixed: Clear thinkingStatus when stopping request, show "被打断" message
 // v2.1 - Exposed isInitialized to fix race condition with URL query parameters
 // v2.0 - Added retry functionality for failed messages
 
@@ -12,6 +13,7 @@ export interface Message {
   isStreaming?: boolean;
   thinkingStatus?: string;  // 显示思考步骤，如 "正在查询数据库..."
   isError?: boolean;        // 标记错误消息，显示重试按钮
+  isStopped?: boolean;      // 标记被用户停止的消息，显示灰色
   originalQuestion?: string; // 保存原始问题用于重试
 }
 
@@ -259,10 +261,10 @@ export function useChatStream(): UseChatStreamReturn {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    // Mark any streaming message as stopped
+    // Mark any streaming message as stopped and clear thinking status
     setMessages(prev => prev.map(msg =>
       msg.isStreaming
-        ? { ...msg, isStreaming: false, content: msg.content || '(已停止)' }
+        ? { ...msg, isStreaming: false, thinkingStatus: undefined, isStopped: true, content: msg.content || '停止了思考。' }
         : msg
     ));
     setIsLoading(false);
