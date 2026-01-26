@@ -1,5 +1,5 @@
 // Chat Page - AI-powered analytics assistant with streaming support
-// v1.6 - Added stop button to cancel ongoing requests
+// v1.8 - Added retry button for failed messages
 
 'use client';
 
@@ -10,15 +10,15 @@ import { ThinkingIndicator } from '@/components/chat/ThinkingIndicator';
 import { UserMenu } from '@/components/layout/UserMenu';
 
 export default function ChatPage() {
-  const { messages, isLoading, sendMessage, stopRequest, clearMessages } = useChatStream();
+  const { messages, isLoading, sendMessage, retryMessage, stopRequest, clearMessages } = useChatStream();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const quickQuestions = [
-    '最近有哪些客诉',
-    '员工都问了哪些问题',
-    '每天桌访情况如何',
-    '客人对菜品评价如何',
+    '这周桌访覆盖率怎么样',
+    '顾客对菜品有什么反馈',
+    '最近有哪些需要改进的地方',
+    '店长都在问什么问题',
   ];
 
   // Auto-scroll to bottom when new messages arrive
@@ -75,6 +75,18 @@ export default function ChatPage() {
               {/* User messages: plain text, Assistant messages: markdown rendered */}
               {msg.role === 'user' ? (
                 <div className="whitespace-pre-wrap">{msg.content}</div>
+              ) : msg.isError ? (
+                // Error message with retry button
+                <div className="space-y-2">
+                  <div className="text-red-600">{msg.content}</div>
+                  <button
+                    onClick={() => retryMessage(msg.id)}
+                    disabled={isLoading}
+                    className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
+                  >
+                    重试
+                  </button>
+                </div>
               ) : msg.thinkingStatus ? (
                 // Show thinking status with animated indicator
                 <ThinkingIndicator status={msg.thinkingStatus} />

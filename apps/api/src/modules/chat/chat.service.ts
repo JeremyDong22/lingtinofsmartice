@@ -1,5 +1,5 @@
 // Chat Service - AI assistant with tool use for database queries
-// v2.8 - Fixed: AI can now access conversation history for context
+// v3.0 - Versatile prompt: combine multiple fields intelligently, guide insights
 // IMPORTANT: Never return raw_transcript to avoid context explosion
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -10,53 +10,66 @@ import { SupabaseService } from '../../common/supabase/supabase.service';
 const PACKY_API_URL = 'https://www.packyapi.com/v1/chat/completions';
 
 // System prompt for the AI assistant
-const SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析助手。
+const SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析助手，帮助餐厅老板洞察桌访数据。
 
-## 核心原则：先理解用户意图
+## 核心原则：理解用户意图
 收到问题后，**先判断用户真正想问什么**：
-- 如果是闲聊、打招呼、问你是谁 → 直接回答，不查数据库
-- 你可以访问对话历史，如果用户问之前聊过的内容（如"我叫什么"、"我刚说了啥"），请根据对话历史回答
-- **只有当用户明确问桌访数据、菜品反馈、顾客评价、服务质量等业务问题时**，才使用 query_database 工具
+- 闲聊、打招呼、问你是谁 → 直接回答，不查数据库
+- 问之前聊过的内容（如"我叫什么"）→ 根据对话历史回答
+- **业务问题**（桌访、菜品、顾客、服务等）→ 使用 query_database 工具
 
-## 你的能力
-你可以使用 query_database 工具查询以下数据表：
+## 数据库字段（内部使用，绝不向用户暴露）
+**lingtin_visit_records** 表：
+- table_id: 桌号（A1, B3, D5）
+- ai_summary: 20字摘要
+- sentiment_score: 情绪分 0-1（0=极差, 1=极好）
+- feedbacks: JSONB数组，每条含 text + sentiment(positive/negative/neutral)
+- manager_questions: 店长问的话（数组）
+- customer_answers: 顾客回答（数组）
+- visit_date, created_at: 时间
 
-1. **lingtin_visit_records** - 桌访录音记录
-   - id, restaurant_id, table_id
-   - corrected_transcript (纠偏后的文本)
-   - ai_summary (AI生成的20字摘要)
-   - sentiment_score (0-1, 越高越正面)
-   - visit_type: routine/complaint/praise
-   - dishes (JSONB): 菜品数组 [{name, sentiment, keywords}]
-   - service (JSONB): 服务关键词数组 ["态度好", "上菜慢"]
-   - other (JSONB): 其他关键词数组 ["老顾客", "推荐朋友"]
-   - status, created_at, processed_at
+**lingtin_dish_mentions** 表：
+- dish_name: 菜品名
+- sentiment: positive/negative/neutral
+- feedback_text: 具体评价
 
-2. **lingtin_dish_mentions** - 菜品提及记录（向后兼容）
-   - id, visit_id, dish_name
-   - sentiment: positive/negative/neutral
-   - feedback_text, created_at
+## 智能回答策略（重要！）
+根据问题类型，**组合多个字段**给出有洞察力的回答：
+
+**问覆盖率/统计** → 查 COUNT + visit_date，给出趋势分析
+**问菜品反馈** → 查 lingtin_dish_mentions，按好评/差评分类总结
+**问顾客满意度** → 结合 sentiment_score + feedbacks，给出整体画像
+**问店长话术** → 分析 manager_questions，找出高频问题和优秀示范
+**问顾客心声** → 分析 customer_answers，提炼共性需求
+**问问题/投诉** → 筛选 sentiment='negative' 的 feedbacks，给改进建议
+**问摘要/概况** → 用 ai_summary 快速了解每桌情况
 
 ## 查询规范
-1. **永远不要查询 raw_transcript 字段** - 它太大会导致上下文爆炸
-2. 使用 ai_summary 和 corrected_transcript 替代
-3. 优先使用 dishes, service, other JSONB 字段进行分析
-4. 限制返回行数，使用 LIMIT 10-20
-5. 只选择需要的列，不要 SELECT *
+1. **永远不要查询 raw_transcript** - 太大会崩溃
+2. 限制返回行数 LIMIT 10-20
+3. 按时间倒序 ORDER BY created_at DESC
 
-## 回答规范
-1. 收到问题后，先思考需要查询什么数据
-2. 使用 query_database 工具执行 SQL 查询
-3. 根据查询结果，用自然语言总结发现
-4. 引用具体的桌号、菜品名、时间作为证据
-5. 如有负面反馈，主动给出改进建议
-6. 保持简洁，重点突出
+## 回答规范（非常重要）
+1. **像跟老板聊天一样**，自然、简洁、有洞察
+2. **绝对不暴露技术细节**：
+   - ❌ "sentiment_score 是 0.85" → ✅ "顾客非常满意"
+   - ❌ "1.0分" → ✅ "好评如潮"
+   - ❌ "negative sentiment" → ✅ "有些不满"
+   - ❌ 提及 restaurant_id、JSONB、visit_type 等术语
+3. **情绪分口语化**：
+   - 0.8-1.0 → 非常满意/好评如潮
+   - 0.6-0.8 → 比较满意/整体不错
+   - 0.4-0.6 → 一般/中规中矩
+   - 0.2-0.4 → 不太满意/有待改进
+   - 0-0.2 → 很不满意/需要重视
+4. **引用证据**：桌号、菜品名、顾客原话
+5. **主动给建议**：发现问题时，提出可行的改进方向
+6. **数据驱动**：用具体数字说话（X桌、X条反馈、X%好评）
 
-## 诚实原则（非常重要）
-1. **如果查询失败或返回错误**，必须告诉用户"查询遇到问题"，不要编造数据
-2. **如果数据量异常少**（如问"每天多少桌访"但只查到几条记录），主动说明"数据可能不完整"
-3. **永远不要编造数字**，所有统计数据必须来自查询结果
-4. 如果不确定，说"根据现有数据..."而不是给出绝对结论
+## 诚实原则
+- 查询失败 → "查询遇到问题，请稍后再试"
+- 数据少 → "目前数据量较少，仅供参考"
+- 不确定 → 如实说明，不编造数字
 
 ## 当前上下文
 - 餐厅ID: {{RESTAURANT_ID}}
@@ -113,13 +126,7 @@ export class ChatService {
     history: Array<{ role: string; content: string }> | undefined,
     res: Response,
   ) {
-    console.log('\n========== CHAT SERVICE DEBUG ==========');
-    console.log('[CHAT] Message:', message);
-    console.log('[CHAT] Restaurant ID:', restaurantId);
-    console.log('[CHAT] History length:', history?.length || 0);
-    this.logger.log(`streamResponse called`);
-    this.logger.log(`message: ${message}`);
-    this.logger.log(`restaurantId: ${restaurantId}`);
+this.logger.log(`Chat request: ${message.slice(0, 50)}...`);
 
     const currentDate = new Date().toISOString().split('T')[0];
     const systemPrompt = SYSTEM_PROMPT
@@ -145,8 +152,7 @@ export class ChatService {
       messages.push({ role: 'user', content: message });
     }
 
-    console.log('[CHAT] Final messages count:', messages.length);
-    console.log('[CHAT] Messages:', messages.map(m => `${m.role}: ${m.content.slice(0, 30)}...`));
+this.logger.log(`Messages in context: ${messages.length}`);
 
     try {
       // Agentic loop: keep calling API until we get a final response (no tool calls)
@@ -294,33 +300,23 @@ export class ChatService {
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     const { name, arguments: argsJson } = toolCall.function;
 
-    console.log('\n---------- TOOL CALL ----------');
-    console.log('[TOOL] Name:', name);
-    console.log('[TOOL] Arguments:', argsJson);
-    this.logger.log(`Executing tool: ${name}`);
-    this.logger.log(`Arguments: ${argsJson}`);
+this.logger.log(`Executing tool: ${name}`);
 
     try {
       const args = JSON.parse(argsJson);
 
       if (name === 'query_database') {
         const { sql, purpose } = args;
-        console.log('[TOOL] Purpose:', purpose);
-        console.log('[TOOL] SQL:', sql);
-        this.logger.log(`[query_database] Purpose: ${purpose}`);
-        this.logger.log(`[query_database] SQL: ${sql}`);
+        this.logger.log(`[query_database] ${purpose}`);
 
         const result = await this.executeQuery(sql, restaurantId);
-        console.log('[TOOL] Result rows:', result?.length || 0);
-        console.log('[TOOL] Result data:', JSON.stringify(result, null, 2));
-        this.logger.log(`[query_database] Result rows: ${result?.length || 0}`);
+        this.logger.log(`[query_database] Returned ${result?.length || 0} rows`);
 
         return { success: true, data: result };
       }
 
       return { success: false, error: `Unknown tool: ${name}` };
     } catch (error) {
-      console.log('[TOOL] ERROR:', error.message);
       this.logger.error(`Tool execution error: ${error.message}`);
       return { success: false, error: error.message };
     }
@@ -387,29 +383,22 @@ export class ChatService {
       }
     }
 
-    console.log('[QUERY] Modified SQL:', modifiedSql);
-    this.logger.log(`[executeQuery] Modified SQL: ${modifiedSql}`);
+    this.logger.log(`[executeQuery] SQL: ${modifiedSql.slice(0, 100)}...`);
 
     // Execute the query using Supabase's raw SQL capability
-    // Note: In production, use a more secure approach like parameterized queries
-    console.log('[QUERY] Calling RPC execute_readonly_query...');
     const { data, error } = await client.rpc('execute_readonly_query', {
       query_text: modifiedSql,
     });
 
     if (error) {
       // If RPC doesn't exist, try direct query on the table
-      console.log('[QUERY] RPC FAILED:', error.message);
-      console.log('[QUERY] Falling back to direct query...');
       this.logger.warn(`RPC failed: ${error.message}, trying direct query`);
 
       // Parse the SQL to extract table and conditions for Supabase query builder
-      // For now, let's try a simpler approach using raw fetch
       const result = await this.executeDirectQuery(modifiedSql, client);
       return result;
     }
 
-    console.log('[QUERY] RPC SUCCESS! Data:', JSON.stringify(data, null, 2));
     return data || [];
   }
 

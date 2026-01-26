@@ -1,5 +1,5 @@
 // Chat Stream Hook - Handle streaming chat responses with session persistence
-// v1.8 - Fix: build history BEFORE setMessages to avoid async state issues
+// v2.0 - Added retry functionality for failed messages
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getAuthHeaders, useAuth } from '@/contexts/AuthContext';
@@ -10,6 +10,8 @@ export interface Message {
   content: string;
   isStreaming?: boolean;
   thinkingStatus?: string;  // 显示思考步骤，如 "正在查询数据库..."
+  isError?: boolean;        // 标记错误消息，显示重试按钮
+  originalQuestion?: string; // 保存原始问题用于重试
 }
 
 interface UseChatStreamReturn {
@@ -17,6 +19,7 @@ interface UseChatStreamReturn {
   isLoading: boolean;
   error: string | null;
   sendMessage: (content: string) => Promise<void>;
+  retryMessage: (messageId: string) => Promise<void>;
   stopRequest: () => void;
   clearMessages: () => void;
 }
@@ -87,17 +90,12 @@ export function useChatStream(): UseChatStreamReturn {
   }, [messages, isInitialized]);
 
   const sendMessage = useCallback(async (content: string) => {
-    console.log('[useChatStream] sendMessage called with:', content);
-    console.log('[useChatStream] isLoading:', isLoading);
-
     if (!content.trim() || isLoading) {
-      console.log('[useChatStream] Early return - empty content or loading');
       return;
     }
 
     // Cancel any ongoing request
     if (abortControllerRef.current) {
-      console.log('[useChatStream] Aborting previous request');
       abortControllerRef.current.abort();
     }
 
@@ -110,15 +108,6 @@ export function useChatStream(): UseChatStreamReturn {
       ...previousMessages.slice(-9).map(msg => ({ role: msg.role, content: msg.content })),
       { role: 'user' as const, content }  // Include current message
     ];
-
-    // Debug log: show how many messages are being sent
-    console.log('========== CHAT HISTORY DEBUG ==========');
-    console.log(`Total messages in history: ${historyMessages.length}`);
-    historyMessages.forEach((msg, i) => {
-      const preview = msg.content.length > 50 ? msg.content.slice(0, 50) + '...' : msg.content;
-      console.log(`  [${i + 1}] ${msg.role}: "${preview}"`);
-    });
-    console.log('=========================================');
 
     const userMessageId = `user-${Date.now()}`;
     const assistantMessageId = `assistant-${Date.now()}`;
@@ -144,7 +133,6 @@ export function useChatStream(): UseChatStreamReturn {
     try {
       abortControllerRef.current = new AbortController();
 
-      console.log('[useChatStream] Sending fetch to /api/chat with history:', historyMessages.length);
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -159,34 +147,23 @@ export function useChatStream(): UseChatStreamReturn {
         signal: abortControllerRef.current.signal,
       });
 
-      console.log('[useChatStream] Response status:', response.status);
-      console.log('[useChatStream] Response ok:', response.ok);
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[useChatStream] Response error:', errorText);
         throw new Error('请求失败，请稍后重试');
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        console.error('[useChatStream] No reader available');
         throw new Error('无法读取响应');
       }
 
-      console.log('[useChatStream] Starting to read stream');
       const decoder = new TextDecoder();
       let fullContent = '';
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-          console.log('[useChatStream] Stream done');
-          break;
-        }
+        if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-        console.log('[useChatStream] Received chunk:', chunk);
         const lines = chunk.split('\n');
 
         for (const line of lines) {
@@ -194,7 +171,6 @@ export function useChatStream(): UseChatStreamReturn {
             const data = line.slice(6);
 
             if (data === '[DONE]') {
-              console.log('[useChatStream] Received [DONE]');
               setMessages(prev => prev.map(msg =>
                 msg.id === assistantMessageId
                   ? { ...msg, isStreaming: false }
@@ -205,7 +181,6 @@ export function useChatStream(): UseChatStreamReturn {
 
             try {
               const parsed = JSON.parse(data);
-              console.log('[useChatStream] Parsed data:', parsed);
 
               if (parsed.type === 'thinking') {
                 // Update thinking status (shown while AI is processing)
@@ -231,37 +206,35 @@ export function useChatStream(): UseChatStreamReturn {
                     : msg
                 ));
               } else if (parsed.type === 'error') {
-                console.error('[useChatStream] Error from server:', parsed.content);
                 throw new Error(parsed.content);
               }
             } catch (e) {
               // Skip invalid JSON lines
-              if (data.trim()) {
-                console.log('[useChatStream] Failed to parse:', data);
-              }
             }
           }
         }
       }
     } catch (err) {
-      console.error('[useChatStream] Catch block error:', err);
-
       if (err instanceof Error && err.name === 'AbortError') {
-        console.log('[useChatStream] Request was aborted');
         return;
       }
 
       const errorMessage = err instanceof Error ? err.message : '发生未知错误';
       setError(errorMessage);
 
-      // Update assistant message with error
+      // Update assistant message with error and store original question for retry
       setMessages(prev => prev.map(msg =>
         msg.id === assistantMessageId
-          ? { ...msg, content: `抱歉，${errorMessage}`, isStreaming: false }
+          ? {
+              ...msg,
+              content: `抱歉，${errorMessage}`,
+              isStreaming: false,
+              isError: true,
+              originalQuestion: content,
+            }
           : msg
       ));
     } finally {
-      console.log('[useChatStream] Finally block');
       setIsLoading(false);
       abortControllerRef.current = null;
     }
@@ -293,11 +266,33 @@ export function useChatStream(): UseChatStreamReturn {
     setIsLoading(false);
   }, []);
 
+  // Retry a failed message - removes the error message and its user question, then resends
+  const retryMessage = useCallback(async (messageId: string) => {
+    const errorMsg = messagesRef.current.find(m => m.id === messageId);
+    if (!errorMsg?.originalQuestion || isLoading) return;
+
+    const question = errorMsg.originalQuestion;
+
+    // Remove the failed assistant message and its preceding user message
+    setMessages(prev => {
+      const errorIndex = prev.findIndex(m => m.id === messageId);
+      if (errorIndex === -1) return prev;
+      // Remove both the user message (errorIndex - 1) and the error message (errorIndex)
+      return prev.filter((_, i) => i !== errorIndex && i !== errorIndex - 1);
+    });
+
+    // Wait for state update, then resend
+    setTimeout(() => {
+      sendMessage(question);
+    }, 50);
+  }, [isLoading, sendMessage]);
+
   return {
     messages,
     isLoading,
     error,
     sendMessage,
+    retryMessage,
     stopRequest,
     clearMessages,
   };
