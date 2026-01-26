@@ -1,16 +1,22 @@
 // Chat Page - AI-powered analytics assistant with streaming support
+// v2.1 - Fixed: Remove query param from URL after processing to prevent re-send on refresh
+// v2.0 - Fixed: Wait for hook initialization before processing URL query parameter
+// v1.9 - Added: Support for pre-filled question via URL query parameter (?q=...)
 // v1.8 - Added retry button for failed messages
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useChatStream } from '@/hooks/useChatStream';
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ThinkingIndicator } from '@/components/chat/ThinkingIndicator';
 import { UserMenu } from '@/components/layout/UserMenu';
 
 export default function ChatPage() {
-  const { messages, isLoading, sendMessage, retryMessage, stopRequest, clearMessages } = useChatStream();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { messages, isLoading, isInitialized, sendMessage, retryMessage, stopRequest, clearMessages } = useChatStream();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -25,6 +31,28 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Handle pre-filled question from URL query parameter
+  // Use sessionStorage to track processed queries to prevent re-send on refresh
+  useEffect(() => {
+    const queryQuestion = searchParams.get('q');
+    if (!queryQuestion || !isInitialized || isLoading) return;
+
+    // Check if we've already processed this exact query
+    const processedKey = 'lingtin_processed_query';
+    const lastProcessed = sessionStorage.getItem(processedKey);
+
+    if (lastProcessed === queryQuestion) {
+      // Already processed this query, just clean up the URL
+      router.replace('/chat', { scroll: false });
+      return;
+    }
+
+    // Mark as processed and send the message
+    sessionStorage.setItem(processedKey, queryQuestion);
+    router.replace('/chat', { scroll: false });
+    sendMessage(queryQuestion);
+  }, [searchParams, isLoading, isInitialized, sendMessage, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

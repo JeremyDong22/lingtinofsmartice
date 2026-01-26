@@ -1,4 +1,5 @@
 // Chat Stream Hook - Handle streaming chat responses with session persistence
+// v2.1 - Exposed isInitialized to fix race condition with URL query parameters
 // v2.0 - Added retry functionality for failed messages
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -17,6 +18,7 @@ export interface Message {
 interface UseChatStreamReturn {
   messages: Message[];
   isLoading: boolean;
+  isInitialized: boolean;  // True when messages have been loaded from storage
   error: string | null;
   sendMessage: (content: string) => Promise<void>;
   retryMessage: (messageId: string) => Promise<void>;
@@ -290,6 +292,7 @@ export function useChatStream(): UseChatStreamReturn {
   return {
     messages,
     isLoading,
+    isInitialized,
     error,
     sendMessage,
     retryMessage,
