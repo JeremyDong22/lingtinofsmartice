@@ -1,5 +1,5 @@
 // Audio Recorder Hook - Handle browser audio recording
-// v1.1 - Fixed duplicate start/stop calls and added guards
+// v1.4 - Slowed down waveform animation with throttle (update every 50ms instead of every frame)
 
 'use client';
 
@@ -43,6 +43,12 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
   // Guard against duplicate calls using ref (survives across renders)
   const isStartingRef = useRef<boolean>(false);
   const isStoppingRef = useRef<boolean>(false);
+  // Use refs for animation loop to avoid stale closure issues
+  const isRecordingRef = useRef<boolean>(false);
+  const isPausedRef = useRef<boolean>(false);
+  // Throttle waveform updates for smoother animation
+  const lastUpdateTimeRef = useRef<number>(0);
+  const WAVEFORM_UPDATE_INTERVAL = 50; // Update every 50ms (20fps) instead of every frame (60fps)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -62,15 +68,26 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
     };
   }, []);
 
-  // Update analyser data for visualization
-  const updateAnalyserData = useCallback(() => {
-    if (analyserRef.current && isRecording && !isPaused) {
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-      analyserRef.current.getByteFrequencyData(dataArray);
-      setAnalyserData(dataArray);
-      animationFrameRef.current = requestAnimationFrame(updateAnalyserData);
-    }
-  }, [isRecording, isPaused]);
+  // Animation loop for waveform visualization (uses refs to avoid stale closures)
+  // Uses getByteTimeDomainData for evenly distributed amplitude data (not frequency)
+  // Throttled to 20fps for smoother, slower animation
+  const startVisualization = useCallback(() => {
+    const updateAnalyserData = (timestamp: number) => {
+      if (analyserRef.current && isRecordingRef.current && !isPausedRef.current) {
+        // Throttle updates to slow down the animation
+        if (timestamp - lastUpdateTimeRef.current >= WAVEFORM_UPDATE_INTERVAL) {
+          lastUpdateTimeRef.current = timestamp;
+          const dataArray = new Uint8Array(analyserRef.current.fftSize);
+          // Use time domain data (amplitude over time) instead of frequency data
+          // This gives evenly distributed values across the array
+          analyserRef.current.getByteTimeDomainData(dataArray);
+          setAnalyserData(dataArray);
+        }
+        animationFrameRef.current = requestAnimationFrame(updateAnalyserData);
+      }
+    };
+    animationFrameRef.current = requestAnimationFrame(updateAnalyserData);
+  }, []);
 
   const startRecording = useCallback(async () => {
     // Guard against duplicate starts
@@ -124,6 +141,10 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(100); // Collect data every 100ms
 
+      // Update refs BEFORE state (refs are synchronous)
+      isRecordingRef.current = true;
+      isPausedRef.current = false;
+
       setIsRecording(true);
       setIsPaused(false);
       startTimeRef.current = Date.now();
@@ -133,15 +154,15 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
         setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
 
-      // Start visualization
-      updateAnalyserData();
+      // Start visualization (now refs are already set)
+      startVisualization();
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法访问麦克风');
       console.error('Recording error:', err);
     } finally {
       isStartingRef.current = false;
     }
-  }, [updateAnalyserData]);
+  }, [startVisualization]);
 
   const stopRecording = useCallback(() => {
     // Guard against duplicate stops using ref (more reliable than state)
@@ -157,6 +178,10 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
     }
 
     isStoppingRef.current = true;
+
+    // Update refs
+    isRecordingRef.current = false;
+    isPausedRef.current = false;
 
     // Stop MediaRecorder
     mediaRecorder.stop();
@@ -193,6 +218,7 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording && !isPaused) {
       mediaRecorderRef.current.pause();
+      isPausedRef.current = true;
       setIsPaused(true);
 
       if (animationFrameRef.current) {
@@ -204,10 +230,11 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
   const resumeRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording && isPaused) {
       mediaRecorderRef.current.resume();
+      isPausedRef.current = false;
       setIsPaused(false);
-      updateAnalyserData();
+      startVisualization();
     }
-  }, [isRecording, isPaused, updateAnalyserData]);
+  }, [isRecording, isPaused, startVisualization]);
 
   const resetRecording = useCallback(() => {
     setAudioBlob(null);
