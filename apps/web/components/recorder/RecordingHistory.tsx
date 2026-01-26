@@ -1,5 +1,5 @@
 // Recording History Component - Display list of recordings with status
-// v1.1 - Added left-swipe to delete (localStorage only, database unaffected)
+// v1.2 - Database sync: delete now removes from database, added pending/processed status
 
 'use client';
 
@@ -29,11 +29,14 @@ function formatDuration(seconds: number): string {
 }
 
 // Status badge component
+// v1.2 - Added pending and processed status types for database sync
 function StatusBadge({ status }: { status: RecordingStatus }) {
   const config: Record<RecordingStatus, { text: string; className: string }> = {
     saved: { text: '已保存', className: 'bg-gray-100 text-gray-600' },
     uploading: { text: '上传中...', className: 'bg-blue-100 text-blue-600' },
+    pending: { text: '待处理', className: 'bg-gray-100 text-gray-600' },
     processing: { text: '处理中...', className: 'bg-yellow-100 text-yellow-600' },
+    processed: { text: '已完成', className: 'bg-green-100 text-green-600' },
     completed: { text: '已完成', className: 'bg-green-100 text-green-600' },
     error: { text: '失败', className: 'bg-red-100 text-red-600' },
   };

@@ -1,5 +1,5 @@
 // Supabase Service - Database and Storage Client
-// v1.4 - Added UUID validation and visit_date handling
+// v1.5 - Changed insert to upsert to prevent duplicate records
 
 import { Injectable, Logger } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -110,9 +110,10 @@ export class SupabaseService {
       };
     }
 
+    // Use upsert to prevent duplicate records when the same recording is uploaded multiple times
     const { data, error } = await this.client!
       .from('lingtin_visit_records')
-      .insert(insertRecord)
+      .upsert(insertRecord, { onConflict: 'id' })
       .select()
       .single();
 

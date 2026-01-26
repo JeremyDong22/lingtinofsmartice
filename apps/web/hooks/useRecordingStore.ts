@@ -1,13 +1,16 @@
-// Recording Store - Local-first storage with background sync
-// v1.2 - Added: getRecordingsNeedingRetry for upload recovery on page reload
+// Recording Store - Database as single source of truth
+// v2.0 - Sync with database: fetch on load, delete calls API
 
 import { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '@/contexts/AuthContext';
 
 export type RecordingStatus =
-  | 'saved'        // Saved to localStorage
+  | 'saved'        // Saved to localStorage (not yet uploaded)
   | 'uploading'    // Uploading to cloud storage
+  | 'pending'      // Uploaded, waiting for AI processing
   | 'processing'   // AI pipeline running
-  | 'completed'    // Fully processed
+  | 'processed'    // Fully processed (database status)
+  | 'completed'    // Alias for processed (frontend display)
   | 'error';       // Processing failed
 
 export interface Recording {
@@ -16,7 +19,7 @@ export interface Recording {
   duration: number;
   timestamp: number;
   status: RecordingStatus;
-  audioData?: string;        // Base64 encoded audio (localStorage)
+  audioData?: string;        // Base64 encoded audio (localStorage only)
   audioUrl?: string;         // Cloud storage URL (after upload)
   transcript?: string;       // Raw STT result
   correctedTranscript?: string;
@@ -26,69 +29,28 @@ export interface Recording {
   errorMessage?: string;
 }
 
-const STORAGE_KEY = 'lingtin_recordings';
+const LOCAL_STORAGE_KEY = 'lingtin_recordings_local';
 const MAX_LOCAL_RECORDINGS = 20;
 
-// Helper: Get recordings from localStorage
-function getStoredRecordings(): Recording[] {
+// Helper: Get local-only recordings (not yet uploaded)
+function getLocalRecordings(): Recording[] {
   if (typeof window === 'undefined') return [];
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch {
     return [];
   }
 }
 
-// Helper: Save recordings to localStorage with quota handling
-function saveRecordings(recordings: Recording[]): { success: boolean; error?: string } {
-  if (typeof window === 'undefined') return { success: true };
-
-  // Keep only recent recordings to manage storage
-  let trimmed = recordings.slice(0, MAX_LOCAL_RECORDINGS);
-
+// Helper: Save local-only recordings
+function saveLocalRecordings(recordings: Recording[]): void {
+  if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-    return { success: true };
+    const trimmed = recordings.slice(0, MAX_LOCAL_RECORDINGS);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(trimmed));
   } catch (error) {
-    // Handle quota exceeded error
-    if (error instanceof DOMException && (
-      error.code === 22 || // Legacy quota exceeded
-      error.code === 1014 || // Firefox quota exceeded
-      error.name === 'QuotaExceededError' ||
-      error.name === 'NS_ERROR_DOM_QUOTA_REACHED'
-    )) {
-      console.warn('[RecordingStore] localStorage quota exceeded, cleaning up old data');
-
-      // Strategy 1: Remove audioData from completed recordings
-      trimmed = trimmed.map(rec =>
-        rec.status === 'completed' && rec.audioUrl
-          ? { ...rec, audioData: undefined }
-          : rec
-      );
-
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-        return { success: true };
-      } catch {
-        // Strategy 2: Keep only the most recent 5 recordings
-        console.warn('[RecordingStore] Still over quota, keeping only 5 recent recordings');
-        trimmed = trimmed.slice(0, 5);
-
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-          return { success: true };
-        } catch {
-          // Strategy 3: Clear all and save only the newest
-          console.error('[RecordingStore] Critical: clearing all recordings');
-          localStorage.removeItem(STORAGE_KEY);
-          return { success: false, error: '存储空间不足，已清理旧录音' };
-        }
-      }
-    }
-
-    console.error('[RecordingStore] Failed to save:', error);
-    return { success: false, error: '保存失败' };
+    console.error('[RecordingStore] Failed to save local recordings:', error);
   }
 }
 
@@ -102,17 +64,69 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export function useRecordingStore() {
+// Convert database record to Recording format
+function dbRecordToRecording(dbRecord: {
+  id: string;
+  table_id: string;
+  status: string;
+  ai_summary?: string;
+  sentiment_score?: number;
+  created_at: string;
+}): Recording {
+  return {
+    id: dbRecord.id,
+    tableId: dbRecord.table_id,
+    duration: 0,
+    timestamp: new Date(dbRecord.created_at).getTime(),
+    status: dbRecord.status === 'processed' ? 'completed' : dbRecord.status as RecordingStatus,
+    aiSummary: dbRecord.ai_summary,
+    sentimentScore: dbRecord.sentiment_score,
+  };
+}
+
+export function useRecordingStore(restaurantId?: string) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load recordings from localStorage on mount
+  // Fetch today's recordings from database on mount
   useEffect(() => {
-    setRecordings(getStoredRecordings());
-    setIsLoading(false);
-  }, []);
+    const fetchFromDatabase = async () => {
+      if (!restaurantId) {
+        setIsLoading(false);
+        return;
+      }
 
-  // Save a new recording (local first)
+      try {
+        const response = await fetch(`/api/audio/today?restaurant_id=${restaurantId}`, {
+          headers: getAuthHeaders(),
+        });
+
+        if (response.ok) {
+          const { records } = await response.json();
+          const dbRecordings = records.map(dbRecordToRecording);
+
+          // Merge with local recordings (not yet uploaded)
+          const localRecs = getLocalRecordings();
+          const localNotUploaded = localRecs.filter(
+            r => r.status === 'saved' || r.status === 'uploading'
+          );
+
+          // Combine: local not-uploaded + database records
+          setRecordings([...localNotUploaded, ...dbRecordings]);
+        }
+      } catch (error) {
+        console.error('[RecordingStore] Failed to fetch from database:', error);
+        // Fallback to local storage
+        setRecordings(getLocalRecordings());
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFromDatabase();
+  }, [restaurantId]);
+
+  // Save a new recording (local first, before upload)
   const saveRecording = useCallback(async (
     tableId: string,
     duration: number,
@@ -121,7 +135,7 @@ export function useRecordingStore() {
     const audioData = await blobToBase64(audioBlob);
 
     const newRecording: Recording = {
-      id: `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `rec_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       tableId,
       duration,
       timestamp: Date.now(),
@@ -131,14 +145,16 @@ export function useRecordingStore() {
 
     setRecordings(prev => {
       const updated = [newRecording, ...prev];
-      saveRecordings(updated);
+      // Save to local storage (only local recordings)
+      const localRecs = updated.filter(r => r.status === 'saved' || r.status === 'uploading');
+      saveLocalRecordings(localRecs);
       return updated;
     });
 
     return newRecording;
   }, []);
 
-  // Update recording status
+  // Update recording status (called during processing)
   const updateRecording = useCallback((
     id: string,
     updates: Partial<Recording>
@@ -147,7 +163,9 @@ export function useRecordingStore() {
       const updated = prev.map(rec =>
         rec.id === id ? { ...rec, ...updates } : rec
       );
-      saveRecordings(updated);
+      // Update local storage for local recordings
+      const localRecs = updated.filter(r => r.status === 'saved' || r.status === 'uploading');
+      saveLocalRecordings(localRecs);
       return updated;
     });
   }, []);
@@ -159,33 +177,31 @@ export function useRecordingStore() {
     return recordings.filter(rec => rec.timestamp >= today.getTime());
   }, [recordings]);
 
-  // Delete a recording
-  const deleteRecording = useCallback((id: string) => {
+  // Delete a recording (calls API to delete from database)
+  const deleteRecording = useCallback(async (id: string) => {
+    // Optimistically remove from UI
     setRecordings(prev => {
       const updated = prev.filter(rec => rec.id !== id);
-      saveRecordings(updated);
+      const localRecs = updated.filter(r => r.status === 'saved' || r.status === 'uploading');
+      saveLocalRecordings(localRecs);
       return updated;
     });
+
+    // Call API to delete from database (if it's a database record)
+    try {
+      await fetch(`/api/audio/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+    } catch (error) {
+      console.error('[RecordingStore] Failed to delete from database:', error);
+    }
   }, []);
 
-  // Clear audio data from completed recordings (save space)
-  const cleanupAudioData = useCallback(() => {
-    setRecordings(prev => {
-      const updated = prev.map(rec =>
-        rec.status === 'completed' && rec.audioUrl
-          ? { ...rec, audioData: undefined }
-          : rec
-      );
-      saveRecordings(updated);
-      return updated;
-    });
-  }, []);
-
-  // Get recordings that need retry (uploading or saved with audioData)
-  // These are recordings that were interrupted during upload
+  // Get recordings that need retry (saved or uploading with audioData)
   const getRecordingsNeedingRetry = useCallback(() => {
     return recordings.filter(rec =>
-      (rec.status === 'uploading' || rec.status === 'saved') && rec.audioData
+      (rec.status === 'saved' || rec.status === 'uploading') && rec.audioData
     );
   }, [recordings]);
 
@@ -196,7 +212,6 @@ export function useRecordingStore() {
     updateRecording,
     getTodayRecordings,
     deleteRecording,
-    cleanupAudioData,
     getRecordingsNeedingRetry,
   };
 }

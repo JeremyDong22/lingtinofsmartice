@@ -1,5 +1,5 @@
 // Dashboard Service - Analytics business logic
-// v1.2 - Fixed status filter: use 'processed' instead of 'completed'
+// v1.6 - Count sentiment by individual feedback items, not by overall visit score
 
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -141,34 +141,61 @@ export class DashboardService {
     return { trend };
   }
 
-  // Get sentiment distribution summary for a date
+  // Get sentiment distribution summary for a date with feedback phrases
+  // v1.6 - Count by individual feedback items, not by overall visit score
   async getSentimentSummary(restaurantId: string, date: string) {
     const client = this.supabase.getClient();
 
     const { data, error } = await client
       .from('lingtin_visit_records')
-      .select('sentiment_score')
+      .select('feedbacks')
       .eq('restaurant_id', restaurantId)
       .eq('visit_date', date)
-      .eq('status', 'processed')
-      .not('sentiment_score', 'is', null);
+      .eq('status', 'processed');
 
     if (error) throw error;
 
-    // Categorize by sentiment thresholds (score is 0-1 scale)
-    // 0.0-0.4 = negative, 0.4-0.6 = neutral, 0.6-1.0 = positive
+    // Count by individual feedback sentiment labels
     let positive = 0;
     let neutral = 0;
     let negative = 0;
 
+    // Collect feedback phrases by sentiment
+    const positiveFeedbacks: string[] = [];
+    const negativeFeedbacks: string[] = [];
+
     data?.forEach((record) => {
-      const score = parseFloat(record.sentiment_score);
-      if (score >= 0.6) positive++;
-      else if (score <= 0.4) negative++;
-      else neutral++;
+      const feedbacks = record.feedbacks || [];
+      feedbacks.forEach(
+        (fb: { text: string; sentiment: string } | string) => {
+          if (typeof fb === 'object' && fb.text) {
+            if (fb.sentiment === 'positive') {
+              positive++;
+              positiveFeedbacks.push(fb.text);
+            } else if (fb.sentiment === 'negative') {
+              negative++;
+              negativeFeedbacks.push(fb.text);
+            } else if (fb.sentiment === 'neutral') {
+              neutral++;
+            }
+          }
+        },
+      );
     });
 
-    const total = data?.length || 0;
+    // Count feedback frequency and get top feedbacks
+    const countFeedbacks = (feedbacks: string[], limit: number) => {
+      const countMap = new Map<string, number>();
+      feedbacks.forEach((fb) => {
+        countMap.set(fb, (countMap.get(fb) || 0) + 1);
+      });
+      return Array.from(countMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([text, count]) => ({ text, count }));
+    };
+
+    const total = positive + neutral + negative;
 
     return {
       positive_count: positive,
@@ -177,76 +204,51 @@ export class DashboardService {
       positive_percent: total > 0 ? Math.round((positive / total) * 100) : 0,
       neutral_percent: total > 0 ? Math.round((neutral / total) * 100) : 0,
       negative_percent: total > 0 ? Math.round((negative / total) * 100) : 0,
-      total_visits: total,
+      total_feedbacks: total,
+      positive_feedbacks: countFeedbacks(positiveFeedbacks, 6),
+      negative_feedbacks: countFeedbacks(negativeFeedbacks, 6),
     };
   }
 
-  // Get speech highlights (good and bad examples)
+  // Get manager questions used today (simple list)
   async getSpeechHighlights(restaurantId: string, date: string) {
     const client = this.supabase.getClient();
 
-    // Get positive examples (high sentiment with good transcripts)
-    const { data: positiveData, error: positiveError } = await client
+    // Get all records with manager questions
+    const { data, error } = await client
       .from('lingtin_visit_records')
-      .select('table_id, corrected_transcript, ai_summary, sentiment_score, created_at')
+      .select('table_id, manager_questions, created_at')
       .eq('restaurant_id', restaurantId)
       .eq('visit_date', date)
       .eq('status', 'processed')
-      .gte('sentiment_score', 0.5)
-      .not('corrected_transcript', 'is', null)
-      .order('sentiment_score', { ascending: false })
-      .limit(3);
+      .not('manager_questions', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
 
-    if (positiveError) throw positiveError;
+    if (error) throw error;
 
-    // Get negative examples (low sentiment or generic responses)
-    const { data: negativeData, error: negativeError } = await client
-      .from('lingtin_visit_records')
-      .select('table_id, corrected_transcript, ai_summary, sentiment_score, created_at')
-      .eq('restaurant_id', restaurantId)
-      .eq('visit_date', date)
-      .eq('status', 'processed')
-      .lte('sentiment_score', 0.2)
-      .not('corrected_transcript', 'is', null)
-      .order('sentiment_score', { ascending: true })
-      .limit(3);
+    // Format as simple list of questions with table and time
+    const questions: { text: string; table: string; time: string }[] = [];
 
-    if (negativeError) throw negativeError;
-
-    // Format positive examples
-    const positive = positiveData?.map((record) => {
-      const time = new Date(record.created_at).toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      // Extract a key phrase from transcript
-      const text =
-        record.ai_summary ||
-        record.corrected_transcript?.substring(0, 50) + '...' ||
-        '优质服务';
-      return {
-        text,
-        table: record.table_id,
-        time,
-      };
-    }) || [];
-
-    // Format negative examples with suggestions
-    const negative = negativeData?.map((record) => {
-      const text =
-        record.corrected_transcript?.substring(0, 30) || '回复较简短';
-      let suggestion = '建议主动询问用餐体验';
-      if (record.sentiment_score < 0) {
-        suggestion = '建议关注顾客反馈并及时处理';
-      } else if (text.length < 20) {
-        suggestion = '建议引导具体菜品反馈';
+    data?.forEach((record) => {
+      const managerQuestions = record.manager_questions || [];
+      if (managerQuestions.length > 0) {
+        const time = new Date(record.created_at).toLocaleTimeString('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        managerQuestions.forEach((question: string) => {
+          if (question && question.trim()) {
+            questions.push({
+              text: question,
+              table: record.table_id,
+              time,
+            });
+          }
+        });
       }
-      return {
-        text,
-        suggestion,
-      };
-    }) || [];
+    });
 
-    return { positive, negative };
+    return { questions: questions.slice(0, 6) };
   }
 }

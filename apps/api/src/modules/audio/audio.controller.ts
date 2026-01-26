@@ -1,11 +1,13 @@
 // Audio Controller - API endpoints for recording
-// v3.1 - Added: GET /pending endpoint for recovery after page refresh
+// v3.3 - Added delete endpoint and today's recordings list
 
 import {
   Controller,
   Post,
   Get,
+  Delete,
   Param,
+  Query,
   Body,
   UploadedFile,
   UseInterceptors,
@@ -69,7 +71,7 @@ export class AudioController {
       restaurantId,
     );
 
-    this.logger.log(`◀ Process complete: score=${result.sentimentScore}, keywords=${result.keywords.length}`);
+    this.logger.log(`◀ Process complete: score=${result.sentimentScore}, feedbacks=${result.feedbacks.length}`);
 
     return {
       success: true,
@@ -77,7 +79,7 @@ export class AudioController {
       correctedTranscript: result.correctedTranscript,
       aiSummary: result.aiSummary,
       sentimentScore: result.sentimentScore,
-      keywords: result.keywords,
+      feedbacks: result.feedbacks,
       managerQuestions: result.managerQuestions,
       customerAnswers: result.customerAnswers,
     };
@@ -97,5 +99,23 @@ export class AudioController {
     const records = await this.audioService.getPendingRecords();
     this.logger.log(`◀ Found ${records.length} pending records`);
     return { records };
+  }
+
+  // GET /api/audio/today - Get today's recordings for a restaurant
+  @Get('today')
+  async getTodayRecordings(@Query('restaurant_id') restaurantId: string) {
+    this.logger.log(`▶ GET /audio/today?restaurant_id=${restaurantId}`);
+    const records = await this.audioService.getTodayRecordings(restaurantId);
+    this.logger.log(`◀ Found ${records.length} recordings`);
+    return { records };
+  }
+
+  // DELETE /api/audio/:visitId - Delete a recording
+  @Delete(':visitId')
+  async deleteRecording(@Param('visitId') visitId: string) {
+    this.logger.log(`▶ DELETE /audio/${visitId}`);
+    await this.audioService.deleteRecording(visitId);
+    this.logger.log(`◀ Deleted recording ${visitId}`);
+    return { success: true };
   }
 }

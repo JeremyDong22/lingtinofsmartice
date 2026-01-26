@@ -1,5 +1,5 @@
 // Audio Service - Business logic for recording processing
-// v2.2 - Added: getPendingRecords() for recovery after page refresh
+// v2.3 - Added: getTodayRecordings() and deleteRecording() for frontend sync
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -139,5 +139,50 @@ export class AudioService {
 
     this.logger.log(`Found ${data?.length || 0} pending records`);
     return data || [];
+  }
+
+  // Get today's recordings for a restaurant (for frontend sync)
+  async getTodayRecordings(restaurantId: string) {
+    if (this.supabase.isMockMode()) {
+      this.logger.warn('[MOCK] Returning empty today recordings');
+      return [];
+    }
+
+    const client = this.supabase.getClient();
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data, error } = await client
+      .from('lingtin_visit_records')
+      .select('id, table_id, status, ai_summary, sentiment_score, created_at')
+      .eq('restaurant_id', restaurantId)
+      .eq('visit_date', today)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      this.logger.error(`Failed to fetch today recordings: ${error.message}`);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  // Delete a recording from database
+  async deleteRecording(visitId: string) {
+    if (this.supabase.isMockMode()) {
+      this.logger.warn('[MOCK] Simulating delete');
+      return;
+    }
+
+    const client = this.supabase.getClient();
+
+    const { error } = await client
+      .from('lingtin_visit_records')
+      .delete()
+      .eq('id', visitId);
+
+    if (error) {
+      this.logger.error(`Failed to delete recording: ${error.message}`);
+      throw error;
+    }
   }
 }

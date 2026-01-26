@@ -1,5 +1,5 @@
-// Recorder Page - Store manager records table visits with local-first approach
-// v2.4 - Added: Auto-retry for interrupted uploads (uploading/saved status)
+// Recorder Page - Store manager records table visits with database sync
+// v2.5 - Database as single source of truth, frontend syncs on load
 
 'use client';
 
@@ -33,6 +33,7 @@ export default function RecorderPage() {
   const { isRecording, duration, audioBlob, error, analyserData } = recorderState;
   const { startRecording, stopRecording, resetRecording } = recorderActions;
 
+  // Pass restaurantId to sync with database
   const {
     recordings,
     saveRecording,
@@ -40,7 +41,7 @@ export default function RecorderPage() {
     getTodayRecordings,
     deleteRecording,
     getRecordingsNeedingRetry,
-  } = useRecordingStore();
+  } = useRecordingStore(restaurantId);
 
   const todayRecordings = getTodayRecordings();
 
