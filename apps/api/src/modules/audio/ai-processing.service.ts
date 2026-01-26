@@ -1,5 +1,5 @@
 // AI Processing Service - Handles STT and AI tagging pipeline
-// v3.1 - Added: Duplicate processing prevention with status check and lock
+// v3.3 - Removed dish name view dependency, only correct actually mentioned dishes
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -8,13 +8,19 @@ import { XunfeiSttService } from './xunfei-stt.service';
 // Gemini via PackyAPI Configuration
 const PACKY_API_URL = 'https://www.packyapi.com/v1/chat/completions';
 
+// Feedback item with sentiment label
+export interface FeedbackItem {
+  text: string;
+  sentiment: 'positive' | 'negative' | 'neutral';
+}
+
 // Simplified MVP result structure (5 dimensions)
 interface ProcessingResult {
   transcript: string;
   correctedTranscript: string;
   aiSummary: string;           // 20字摘要
   sentimentScore: number;       // 0-1 情绪分
-  keywords: string[];           // 关键词列表
+  feedbacks: FeedbackItem[];    // 评价短语列表（带情绪标签）
   managerQuestions: string[];   // 店长问了什么
   customerAnswers: string[];    // 顾客怎么回答
 }
@@ -66,33 +72,28 @@ export class AiProcessingService {
       this.logger.log(`Recording: ${recordingId} | Table: ${tableId}`);
       this.logger.log(`Audio URL: ${audioUrl}`);
 
-      // Step 1: Get dish names for correction reference
-      this.logger.log(`[Step 1/4] Loading dish names...`);
-      const dishNames = await this.getDishNames(restaurantId);
-      this.logger.log(`[Step 1/4] Loaded ${dishNames.length} dish names`);
-
-      // Step 2: Speech-to-Text (讯飞)
-      this.logger.log(`[Step 2/4] Starting STT (讯飞)...`);
+      // Step 1: Speech-to-Text (讯飞)
+      this.logger.log(`[Step 1/3] Starting STT (讯飞)...`);
       const sttStart = Date.now();
       const rawTranscript = await this.transcribeAudio(audioUrl);
-      this.logger.log(`[Step 2/4] STT complete in ${Date.now() - sttStart}ms`);
-      this.logger.log(`[Step 2/4] Transcript: "${rawTranscript}"`);
+      this.logger.log(`[Step 1/3] STT complete in ${Date.now() - sttStart}ms`);
+      this.logger.log(`[Step 1/3] Transcript: "${rawTranscript}"`);
 
-      // Step 3: Correction + Tagging (Gemini)
-      this.logger.log(`[Step 3/4] Starting Gemini AI processing...`);
+      // Step 2: Correction + Tagging (Gemini) - No dish name dictionary needed
+      this.logger.log(`[Step 2/3] Starting Gemini AI processing...`);
       const aiStart = Date.now();
-      const aiResult = await this.processWithGemini(rawTranscript, dishNames);
-      this.logger.log(`[Step 3/4] Gemini complete in ${Date.now() - aiStart}ms`);
-      this.logger.log(`[Step 3/4] Summary: "${aiResult.aiSummary}"`);
-      this.logger.log(`[Step 3/4] Score: ${aiResult.sentimentScore}, Keywords: ${aiResult.keywords.length}`);
+      const aiResult = await this.processWithGemini(rawTranscript);
+      this.logger.log(`[Step 2/3] Gemini complete in ${Date.now() - aiStart}ms`);
+      this.logger.log(`[Step 2/3] Summary: "${aiResult.aiSummary}"`);
+      this.logger.log(`[Step 2/3] Score: ${aiResult.sentimentScore}, Feedbacks: ${aiResult.feedbacks.length}`);
 
-      // Step 4: Save results to database
-      this.logger.log(`[Step 4/4] Saving to database...`);
+      // Step 3: Save results to database
+      this.logger.log(`[Step 3/3] Saving to database...`);
       await this.saveResults(recordingId, {
         rawTranscript,
         ...aiResult,
       });
-      this.logger.log(`[Step 4/4] Saved successfully`);
+      this.logger.log(`[Step 3/3] Saved successfully`);
 
       const totalTime = Date.now() - startTime;
       this.logger.log(`========== PIPELINE COMPLETE ==========`);
@@ -154,8 +155,9 @@ export class AiProcessingService {
 
   /**
    * Get dish names from database for correction reference
+   * NOTE: Currently unused - dish name correction removed in v3.3
    */
-  private async getDishNames(restaurantId: string): Promise<string[]> {
+  private async getDishNames(_restaurantId: string): Promise<string[]> {
     // Use the mock-aware helper from SupabaseService
     return this.supabase.getDishNames();
   }
@@ -187,10 +189,10 @@ export class AiProcessingService {
 
   /**
    * Process transcript with Gemini for correction and tagging
+   * v3.3: Removed dish name dictionary - only correct actually mentioned dishes
    */
   private async processWithGemini(
     transcript: string,
-    dishNames: string[],
   ): Promise<Omit<ProcessingResult, 'transcript'>> {
     // Read API key at runtime
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -204,24 +206,31 @@ export class AiProcessingService {
 
     const systemPrompt = `分析餐饮桌访对话，提取结构化信息。
 
-菜单参考（用于纠错）：${dishNames.slice(0, 30).join('、')}
-
 输出JSON格式（只输出JSON，无其他内容）：
 {
-  "correctedTranscript": "纠偏后的完整文本（修正菜名错字）",
+  "correctedTranscript": "纠偏后的完整文本",
   "aiSummary": "20字以内摘要",
   "sentimentScore": 0.5,
-  "keywords": ["关键词1", "关键词2"],
+  "feedbacks": [
+    {"text": "清蒸鲈鱼很新鲜", "sentiment": "positive"},
+    {"text": "上菜太慢", "sentiment": "negative"}
+  ],
   "managerQuestions": ["店长问的问题1", "店长问的问题2"],
   "customerAnswers": ["顾客的回答1", "顾客的回答2"]
 }
 
 规则：
-1. sentimentScore: 0-1分，0=极差，0.5=中性，1=极好
-2. keywords: 提取关键词（菜名、形容词、服务词等），最多10个
-3. managerQuestions: 店长/服务员说的话（通常是问候或询问）
-4. customerAnswers: 顾客的回复内容
-5. 如果某项为空，返回空数组[]`;
+1. correctedTranscript: 只修正明显的语音识别错误（如同音字错误），不要添加原文没有的内容
+   - 如果原文没有提到菜品，不要凭空添加菜品名称
+   - 保持原文的意思不变，只修正错别字
+2. sentimentScore: 0-1分，0=极差，0.5=中性，1=极好
+3. feedbacks: 提取顾客的评价短语，每个评价必须包含主语+评价词（如"清蒸鲈鱼很新鲜"而不是单独的"新鲜"）
+   - sentiment: positive（正面）/ negative（负面）/ neutral（中性）
+   - 只提取有明确情绪倾向的评价，最多5个
+   - 如果原文没有提到具体菜品，不要在feedbacks中添加菜品名称
+4. managerQuestions: 店长/服务员说的话（通常是问候或询问）
+5. customerAnswers: 顾客的回复内容
+6. 如果某项为空，返回空数组[]`;
 
     try {
       const response = await fetch(PACKY_API_URL, {
@@ -280,7 +289,7 @@ export class AiProcessingService {
         correctedTranscript: result.correctedTranscript || transcript,
         aiSummary: result.aiSummary || '无摘要',
         sentimentScore: parseFloat(result.sentimentScore) || 0.5,
-        keywords: result.keywords || [],
+        feedbacks: result.feedbacks || [],
         managerQuestions: result.managerQuestions || [],
         customerAnswers: result.customerAnswers || [],
       };
@@ -300,7 +309,7 @@ export class AiProcessingService {
       correctedTranscript: string;
       aiSummary: string;
       sentimentScore: number;
-      keywords: string[];
+      feedbacks: FeedbackItem[];
       managerQuestions: string[];
       customerAnswers: string[];
     },
@@ -310,7 +319,7 @@ export class AiProcessingService {
       this.logger.log(`[MOCK] Would save results for ${recordingId}:`);
       this.logger.log(`  - Summary: ${result.aiSummary}`);
       this.logger.log(`  - Score: ${result.sentimentScore}`);
-      this.logger.log(`  - Keywords: ${result.keywords.join(', ')}`);
+      this.logger.log(`  - Feedbacks: ${result.feedbacks.map((f) => f.text).join(', ')}`);
       this.logger.log(`  - Manager Q: ${result.managerQuestions.join(' | ')}`);
       this.logger.log(`  - Customer A: ${result.customerAnswers.join(' | ')}`);
       return;
@@ -326,7 +335,7 @@ export class AiProcessingService {
         corrected_transcript: result.correctedTranscript,
         ai_summary: result.aiSummary,
         sentiment_score: result.sentimentScore,
-        keywords: result.keywords,
+        feedbacks: result.feedbacks,
         manager_questions: result.managerQuestions,
         customer_answers: result.customerAnswers,
         status: 'processed',
@@ -360,7 +369,11 @@ export class AiProcessingService {
       correctedTranscript: '今天的清蒸鲈鱼很新鲜，油焖大虾也不错，就是等的时间有点长',
       aiSummary: '清蒸鲈鱼新鲜，油焖大虾好，上菜稍慢',
       sentimentScore: 0.72,
-      keywords: ['清蒸鲈鱼', '新鲜', '油焖大虾', '不错', '等待时间长'],
+      feedbacks: [
+        { text: '清蒸鲈鱼很新鲜', sentiment: 'positive' },
+        { text: '油焖大虾不错', sentiment: 'positive' },
+        { text: '等待时间有点长', sentiment: 'negative' },
+      ],
       managerQuestions: ['您好，今天的菜吃得还习惯吗？'],
       customerAnswers: ['清蒸鲈鱼很新鲜，油焖大虾也不错，就是等的时间有点长'],
     };

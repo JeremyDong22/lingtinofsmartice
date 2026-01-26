@@ -1,5 +1,5 @@
 // Recording Store - Local-first storage with background sync
-// v1.1 - Added: localStorage quota handling, error callbacks, cleanup on quota exceeded
+// v1.2 - Added: getRecordingsNeedingRetry for upload recovery on page reload
 
 import { useState, useEffect, useCallback } from 'react';
 
@@ -181,6 +181,14 @@ export function useRecordingStore() {
     });
   }, []);
 
+  // Get recordings that need retry (uploading or saved with audioData)
+  // These are recordings that were interrupted during upload
+  const getRecordingsNeedingRetry = useCallback(() => {
+    return recordings.filter(rec =>
+      (rec.status === 'uploading' || rec.status === 'saved') && rec.audioData
+    );
+  }, [recordings]);
+
   return {
     recordings,
     isLoading,
@@ -189,5 +197,6 @@ export function useRecordingStore() {
     getTodayRecordings,
     deleteRecording,
     cleanupAudioData,
+    getRecordingsNeedingRetry,
   };
 }

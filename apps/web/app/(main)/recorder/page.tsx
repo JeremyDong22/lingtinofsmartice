@@ -1,5 +1,5 @@
 // Recorder Page - Store manager records table visits with local-first approach
-// v2.3 - Added UserMenu component for user info and logout
+// v2.4 - Added: Auto-retry for interrupted uploads (uploading/saved status)
 
 'use client';
 
@@ -39,9 +39,16 @@ export default function RecorderPage() {
     updateRecording,
     getTodayRecordings,
     deleteRecording,
+    getRecordingsNeedingRetry,
   } = useRecordingStore();
 
   const todayRecordings = getTodayRecordings();
+
+  // Show toast message - defined early so it can be used in useEffects
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 2500);
+  }, []);
 
   // Auto-retry pending records from database on page load
   // This recovers recordings that were interrupted by page refresh
@@ -55,13 +62,36 @@ export default function RecorderPage() {
       }
     };
     retryPending();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showToast]);
 
-  // Show toast message
-  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 2500);
-  }, []);
+  // Auto-retry interrupted uploads (uploading/saved status with audioData)
+  // This recovers recordings that were interrupted during upload
+  useEffect(() => {
+    const retryInterruptedUploads = async () => {
+      const needRetry = getRecordingsNeedingRetry();
+      if (needRetry.length === 0) return;
+
+      showToast(`发现 ${needRetry.length} 条未完成上传`, 'info');
+
+      for (const recording of needRetry) {
+        processRecordingInBackground(recording, {
+          onStatusChange: (id, status, data) => {
+            updateRecording(id, { status, ...data });
+            if (status === 'completed') {
+              showToast(`${recording.tableId} 桌录音恢复完成`, 'success');
+            }
+          },
+          onError: (id, errorMsg) => {
+            console.error(`Recording ${id} retry failed:`, errorMsg);
+          },
+        }, restaurantId);
+      }
+    };
+
+    // Delay to ensure recordings are loaded from localStorage
+    const timer = setTimeout(retryInterruptedUploads, 1000);
+    return () => clearTimeout(timer);
+  }, [getRecordingsNeedingRetry, updateRecording, restaurantId, showToast]);
 
   // Handle recording start
   const handleStart = useCallback(async () => {
