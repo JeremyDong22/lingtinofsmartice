@@ -1,41 +1,120 @@
 // Dashboard Page - Business metrics and analytics
-// v1.0
+// v1.2 - Fixed restaurant ID to match backend default
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-// Mock data for demo - will be replaced with real API calls
-const MOCK_COVERAGE = {
-  periods: [
-    { period: 'lunch', open_count: 50, visit_count: 42, coverage: 84, status: 'warning' },
-    { period: 'dinner', open_count: 68, visit_count: 65, coverage: 96, status: 'good' },
-  ],
-};
+// Must match DEFAULT_RESTAURANT_ID in backend supabase.service.ts
+const DEMO_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
 
-const MOCK_DISHES = {
-  dishes: [
-    { dish_name: '油焖大虾', mention_count: 20, positive: 18, negative: 2 },
-    { dish_name: '招牌红烧肉', mention_count: 16, positive: 15, negative: 1 },
-    { dish_name: '清蒸鲈鱼', mention_count: 15, positive: 12, negative: 3 },
-    { dish_name: '蒜蓉粉丝虾', mention_count: 10, positive: 10, negative: 0 },
-    { dish_name: '宫保鸡丁', mention_count: 10, positive: 8, negative: 2 },
-  ],
-};
+// Types for API responses
+interface CoveragePeriod {
+  period: string;
+  open_count: number;
+  visit_count: number;
+  coverage: number;
+  status: 'good' | 'warning' | 'critical';
+}
 
-const MOCK_HIGHLIGHTS = {
-  positive: [
-    { text: '您觉得咱家招牌菜味道怎么样？', table: 'B4', time: '12:30' },
-    { text: '今天的鲈鱼是早上刚到的，特别新鲜', table: 'A7', time: '13:15' },
-  ],
-  negative: [
-    { text: '还行吧', suggestion: '建议引导具体菜品反馈' },
-    { text: '嗯嗯好的', suggestion: '建议主动询问用餐体验' },
-  ],
-};
+interface DishRanking {
+  dish_name: string;
+  mention_count: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+}
+
+interface SentimentSummary {
+  positive_count: number;
+  neutral_count: number;
+  negative_count: number;
+  positive_percent: number;
+  neutral_percent: number;
+  negative_percent: number;
+  total_visits: number;
+}
+
+interface HighlightPositive {
+  text: string;
+  table: string;
+  time: string;
+}
+
+interface HighlightNegative {
+  text: string;
+  suggestion: string;
+}
+
+// Calculate date based on selection
+function getDateForSelection(selection: string): string {
+  const date = new Date();
+  if (selection === '昨日') {
+    date.setDate(date.getDate() - 1);
+  }
+  return date.toISOString().split('T')[0];
+}
 
 export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState('今日');
+  const [loading, setLoading] = useState(true);
+
+  // API data states
+  const [coverage, setCoverage] = useState<{ periods: CoveragePeriod[] }>({ periods: [] });
+  const [dishes, setDishes] = useState<{ dishes: DishRanking[] }>({ dishes: [] });
+  const [sentiment, setSentiment] = useState<SentimentSummary | null>(null);
+  const [highlights, setHighlights] = useState<{
+    positive: HighlightPositive[];
+    negative: HighlightNegative[];
+  }>({ positive: [], negative: [] });
+
+  // Fetch all dashboard data
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const date = getDateForSelection(selectedDate);
+      const params = new URLSearchParams({
+        restaurant_id: DEMO_RESTAURANT_ID,
+        date,
+      });
+
+      try {
+        // Fetch all data in parallel
+        const [coverageRes, dishesRes, sentimentRes, highlightsRes] = await Promise.all([
+          fetch(`/api/dashboard/coverage?${params}`),
+          fetch(`/api/dashboard/dish-ranking?${params}&limit=5`),
+          fetch(`/api/dashboard/sentiment-summary?${params}`),
+          fetch(`/api/dashboard/speech-highlights?${params}`),
+        ]);
+
+        if (coverageRes.ok) {
+          const data = await coverageRes.json();
+          setCoverage(data);
+        }
+
+        if (dishesRes.ok) {
+          const data = await dishesRes.json();
+          setDishes(data);
+        }
+
+        if (sentimentRes.ok) {
+          const data = await sentimentRes.json();
+          setSentiment(data);
+        }
+
+        if (highlightsRes.ok) {
+          const data = await highlightsRes.json();
+          setHighlights(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedDate]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,14 +128,18 @@ export default function DashboardPage() {
         >
           <option>今日</option>
           <option>昨日</option>
-          <option>本周</option>
         </select>
       </header>
 
       <main className="p-4 space-y-4">
+        {/* Loading indicator */}
+        {loading && (
+          <div className="text-center py-8 text-gray-500">加载中...</div>
+        )}
+
         {/* Coverage Table */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">执行匹配流</h2>
+          <h2 className="text-sm font-medium text-gray-700 mb-3">执行覆盖率</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -69,7 +152,14 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_COVERAGE.periods.map((row) => (
+                {coverage.periods.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-4 text-gray-400">
+                      暂无数据
+                    </td>
+                  </tr>
+                )}
+                {coverage.periods.map((row) => (
                   <tr key={row.period} className="border-b border-gray-50">
                     <td className="py-3 font-medium">
                       {row.period === 'lunch' ? '午市' : '晚市'}
@@ -92,10 +182,12 @@ export default function DashboardPage() {
                     <td className="text-right">
                       {row.status === 'good' ? (
                         <span className="text-green-600">✓ 正常</span>
-                      ) : (
+                      ) : row.open_count > row.visit_count ? (
                         <span className="text-yellow-600">
                           ⚠ -{row.open_count - row.visit_count}桌
                         </span>
+                      ) : (
+                        <span className="text-green-600">✓ 正常</span>
                       )}
                     </td>
                   </tr>
@@ -109,7 +201,10 @@ export default function DashboardPage() {
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h2 className="text-sm font-medium text-gray-700 mb-3">菜品提及 TOP 5</h2>
           <div className="space-y-3">
-            {MOCK_DISHES.dishes.map((dish, i) => (
+            {dishes.dishes.length === 0 && !loading && (
+              <div className="text-center py-4 text-gray-400">暂无数据</div>
+            )}
+            {dishes.dishes.map((dish, i) => (
               <div
                 key={dish.dish_name}
                 className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
@@ -139,22 +234,32 @@ export default function DashboardPage() {
         {/* Sentiment Summary */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h2 className="text-sm font-medium text-gray-700 mb-3">情绪概览</h2>
-          <div className="flex items-center justify-around py-4">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600">78%</div>
-              <div className="text-xs text-gray-500 mt-1">正面情绪</div>
+          {sentiment ? (
+            <div className="flex items-center justify-around py-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600">
+                  {sentiment.positive_percent}%
+                </div>
+                <div className="text-xs text-gray-500 mt-1">正面情绪</div>
+              </div>
+              <div className="h-12 w-px bg-gray-200" />
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-600">
+                  {sentiment.neutral_percent}%
+                </div>
+                <div className="text-xs text-gray-500 mt-1">中性情绪</div>
+              </div>
+              <div className="h-12 w-px bg-gray-200" />
+              <div className="text-center">
+                <div className="text-3xl font-bold text-red-500">
+                  {sentiment.negative_percent}%
+                </div>
+                <div className="text-xs text-gray-500 mt-1">负面情绪</div>
+              </div>
             </div>
-            <div className="h-12 w-px bg-gray-200" />
-            <div className="text-center">
-              <div className="text-3xl font-bold text-gray-600">15%</div>
-              <div className="text-xs text-gray-500 mt-1">中性情绪</div>
-            </div>
-            <div className="h-12 w-px bg-gray-200" />
-            <div className="text-center">
-              <div className="text-3xl font-bold text-red-500">7%</div>
-              <div className="text-xs text-gray-500 mt-1">负面情绪</div>
-            </div>
-          </div>
+          ) : !loading ? (
+            <div className="text-center py-4 text-gray-400">暂无数据</div>
+          ) : null}
         </div>
 
         {/* Speech Highlights */}
@@ -168,7 +273,10 @@ export default function DashboardPage() {
               <span className="text-xs font-medium text-gray-600">优秀话术</span>
             </div>
             <div className="space-y-2">
-              {MOCK_HIGHLIGHTS.positive.map((item, i) => (
+              {highlights.positive.length === 0 && !loading && (
+                <div className="text-center py-2 text-gray-400 text-sm">暂无数据</div>
+              )}
+              {highlights.positive.map((item, i) => (
                 <div
                   key={i}
                   className="bg-green-50 rounded-lg p-3 text-sm text-green-800"
@@ -189,7 +297,10 @@ export default function DashboardPage() {
               <span className="text-xs font-medium text-gray-600">待改进</span>
             </div>
             <div className="space-y-2">
-              {MOCK_HIGHLIGHTS.negative.map((item, i) => (
+              {highlights.negative.length === 0 && !loading && (
+                <div className="text-center py-2 text-gray-400 text-sm">暂无数据</div>
+              )}
+              {highlights.negative.map((item, i) => (
                 <div key={i} className="bg-yellow-50 rounded-lg p-3 text-sm">
                   <div className="text-yellow-800">"{item.text}"</div>
                   <div className="text-yellow-600 text-xs mt-1">

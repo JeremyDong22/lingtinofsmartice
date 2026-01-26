@@ -1,5 +1,5 @@
 // Background Processor - Handles async upload and AI pipeline
-// v1.1 - Added detailed console logging for debugging
+// v1.2 - Fixed: Use visit_id (UUID) instead of frontend recording_id for AI processing
 
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
 
@@ -85,11 +85,13 @@ export async function processRecordingInBackground(
     });
 
     const processStartTime = Date.now();
+    // Use visit_id (UUID from database) instead of frontend recording ID
+    // This ensures the AI results can be saved to the correct database record
     const processResponse = await fetch('/api/audio/process', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recording_id: id,
+        recording_id: uploadResult.visit_id,
         audio_url: uploadResult.audioUrl,
         table_id: tableId,
         restaurant_id: 'demo-restaurant-id',

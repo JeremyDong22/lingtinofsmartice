@@ -56,11 +56,19 @@ audio_url TEXT                  -- 音频文件URL
 raw_transcript TEXT             -- 讯飞STT原始转写
 corrected_transcript TEXT       -- 纠偏后文本
 
--- AI自动打标
-visit_type VARCHAR(20)          -- routine/complaint/promotion
-sentiment_score DECIMAL(3,2)    -- 情绪：-1.00 到 1.00
-service_stage VARCHAR(20)       -- ordering/serving/checkout
-ai_summary TEXT                 -- AI简要总结
+-- AI自动打标 (MVP v3.0 简化版 - 5维度)
+sentiment_score DECIMAL(3,2)    -- 情绪分：0.00 到 1.00 (0=极差, 0.5=中性, 1=极好)
+ai_summary TEXT                 -- AI简要总结 (20字以内)
+keywords JSONB                  -- 关键词数组 (菜名、形容词、服务词等)
+manager_questions JSONB         -- 店长/服务员说的话
+customer_answers JSONB          -- 顾客的回复内容
+
+-- 已废弃字段 (保留向后兼容)
+visit_type VARCHAR(20)          -- [废弃] routine/complaint/praise
+service_stage VARCHAR(20)       -- [废弃] ordering/serving/checkout
+dishes JSONB                    -- [废弃] 复杂菜品提及结构
+service JSONB                   -- [废弃] 服务关键词
+other JSONB                     -- [废弃] 其他关键词
 
 -- 时间维度
 visit_date DATE
@@ -209,9 +217,10 @@ lingtin_dishname_view
     ↓
 [Step 3] Gemini AI 分析 (~7-10秒)
     • 菜名纠错（清蒸路鱼→清蒸鲈鱼）
-    • 情绪识别（positive/neutral/negative）
-    • 自动摘要（15字内）
-    • 菜品提及提取
+    • 情绪评分（0-1分，0=极差，1=极好）
+    • 自动摘要（20字内）
+    • 关键词提取
+    • 店长问题 & 顾客回答分离
     ↓
 [Step 4] 保存数据库 → 提示「分析完成」
 ```

@@ -1,5 +1,5 @@
-// Dashboard Dish Ranking API Route - Proxy to NestJS backend
-// v1.2 - Fixed restaurant ID to match backend default
+// Dashboard Sentiment Summary API Route - Proxy to NestJS backend
+// v1.1 - Fixed restaurant ID to match backend default
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -12,18 +12,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const restaurantId = searchParams.get('restaurant_id') || DEMO_RESTAURANT_ID;
     const date = searchParams.get('date');
-    const limit = searchParams.get('limit') || '5';
 
-    const url = new URL(`${API_URL}/api/dashboard/dish-ranking`);
+    const url = new URL(`${API_URL}/api/dashboard/sentiment-summary`);
     url.searchParams.set('restaurant_id', restaurantId);
-    url.searchParams.set('limit', limit);
     if (date) url.searchParams.set('date', date);
 
     const response = await fetch(url.toString());
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: 'Failed to fetch dish ranking' },
+        { error: 'Failed to fetch sentiment summary' },
         { status: response.status }
       );
     }
@@ -31,9 +29,9 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Dish ranking fetch error:', error);
+    console.error('Sentiment summary fetch error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch dish ranking' },
+      { error: 'Failed to fetch sentiment summary' },
       { status: 500 }
     );
   }

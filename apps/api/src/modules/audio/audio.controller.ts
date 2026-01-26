@@ -1,5 +1,5 @@
 // Audio Controller - API endpoints for recording
-// v2.2 - Updated to use new structured label system (dishes, service, other)
+// v3.0 - Simplified MVP: 5 dimensions (summary, sentiment, keywords, manager_questions, customer_answers)
 
 import {
   Controller,
@@ -69,7 +69,7 @@ export class AudioController {
       restaurantId,
     );
 
-    this.logger.log(`◀ Process complete: score=${result.sentimentScore}, dishes=${result.dishes.length}`);
+    this.logger.log(`◀ Process complete: score=${result.sentimentScore}, keywords=${result.keywords.length}`);
 
     return {
       success: true,
@@ -77,10 +77,9 @@ export class AudioController {
       correctedTranscript: result.correctedTranscript,
       aiSummary: result.aiSummary,
       sentimentScore: result.sentimentScore,
-      visitType: result.visitType,
-      dishes: result.dishes,
-      service: result.service,
-      other: result.other,
+      keywords: result.keywords,
+      managerQuestions: result.managerQuestions,
+      customerAnswers: result.customerAnswers,
     };
   }
 
