@@ -1,5 +1,5 @@
 // Recorder Page - Store manager records table visits with local-first approach
-// v2.2 - Added: Auth context integration, pass restaurantId to background processor
+// v2.3 - Added UserMenu component for user info and logout
 
 'use client';
 
@@ -11,6 +11,7 @@ import { TableSelector } from '@/components/recorder/TableSelector';
 import { WaveformVisualizer } from '@/components/recorder/WaveformVisualizer';
 import { RecordButton } from '@/components/recorder/RecordButton';
 import { RecordingHistory } from '@/components/recorder/RecordingHistory';
+import { UserMenu } from '@/components/layout/UserMenu';
 import { processRecordingInBackground, retryPendingFromDatabase } from '@/lib/backgroundProcessor';
 
 // Format seconds to MM:SS
@@ -136,9 +137,7 @@ export default function RecorderPage() {
       {/* Header */}
       <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">桌访录音</h1>
-        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-          <span className="text-primary-600 text-xs font-medium">店</span>
-        </div>
+        <UserMenu />
       </header>
 
       <main className="p-4 space-y-4">

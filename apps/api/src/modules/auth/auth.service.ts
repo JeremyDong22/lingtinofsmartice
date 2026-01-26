@@ -53,10 +53,13 @@ export class AuthService {
 
     const client = this.supabase.getClient();
 
-    // Find user by username
+    // Find user by username with restaurant info
     const { data: user, error } = await client
       .from('master_employee')
-      .select('id, username, password_hash, employee_name, restaurant_id, role_code, is_active')
+      .select(`
+        id, username, password_hash, employee_name, restaurant_id, role_code, is_active,
+        master_restaurant:restaurant_id (restaurant_name)
+      `)
       .eq('username', username)
       .eq('is_active', true)
       .single();
@@ -89,6 +92,11 @@ export class AuthService {
       return null;
     }
 
+    // Extract restaurant name from joined data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const restaurantData = user.master_restaurant as any;
+    const restaurantName = restaurantData?.restaurant_name || '未知店铺';
+
     this.logger.log(`User validated: ${username} (restaurant: ${user.restaurant_id})`);
 
     return {
@@ -96,6 +104,7 @@ export class AuthService {
       username: user.username,
       employeeName: user.employee_name,
       restaurantId: user.restaurant_id,
+      restaurantName,
       roleCode: user.role_code,
     };
   }
@@ -106,6 +115,7 @@ export class AuthService {
       username: user.username,
       employeeName: user.employeeName,
       restaurantId: user.restaurantId,
+      restaurantName: user.restaurantName,
       roleCode: user.roleCode,
     };
 
@@ -116,6 +126,7 @@ export class AuthService {
         username: user.username,
         employeeName: user.employeeName,
         restaurantId: user.restaurantId,
+        restaurantName: user.restaurantName,
         roleCode: user.roleCode,
       },
     };

@@ -1,5 +1,5 @@
 // Auth Context - Manage authentication state across the app
-// v1.0 - Initial implementation with JWT token storage
+// v1.1 - Added restaurantName to user info
 
 'use client';
 
@@ -11,6 +11,7 @@ interface User {
   username: string;
   employeeName: string;
   restaurantId: string;
+  restaurantName: string;
   roleCode: string;
 }
 

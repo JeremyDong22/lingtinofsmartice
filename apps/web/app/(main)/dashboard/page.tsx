@@ -1,10 +1,11 @@
 // Dashboard Page - Business metrics and analytics
-// v1.3 - Added Authorization header for authenticated API calls
+// v1.4 - Added UserMenu component for user info and logout
 
 'use client';
 
 import { useState, useEffect } from 'react';
 import { getAuthHeaders } from '@/contexts/AuthContext';
+import { UserMenu } from '@/components/layout/UserMenu';
 
 // Must match DEFAULT_RESTAURANT_ID in backend supabase.service.ts
 const DEMO_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
@@ -123,14 +124,17 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">数据看板</h1>
-        <select
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white"
-        >
-          <option>今日</option>
-          <option>昨日</option>
-        </select>
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white"
+          >
+            <option>今日</option>
+            <option>昨日</option>
+          </select>
+          <UserMenu />
+        </div>
       </header>
 
       <main className="p-4 space-y-4">

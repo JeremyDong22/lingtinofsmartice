@@ -1,5 +1,5 @@
 // Chat Page - AI-powered analytics assistant with streaming support
-// v1.4 - Added ThinkingIndicator with animated ellipsis and fade transitions
+// v1.5 - Added UserMenu component for user info and logout
 
 'use client';
 
@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useChatStream } from '@/hooks/useChatStream';
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ThinkingIndicator } from '@/components/chat/ThinkingIndicator';
+import { UserMenu } from '@/components/layout/UserMenu';
 
 export default function ChatPage() {
   const { messages, isLoading, sendMessage, clearMessages } = useChatStream();
@@ -45,13 +46,16 @@ export default function ChatPage() {
       {/* Header */}
       <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">AI 智库</h1>
-        <button
-          onClick={clearMessages}
-          disabled={isLoading}
-          className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
-        >
-          清空对话
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={clearMessages}
+            disabled={isLoading}
+            className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
+          >
+            清空对话
+          </button>
+          <UserMenu />
+        </div>
       </header>
 
       {/* Messages area with proper overflow handling */}
