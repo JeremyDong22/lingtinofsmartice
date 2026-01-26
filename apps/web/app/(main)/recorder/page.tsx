@@ -1,5 +1,5 @@
 // Recorder Page - Store manager records table visits with local-first approach
-// v2.0 - Added recording history, local storage, background processing
+// v2.1 - Added: Auto-retry pending records from database on page load
 
 'use client';
 
@@ -10,7 +10,7 @@ import { TableSelector } from '@/components/recorder/TableSelector';
 import { WaveformVisualizer } from '@/components/recorder/WaveformVisualizer';
 import { RecordButton } from '@/components/recorder/RecordButton';
 import { RecordingHistory } from '@/components/recorder/RecordingHistory';
-import { processRecordingInBackground } from '@/lib/backgroundProcessor';
+import { processRecordingInBackground, retryPendingFromDatabase } from '@/lib/backgroundProcessor';
 
 // Format seconds to MM:SS
 function formatDuration(seconds: number): string {
@@ -37,6 +37,20 @@ export default function RecorderPage() {
   } = useRecordingStore();
 
   const todayRecordings = getTodayRecordings();
+
+  // Auto-retry pending records from database on page load
+  // This recovers recordings that were interrupted by page refresh
+  useEffect(() => {
+    const retryPending = async () => {
+      const { processed } = await retryPendingFromDatabase((message) => {
+        showToast(message, 'info');
+      });
+      if (processed > 0) {
+        showToast(`已恢复处理 ${processed} 条录音`, 'success');
+      }
+    };
+    retryPending();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show toast message
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {

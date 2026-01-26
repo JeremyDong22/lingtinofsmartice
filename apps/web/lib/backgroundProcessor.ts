@@ -1,5 +1,5 @@
 // Background Processor - Handles async upload and AI pipeline
-// v1.2 - Fixed: Use visit_id (UUID) instead of frontend recording_id for AI processing
+// v1.3 - Added: retryPendingFromDatabase() to recover interrupted processing on page load
 
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
 
@@ -143,5 +143,77 @@ export async function retryFailedRecordings(
 
   for (const recording of failed) {
     await processRecordingInBackground(recording, callbacks);
+  }
+}
+
+// Retry pending records from database (for recovery after page refresh)
+// This fetches records that have audio_url but are still in 'pending' status
+export async function retryPendingFromDatabase(
+  onProgress?: (message: string) => void
+): Promise<{ processed: number; failed: number }> {
+  log('Checking for pending records in database...');
+
+  let processed = 0;
+  let failed = 0;
+
+  try {
+    // Fetch pending records from API
+    const response = await fetch('/api/audio/pending');
+
+    if (!response.ok) {
+      logError(`Failed to fetch pending records: ${response.status}`);
+      return { processed: 0, failed: 0 };
+    }
+
+    const { records } = await response.json();
+
+    if (!records || records.length === 0) {
+      log('No pending records found');
+      return { processed: 0, failed: 0 };
+    }
+
+    log(`Found ${records.length} pending records to process`);
+    onProgress?.(`发现 ${records.length} 条待处理录音`);
+
+    // Process each pending record
+    for (const record of records) {
+      try {
+        log(`Processing pending record: ${record.id} (table: ${record.table_id})`);
+        onProgress?.(`正在处理 ${record.table_id} 桌录音...`);
+
+        const processResponse = await fetch('/api/audio/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recording_id: record.id,
+            audio_url: record.audio_url,
+            table_id: record.table_id,
+            restaurant_id: record.restaurant_id || 'demo-restaurant-id',
+          }),
+        });
+
+        if (processResponse.ok) {
+          log(`Successfully processed: ${record.id}`);
+          processed++;
+        } else {
+          const errorText = await processResponse.text();
+          logError(`Failed to process ${record.id}`, errorText);
+          failed++;
+        }
+      } catch (error) {
+        logError(`Error processing ${record.id}`, error);
+        failed++;
+      }
+    }
+
+    log(`Pending recovery complete: ${processed} processed, ${failed} failed`);
+    if (processed > 0) {
+      onProgress?.(`已完成 ${processed} 条录音处理`);
+    }
+
+    return { processed, failed };
+  } catch (error) {
+    logError('Failed to retry pending records', error);
+    return { processed: 0, failed: 0 };
   }
 }

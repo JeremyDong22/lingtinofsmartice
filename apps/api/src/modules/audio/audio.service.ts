@@ -1,5 +1,5 @@
 // Audio Service - Business logic for recording processing
-// v2.1 - Added mock mode support for local development
+// v2.2 - Added: getPendingRecords() for recovery after page refresh
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -106,5 +106,38 @@ export class AudioService {
       error_message: data.error_message,
       ai_summary: data.ai_summary,
     };
+  }
+
+  // Get pending records that have audio_url but haven't been processed
+  // Used for recovery after page refresh interrupts processing
+  async getPendingRecords() {
+    if (this.supabase.isMockMode()) {
+      this.logger.warn('[MOCK] Returning empty pending records');
+      return [];
+    }
+
+    const client = this.supabase.getClient();
+
+    // Get records from last 7 days that are pending and have audio_url
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const { data, error } = await client
+      .from('lingtin_visit_records')
+      .select('id, table_id, audio_url, restaurant_id, created_at')
+      .eq('status', 'pending')
+      .not('audio_url', 'is', null)
+      .gte('created_at', sevenDaysAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      this.logger.error(`Failed to fetch pending records: ${error.message}`);
+      throw error;
+    }
+
+    this.logger.log(`Found ${data?.length || 0} pending records`);
+    return data || [];
   }
 }

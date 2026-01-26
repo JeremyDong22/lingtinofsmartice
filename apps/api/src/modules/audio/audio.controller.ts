@@ -1,5 +1,5 @@
 // Audio Controller - API endpoints for recording
-// v3.0 - Simplified MVP: 5 dimensions (summary, sentiment, keywords, manager_questions, customer_answers)
+// v3.1 - Added: GET /pending endpoint for recovery after page refresh
 
 import {
   Controller,
@@ -88,5 +88,14 @@ export class AudioController {
   async getStatus(@Param('visitId') visitId: string) {
     this.logger.log(`▶ GET /audio/status/${visitId}`);
     return this.audioService.getProcessingStatus(visitId);
+  }
+
+  // GET /api/audio/pending - Get pending records for recovery
+  @Get('pending')
+  async getPendingRecords() {
+    this.logger.log(`▶ GET /audio/pending`);
+    const records = await this.audioService.getPendingRecords();
+    this.logger.log(`◀ Found ${records.length} pending records`);
+    return { records };
   }
 }
