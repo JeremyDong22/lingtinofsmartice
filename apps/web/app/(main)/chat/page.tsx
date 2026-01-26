@@ -1,11 +1,12 @@
 // Chat Page - AI-powered analytics assistant with streaming support
-// v1.2 - Added markdown rendering for AI responses, fixed layout for bottom nav
+// v1.4 - Added ThinkingIndicator with animated ellipsis and fade transitions
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { useChatStream } from '@/hooks/useChatStream';
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
+import { ThinkingIndicator } from '@/components/chat/ThinkingIndicator';
 
 export default function ChatPage() {
   const { messages, isLoading, sendMessage, clearMessages } = useChatStream();
@@ -70,31 +71,23 @@ export default function ChatPage() {
               {/* User messages: plain text, Assistant messages: markdown rendered */}
               {msg.role === 'user' ? (
                 <div className="whitespace-pre-wrap">{msg.content}</div>
-              ) : (
+              ) : msg.thinkingStatus ? (
+                // Show thinking status with animated indicator
+                <ThinkingIndicator status={msg.thinkingStatus} />
+              ) : msg.content ? (
                 <MarkdownRenderer content={msg.content} />
-              )}
-              {msg.isStreaming && (
+              ) : msg.isStreaming ? (
+                // Initial loading state before any status arrives
+                <ThinkingIndicator status="思考中" />
+              ) : null}
+              {msg.isStreaming && msg.content && (
                 <span className="inline-block w-2 h-4 bg-primary-500 ml-1 animate-pulse" />
               )}
             </div>
           </div>
         ))}
 
-        {/* Loading indicator */}
-        {isLoading && messages[messages.length - 1]?.content === '' && (
-          <div className="flex justify-start">
-            <div className="bg-white shadow-sm rounded-2xl px-4 py-3">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-                <span className="text-gray-400 text-sm">思考中...</span>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Loading indicator removed - now integrated into message bubble */}
 
         <div ref={messagesEndRef} />
       </div>
