@@ -1,5 +1,5 @@
 // Table Selector Component - Select table by letter + number
-// v1.0
+// v1.1 - Added "外" option for outdoor seating area
 
 'use client';
 
@@ -11,7 +11,7 @@ interface TableSelectorProps {
   disabled?: boolean;
 }
 
-const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', '外'];
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 export function TableSelector({ value, onChange, disabled = false }: TableSelectorProps) {
