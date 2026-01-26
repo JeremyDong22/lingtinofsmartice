@@ -1,8 +1,9 @@
 // Recording Store - Database as single source of truth
-// v2.0 - Sync with database: fetch on load, delete calls API
+// v2.2 - Fixed: Generate UUID format IDs to prevent duplicate records in database
 
 import { useState, useEffect, useCallback } from 'react';
 import { getAuthHeaders } from '@/contexts/AuthContext';
+import { cancelProcessing } from '@/lib/backgroundProcessor';
 
 export type RecordingStatus =
   | 'saved'        // Saved to localStorage (not yet uploaded)
@@ -32,6 +33,15 @@ export interface Recording {
 const LOCAL_STORAGE_KEY = 'lingtin_recordings_local';
 const MAX_LOCAL_RECORDINGS = 20;
 
+// Generate UUID v4 format ID for database compatibility
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // Helper: Get local-only recordings (not yet uploaded)
 function getLocalRecordings(): Recording[] {
   if (typeof window === 'undefined') return [];
@@ -43,14 +53,38 @@ function getLocalRecordings(): Recording[] {
   }
 }
 
-// Helper: Save local-only recordings
+// Helper: Save local-only recordings with quota error handling
 function saveLocalRecordings(recordings: Recording[]): void {
   if (typeof window === 'undefined') return;
   try {
     const trimmed = recordings.slice(0, MAX_LOCAL_RECORDINGS);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(trimmed));
+    // Remove audioData from completed recordings to save space
+    const toSave = trimmed.map(r => {
+      if (r.status === 'completed' || r.status === 'processed') {
+        const { audioData, ...rest } = r;
+        return rest;
+      }
+      return r;
+    });
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
   } catch (error) {
-    console.error('[RecordingStore] Failed to save local recordings:', error);
+    // Handle QuotaExceededError by clearing old data
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn('[RecordingStore] localStorage quota exceeded, clearing old data');
+      try {
+        // Keep only the most recent 5 recordings without audioData
+        const minimal = recordings.slice(0, 5).map(r => {
+          const { audioData, ...rest } = r;
+          return rest;
+        });
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(minimal));
+      } catch {
+        // Last resort: clear all recordings
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+      }
+    } else {
+      console.error('[RecordingStore] Failed to save local recordings:', error);
+    }
   }
 }
 
@@ -135,7 +169,7 @@ export function useRecordingStore(restaurantId?: string) {
     const audioData = await blobToBase64(audioBlob);
 
     const newRecording: Recording = {
-      id: `rec_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+      id: generateUUID(),
       tableId,
       duration,
       timestamp: Date.now(),
@@ -177,8 +211,11 @@ export function useRecordingStore(restaurantId?: string) {
     return recordings.filter(rec => rec.timestamp >= today.getTime());
   }, [recordings]);
 
-  // Delete a recording (calls API to delete from database)
+  // Delete a recording (cancels processing, calls API to delete from database)
   const deleteRecording = useCallback(async (id: string) => {
+    // Cancel any ongoing processing for this recording
+    cancelProcessing(id);
+
     // Optimistically remove from UI
     setRecordings(prev => {
       const updated = prev.filter(rec => rec.id !== id);

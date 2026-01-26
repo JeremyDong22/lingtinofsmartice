@@ -1,9 +1,9 @@
 // Recorder Page - Store manager records table visits with database sync
-// v2.6 - Added today/yesterday date selector for recording history
+// v2.7 - Fixed race condition: prevent duplicate processing of recordings
 
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useRecordingStore } from '@/hooks/useRecordingStore';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,6 +38,11 @@ export default function RecorderPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
   const [selectedDate, setSelectedDate] = useState('今日');
+
+  // Track recordings currently being processed to prevent duplicate processing
+  const processingIdsRef = useRef<Set<string>>(new Set());
+  // Track if retry effect has already run (only run once on mount)
+  const retryEffectRanRef = useRef(false);
 
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
@@ -83,22 +88,34 @@ export default function RecorderPage() {
 
   // Auto-retry interrupted uploads (uploading/saved status with audioData)
   // This recovers recordings that were interrupted during upload
+  // Only runs ONCE on mount to avoid race conditions with new recordings
   useEffect(() => {
+    // Only run once on mount
+    if (retryEffectRanRef.current) return;
+    retryEffectRanRef.current = true;
+
     const retryInterruptedUploads = async () => {
       const needRetry = getRecordingsNeedingRetry();
-      if (needRetry.length === 0) return;
+      // Filter out recordings that are already being processed
+      const toRetry = needRetry.filter(r => !processingIdsRef.current.has(r.id));
+      if (toRetry.length === 0) return;
 
-      showToast(`发现 ${needRetry.length} 条未完成上传`, 'info');
+      showToast(`发现 ${toRetry.length} 条未完成上传`, 'info');
 
-      for (const recording of needRetry) {
+      for (const recording of toRetry) {
+        // Mark as processing to prevent duplicate processing
+        processingIdsRef.current.add(recording.id);
+
         processRecordingInBackground(recording, {
           onStatusChange: (id, status, data) => {
             updateRecording(id, { status, ...data });
             if (status === 'completed') {
+              processingIdsRef.current.delete(id);
               showToast(`${recording.tableId} 桌录音恢复完成`, 'success');
             }
           },
           onError: (id, errorMsg) => {
+            processingIdsRef.current.delete(id);
             console.error(`Recording ${id} retry failed:`, errorMsg);
           },
         }, restaurantId);
@@ -108,7 +125,8 @@ export default function RecorderPage() {
     // Delay to ensure recordings are loaded from localStorage
     const timer = setTimeout(retryInterruptedUploads, 1000);
     return () => clearTimeout(timer);
-  }, [getRecordingsNeedingRetry, updateRecording, restaurantId, showToast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle recording start
   const handleStart = useCallback(async () => {
@@ -135,21 +153,26 @@ export default function RecorderPage() {
         const recording = await saveRecording(tableId, duration, audioBlob);
         showToast(`${tableId} 桌录音已保存`, 'success');
 
-        // Step 2: Reset for next recording
+        // Step 2: Mark as processing to prevent duplicate processing by retry effect
+        processingIdsRef.current.add(recording.id);
+
+        // Step 3: Reset for next recording
         const savedTableId = tableId;
         resetRecording();
         setTableId('');
 
-        // Step 3: Process in background (silent)
+        // Step 4: Process in background (silent)
         processRecordingInBackground(recording, {
           onStatusChange: (id, status, data) => {
             updateRecording(id, { status, ...data });
             // Show completion toast
             if (status === 'completed') {
+              processingIdsRef.current.delete(id);
               showToast(`${savedTableId} 桌分析完成`, 'success');
             }
           },
           onError: (id, errorMsg) => {
+            processingIdsRef.current.delete(id);
             console.error(`Recording ${id} failed:`, errorMsg);
           },
         }, restaurantId);
@@ -157,7 +180,7 @@ export default function RecorderPage() {
 
       processAsync();
     }
-  }, [audioBlob, isRecording, tableId, duration, pendingSave, saveRecording, resetRecording, updateRecording, showToast]);
+  }, [audioBlob, isRecording, tableId, duration, pendingSave, saveRecording, resetRecording, updateRecording, showToast, restaurantId]);
 
   // Retry failed recording
   const handleRetry = useCallback((id: string) => {
