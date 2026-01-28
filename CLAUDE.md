@@ -18,19 +18,37 @@
 |------|------|------|
 | 前端 | Cloudflare Pages | https://lt.smartice.ai |
 | 前端备用 | Cloudflare Pages | https://lingtinofsmartice.pages.dev |
-| 后端 | 阿里云 SAE | https://lt-api.smartice.ai |
+| 后端 | Zeabur | https://lt-api.smartice.ai |
 
-### 后端部署配置 (阿里云 SAE)
+### 后端部署配置 (Zeabur)
 
-- **应用ID**: `5353bc89-29a3-4507-9df1-5f13bf196764`
-- **命名空间**: `cn-hangzhou:lingtin-backend`
-- **镜像**: `crpi-nlg7u5sflu0ivo3f.cn-hangzhou.personal.cr.aliyuncs.com/lingtin/lingtin-api:v1.1`
-- **规格**: 1 Core, 2 GiB
-- **公网IP (SLB)**: `47.97.122.195`
-- **SLB ID**: `lb-bp1u1jh2ugqj4ve4ykt6g`
-- **VPC**: `vpc-bp1qdj9fwr0a0jl9t26dg`
-- **出网EIP**: `114.55.247.154` (用于访问外部服务如Supabase)
+- **平台**: Zeabur (https://zeabur.com)
+- **项目ID**: `697a5cfa06505fdd547f6889`
+- **服务ID**: `697a5def06505fdd547f68c8`
+- **服务名**: `lingtinofsmartice`
+- **区域**: 待配置 (推荐香港/新加坡)
+- **根目录**: `/apps/api`
+- **框架**: NestJS + pnpm
+- **自动HTTPS**: ✅ Zeabur 自动提供
 - **API 地址**: `https://lt-api.smartice.ai/api`
+
+#### 环境变量
+
+```
+NODE_ENV=production
+PORT=3001
+SUPABASE_URL=https://wdpeoyugsxqnpwwtkqsl.supabase.co
+SUPABASE_SERVICE_KEY=<见.env>
+XUNFEI_API_KEY=<见.env>
+XUNFEI_API_SECRET=<见.env>
+XUNFEI_APP_ID=<见.env>
+GEMINI_API_KEY=<见.env>
+ANTHROPIC_API_KEY=<见.env>
+```
+
+#### 历史部署 (已废弃)
+
+~~阿里云 SAE~~ - 2026-01-29 已删除，原因：HTTPS配置复杂，Cloudflare Full (Strict) 模式需要有效SSL证书
 
 ### 前端部署配置
 

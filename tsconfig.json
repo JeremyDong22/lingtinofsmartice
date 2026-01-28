@@ -1,0 +1,29 @@
+// Root TypeScript Configuration for Lingtin Monorepo
+// v1.0 - Enables LSP support across all packages
+
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "lib": ["ES2021"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
+    "baseUrl": ".",
+    "paths": {
+      "@lingtin/types": ["packages/types"]
+    }
+  },
+  "references": [
+    { "path": "apps/api" },
+    { "path": "apps/web" },
+    { "path": "packages/types" }
+  ],
+  "exclude": ["node_modules", "**/dist", "**/.next"]
+}
