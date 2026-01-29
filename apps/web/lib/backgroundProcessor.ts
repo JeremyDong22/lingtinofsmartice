@@ -1,5 +1,5 @@
 // Background Processor - Handles async upload and AI pipeline
-// v1.9 - Added: Update database status on frontend processing failure
+// v2.0 - Fixed: Support retry for recordings with audioUrl but no audioData
 
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
 import { getAuthHeaders } from '@/contexts/AuthContext';
@@ -83,7 +83,7 @@ export async function processRecordingInBackground(
   callbacks: ProcessingCallbacks,
   restaurantId?: string
 ) {
-  const { id, tableId, audioData } = recording;
+  const { id, tableId, audioData, audioUrl: existingAudioUrl } = recording;
   const startTime = Date.now();
   const authHeaders = getAuthHeaders();
 
@@ -93,7 +93,8 @@ export async function processRecordingInBackground(
 
   log(`Starting pipeline for recording ${id} (table: ${tableId})`);
 
-  if (!audioData) {
+  // Check if we have either audioData (for upload) or audioUrl (already uploaded)
+  if (!audioData && !existingAudioUrl) {
     logError(`Recording ${id} has no audio data`);
     callbacks.onError(id, '录音数据丢失');
     activeProcessing.delete(id);
@@ -107,48 +108,60 @@ export async function processRecordingInBackground(
       return;
     }
 
-    // Step 1: Upload to cloud storage
-    log(`[Step 1/3] Uploading audio to cloud storage...`);
-    callbacks.onStatusChange(id, 'uploading');
+    let audioUrl: string;
+    let visitId: string = id;
 
-    const audioBlob = base64ToBlob(audioData);
-    log(`Audio blob created: ${(audioBlob.size / 1024).toFixed(1)} KB`);
+    // If we already have audioUrl, skip upload and go directly to AI processing
+    if (existingAudioUrl) {
+      log(`[Step 1/3] Audio already uploaded, skipping upload step`);
+      audioUrl = existingAudioUrl;
+      callbacks.onStatusChange(id, 'processing', { audioUrl });
+    } else {
+      // Step 1: Upload to cloud storage
+      log(`[Step 1/3] Uploading audio to cloud storage...`);
+      callbacks.onStatusChange(id, 'uploading');
 
-    const formData = new FormData();
-    formData.append('file', audioBlob, `${tableId}_${Date.now()}.webm`);
-    formData.append('table_id', tableId);
-    formData.append('recording_id', id);
-    if (restaurantId) {
-      formData.append('restaurant_id', restaurantId);
-    }
+      const audioBlob = base64ToBlob(audioData!);
+      log(`Audio blob created: ${(audioBlob.size / 1024).toFixed(1)} KB`);
 
-    const uploadStartTime = Date.now();
-    const uploadResponse = await fetchWithTimeout(getApiUrl('api/audio/upload'), {
-      method: 'POST',
-      headers: authHeaders,
-      body: formData,
-    }, UPLOAD_TIMEOUT_MS, abortController);
+      const formData = new FormData();
+      formData.append('file', audioBlob, `${tableId}_${Date.now()}.webm`);
+      formData.append('table_id', tableId);
+      formData.append('recording_id', id);
+      if (restaurantId) {
+        formData.append('restaurant_id', restaurantId);
+      }
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      logError(`Upload failed: ${uploadResponse.status}`, errorText);
-      throw new Error(`上传失败: ${uploadResponse.status}`);
-    }
+      const uploadStartTime = Date.now();
+      const uploadResponse = await fetchWithTimeout(getApiUrl('api/audio/upload'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+      }, UPLOAD_TIMEOUT_MS, abortController);
 
-    const uploadResult = await uploadResponse.json();
-    log(`[Step 1/3] Upload complete in ${Date.now() - uploadStartTime}ms`, uploadResult);
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        logError(`Upload failed: ${uploadResponse.status}`, errorText);
+        throw new Error(`上传失败: ${uploadResponse.status}`);
+      }
 
-    // Check if cancelled after upload
-    if (abortController.signal.aborted) {
-      log(`Processing cancelled after upload: ${id}`);
-      return;
+      const uploadResult = await uploadResponse.json();
+      log(`[Step 1/3] Upload complete in ${Date.now() - uploadStartTime}ms`, uploadResult);
+      audioUrl = uploadResult.audioUrl;
+      visitId = uploadResult.visit_id;
+
+      // Check if cancelled after upload
+      if (abortController.signal.aborted) {
+        log(`Processing cancelled after upload: ${id}`);
+        return;
+      }
+
+      // Update status to processing with audioUrl
+      callbacks.onStatusChange(id, 'processing', { audioUrl });
     }
 
     // Step 2: Trigger AI pipeline processing with retry logic
     log(`[Step 2/3] Starting AI processing (STT + Gemini)...`);
-    callbacks.onStatusChange(id, 'processing', {
-      audioUrl: uploadResult.audioUrl,
-    });
 
     let processResult = null;
     let lastError: Error | null = null;
@@ -169,8 +182,8 @@ export async function processRecordingInBackground(
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({
-            recording_id: uploadResult.visit_id,
-            audio_url: uploadResult.audioUrl,
+            recording_id: visitId,
+            audio_url: audioUrl,
             table_id: tableId,
             restaurant_id: restaurantId,
           }),
