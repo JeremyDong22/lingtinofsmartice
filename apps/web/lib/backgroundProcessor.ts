@@ -1,5 +1,5 @@
 // Background Processor - Handles async upload and AI pipeline
-// v1.8 - Changed: Direct backend API calls (removed Next.js proxy layer)
+// v1.9 - Added: Update database status on frontend processing failure
 
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
 import { getAuthHeaders } from '@/contexts/AuthContext';
@@ -248,6 +248,22 @@ export async function processRecordingInBackground(
       message = error.message;
     }
     logError(`Pipeline failed for ${id}`, error);
+
+    // Update database status to 'error' for recovery after page refresh
+    try {
+      await fetchWithTimeout(getApiUrl(`api/audio/${id}/status`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          status: 'error',
+          error_message: message,
+        }),
+      }, 5000);
+      log(`Database status updated to error for ${id}`);
+    } catch (updateError) {
+      logError(`Failed to update error status in database for ${id}`, updateError);
+    }
+
     callbacks.onError(id, message);
     callbacks.onStatusChange(id, 'error', { errorMessage: message });
   } finally {

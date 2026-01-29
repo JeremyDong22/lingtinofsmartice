@@ -1,5 +1,5 @@
 // Audio Service - Business logic for recording processing
-// v2.5 - Fixed: Use China timezone for getTodayRecordings and visit_period
+// v2.6 - Added updateRecordingStatus method for error recovery
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -183,6 +183,38 @@ export class AudioService {
 
     if (error) {
       this.logger.error(`Failed to delete recording: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Update recording status (for error recovery from frontend)
+  async updateRecordingStatus(
+    visitId: string,
+    status: string,
+    errorMessage?: string,
+  ) {
+    if (this.supabase.isMockMode()) {
+      this.logger.warn(`[MOCK] Would update status to ${status}`);
+      return;
+    }
+
+    const client = this.supabase.getClient();
+
+    const updateData: Record<string, unknown> = { status };
+    if (errorMessage) {
+      updateData.error_message = errorMessage;
+    }
+    if (status === 'error' || status === 'processed') {
+      updateData.processed_at = new Date().toISOString();
+    }
+
+    const { error } = await client
+      .from('lingtin_visit_records')
+      .update(updateData)
+      .eq('id', visitId);
+
+    if (error) {
+      this.logger.error(`Failed to update status: ${error.message}`);
       throw error;
     }
   }

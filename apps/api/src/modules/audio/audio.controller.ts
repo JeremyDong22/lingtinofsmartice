@@ -1,11 +1,12 @@
 // Audio Controller - API endpoints for recording
-// v3.3 - Added delete endpoint and today's recordings list
+// v3.4 - Added PATCH status endpoint for error recovery
 
 import {
   Controller,
   Post,
   Get,
   Delete,
+  Patch,
   Param,
   Query,
   Body,
@@ -116,6 +117,19 @@ export class AudioController {
     this.logger.log(`▶ DELETE /audio/${visitId}`);
     await this.audioService.deleteRecording(visitId);
     this.logger.log(`◀ Deleted recording ${visitId}`);
+    return { success: true };
+  }
+
+  // PATCH /api/audio/:visitId/status - Update recording status (for error recovery)
+  @Patch(':visitId/status')
+  async updateStatus(
+    @Param('visitId') visitId: string,
+    @Body('status') status: string,
+    @Body('error_message') errorMessage?: string,
+  ) {
+    this.logger.log(`▶ PATCH /audio/${visitId}/status → ${status}`);
+    await this.audioService.updateRecordingStatus(visitId, status, errorMessage);
+    this.logger.log(`◀ Status updated to ${status}`);
     return { success: true };
   }
 }

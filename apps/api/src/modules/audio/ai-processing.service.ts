@@ -1,5 +1,5 @@
 // AI Processing Service - Handles STT and AI tagging pipeline
-// v3.5 - Switched from PackyAPI to OpenRouter for faster response
+// v3.6 - Added error handling: update database status to 'error' on failure
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -103,6 +103,14 @@ export class AiProcessingService {
         transcript: rawTranscript,
         ...aiResult,
       };
+    } catch (error) {
+      // Update database status to 'error' on any failure
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Pipeline failed for ${recordingId}: ${errorMessage}`);
+
+      await this.saveErrorStatus(recordingId, errorMessage);
+
+      throw error; // Re-throw for caller
     } finally {
       // Always release lock when done
       this.processingLocks.delete(recordingId);
@@ -150,6 +158,32 @@ export class AiProcessingService {
 
     if (error) {
       this.logger.error(`Failed to update status for ${recordingId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Save error status to database when processing fails
+   */
+  private async saveErrorStatus(recordingId: string, errorMessage: string): Promise<void> {
+    if (this.supabase.isMockMode()) {
+      this.logger.log(`[MOCK] Would save error status for ${recordingId}: ${errorMessage}`);
+      return;
+    }
+
+    const client = this.supabase.getClient();
+    const { error } = await client
+      .from('lingtin_visit_records')
+      .update({
+        status: 'error',
+        error_message: errorMessage,
+        processed_at: new Date().toISOString(),
+      })
+      .eq('id', recordingId);
+
+    if (error) {
+      this.logger.error(`Failed to save error status for ${recordingId}: ${error.message}`);
+    } else {
+      this.logger.log(`Error status saved for ${recordingId}`);
     }
   }
 

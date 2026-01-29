@@ -1,5 +1,5 @@
 // Recorder Page - Store manager records table visits with database sync
-// v2.8 - Clear table selection immediately when stopping recording for better UX
+// v2.9 - Added periodic cleanup of stale processingIdsRef entries
 
 'use client';
 
@@ -118,6 +118,7 @@ export default function RecorderPage() {
           },
           onError: (id, errorMsg) => {
             processingIdsRef.current.delete(id);
+            updateRecording(id, { status: 'error', errorMessage: errorMsg });
             console.error(`Recording ${id} retry failed:`, errorMsg);
           },
         }, restaurantId);
@@ -129,6 +130,23 @@ export default function RecorderPage() {
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Periodic cleanup of stale processingIdsRef entries
+  // This prevents recordings from getting stuck if backend fails silently
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      recordings.forEach(rec => {
+        // If marked as processing in frontend tracker but DB shows terminal state
+        if (processingIdsRef.current.has(rec.id)) {
+          if (rec.status === 'error' || rec.status === 'completed' || rec.status === 'processed') {
+            processingIdsRef.current.delete(rec.id);
+          }
+        }
+      });
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(cleanupInterval);
+  }, [recordings]);
 
   // Handle recording start
   const handleStart = useCallback(async () => {
