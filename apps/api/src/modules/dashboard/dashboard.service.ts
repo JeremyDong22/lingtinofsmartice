@@ -1,5 +1,9 @@
 // Dashboard Service - Analytics business logic
-// v1.8 - Added: FeedbackWithContext interface for conversation popover
+// v2.0 - Added: getRestaurantsOverview() for admin dashboard with sentiment scores
+// v1.9 - Added: Multi-restaurant support for administrator role
+//        - getRestaurantList() returns all active restaurants
+//        - getCoverageStats() supports restaurant_id=all for multi-store summary
+//        - getSentimentSummary() supports restaurant_id=all for aggregated data
 
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -19,10 +23,32 @@ export interface FeedbackWithContext {
 export class DashboardService {
   constructor(private readonly supabase: SupabaseService) {}
 
+  // Get all active restaurants (for administrator multi-store view)
+  async getRestaurantList() {
+    const client = this.supabase.getClient();
+
+    const { data, error } = await client
+      .from('master_restaurant')
+      .select('id, restaurant_name')
+      .eq('is_active', true)
+      .order('restaurant_name');
+
+    if (error) throw error;
+
+    return { restaurants: data || [] };
+  }
+
   // Get coverage statistics (visits vs table sessions)
+  // Supports restaurant_id=all for multi-store summary
   async getCoverageStats(restaurantId: string, date: string) {
     const client = this.supabase.getClient();
 
+    // Multi-restaurant mode: return per-restaurant breakdown with summary
+    if (restaurantId === 'all') {
+      return this.getMultiRestaurantCoverage(date);
+    }
+
+    // Single restaurant mode (original logic)
     // Get table sessions count by period
     const { data: sessions, error: sessionsError } = await client
       .from('lingtin_table_sessions')
@@ -60,6 +86,85 @@ export class DashboardService {
     });
 
     return { periods: result };
+  }
+
+  // Get coverage stats for all restaurants (admin multi-store view)
+  private async getMultiRestaurantCoverage(date: string) {
+    const client = this.supabase.getClient();
+
+    // Get all active restaurants
+    const { data: restaurants, error: restError } = await client
+      .from('master_restaurant')
+      .select('id, restaurant_name')
+      .eq('is_active', true)
+      .order('restaurant_name');
+
+    if (restError) throw restError;
+
+    // Get all sessions for the date
+    const { data: allSessions, error: sessionsError } = await client
+      .from('lingtin_table_sessions')
+      .select('restaurant_id, period')
+      .eq('session_date', date);
+
+    if (sessionsError) throw sessionsError;
+
+    // Get all visits for the date
+    const { data: allVisits, error: visitsError } = await client
+      .from('lingtin_visit_records')
+      .select('restaurant_id, visit_period')
+      .eq('visit_date', date)
+      .eq('status', 'processed');
+
+    if (visitsError) throw visitsError;
+
+    // Calculate per-restaurant stats
+    const periods = ['lunch', 'dinner'];
+    let totalOpen = 0;
+    let totalVisit = 0;
+
+    const restaurantStats = (restaurants || []).map((rest) => {
+      const restSessions = allSessions?.filter((s) => s.restaurant_id === rest.id) || [];
+      const restVisits = allVisits?.filter((v) => v.restaurant_id === rest.id) || [];
+
+      const periodStats = periods.map((period) => {
+        const openCount = restSessions.filter((s) => s.period === period).length;
+        const visitCount = restVisits.filter((v) => v.visit_period === period).length;
+        const coverage = openCount > 0 ? Math.round((visitCount / openCount) * 100) : 0;
+
+        totalOpen += openCount;
+        totalVisit += visitCount;
+
+        return {
+          period,
+          open_count: openCount,
+          visit_count: visitCount,
+          coverage,
+        };
+      });
+
+      // Calculate overall status for this restaurant
+      const restTotalOpen = periodStats.reduce((sum, p) => sum + p.open_count, 0);
+      const restTotalVisit = periodStats.reduce((sum, p) => sum + p.visit_count, 0);
+      const overallCoverage = restTotalOpen > 0 ? Math.round((restTotalVisit / restTotalOpen) * 100) : 0;
+
+      return {
+        id: rest.id,
+        name: rest.restaurant_name,
+        periods: periodStats,
+        overall_coverage: overallCoverage,
+        status: overallCoverage >= 90 ? 'good' : overallCoverage >= 70 ? 'warning' : 'critical',
+      };
+    });
+
+    return {
+      summary: {
+        total_open: totalOpen,
+        total_visit: totalVisit,
+        coverage: totalOpen > 0 ? Math.round((totalVisit / totalOpen) * 100) : 0,
+      },
+      restaurants: restaurantStats,
+    };
   }
 
   // Get top mentioned dishes with sentiment
@@ -154,15 +259,23 @@ export class DashboardService {
 
   // Get sentiment distribution summary for a date with feedback phrases
   // v1.7 - Added: Include conversation context for each feedback (for popover display)
+  // v1.9 - Added: Support restaurant_id=all for multi-store aggregation
   async getSentimentSummary(restaurantId: string, date: string) {
     const client = this.supabase.getClient();
 
-    const { data, error } = await client
+    // Build query - either for single restaurant or all restaurants
+    let query = client
       .from('lingtin_visit_records')
       .select('id, table_id, feedbacks, manager_questions, customer_answers, corrected_transcript')
-      .eq('restaurant_id', restaurantId)
       .eq('visit_date', date)
       .eq('status', 'processed');
+
+    // Only filter by restaurant_id if not 'all'
+    if (restaurantId !== 'all') {
+      query = query.eq('restaurant_id', restaurantId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -236,6 +349,110 @@ export class DashboardService {
       total_feedbacks: total,
       positive_feedbacks: groupFeedbacks(positiveFeedbacks, 6),
       negative_feedbacks: groupFeedbacks(negativeFeedbacks, 6),
+    };
+  }
+
+  // Get all restaurants overview with sentiment scores and keywords (for admin dashboard)
+  // Returns: restaurant list with visit count, avg sentiment, coverage, recent keywords
+  async getRestaurantsOverview(date: string) {
+    const client = this.supabase.getClient();
+
+    // Get all active restaurants
+    const { data: restaurants, error: restError } = await client
+      .from('master_restaurant')
+      .select('id, restaurant_name')
+      .eq('is_active', true)
+      .order('restaurant_name');
+
+    if (restError) throw restError;
+
+    // Get all visits for the date with sentiment and keywords
+    const { data: allVisits, error: visitsError } = await client
+      .from('lingtin_visit_records')
+      .select('restaurant_id, visit_period, sentiment_score, keywords')
+      .eq('visit_date', date)
+      .eq('status', 'processed');
+
+    if (visitsError) throw visitsError;
+
+    // Get all table sessions for coverage calculation
+    const { data: allSessions, error: sessionsError } = await client
+      .from('lingtin_table_sessions')
+      .select('restaurant_id, period')
+      .eq('session_date', date);
+
+    if (sessionsError) throw sessionsError;
+
+    // Calculate per-restaurant stats
+    let totalVisits = 0;
+    let totalSentimentSum = 0;
+    let totalSentimentCount = 0;
+    const allKeywords: string[] = [];
+
+    const restaurantStats = (restaurants || []).map((rest) => {
+      const restVisits = allVisits?.filter((v) => v.restaurant_id === rest.id) || [];
+      const restSessions = allSessions?.filter((s) => s.restaurant_id === rest.id) || [];
+
+      // Visit count
+      const visitCount = restVisits.length;
+      totalVisits += visitCount;
+
+      // Average sentiment score
+      const sentimentScores = restVisits
+        .filter((v) => v.sentiment_score !== null)
+        .map((v) => v.sentiment_score);
+      const avgSentiment = sentimentScores.length > 0
+        ? sentimentScores.reduce((a, b) => a + b, 0) / sentimentScores.length
+        : null;
+
+      if (avgSentiment !== null) {
+        totalSentimentSum += avgSentiment * sentimentScores.length;
+        totalSentimentCount += sentimentScores.length;
+      }
+
+      // Coverage
+      const openCount = restSessions.length;
+      const coverage = openCount > 0 ? Math.round((visitCount / openCount) * 100) : 0;
+
+      // Recent keywords (flatten and dedupe)
+      const keywords: string[] = [];
+      restVisits.forEach((v) => {
+        if (Array.isArray(v.keywords)) {
+          v.keywords.forEach((kw: string) => {
+            if (kw && !keywords.includes(kw)) {
+              keywords.push(kw);
+            }
+            if (kw && !allKeywords.includes(kw)) {
+              allKeywords.push(kw);
+            }
+          });
+        }
+      });
+
+      return {
+        id: rest.id,
+        name: rest.restaurant_name,
+        visit_count: visitCount,
+        open_count: openCount,
+        coverage,
+        avg_sentiment: avgSentiment !== null ? Math.round(avgSentiment * 100) / 100 : null,
+        keywords: keywords.slice(0, 5),
+      };
+    });
+
+    // Sort by visit count descending
+    restaurantStats.sort((a, b) => b.visit_count - a.visit_count);
+
+    return {
+      summary: {
+        total_visits: totalVisits,
+        avg_sentiment: totalSentimentCount > 0
+          ? Math.round((totalSentimentSum / totalSentimentCount) * 100) / 100
+          : null,
+        restaurant_count: restaurants?.length || 0,
+      },
+      restaurants: restaurantStats,
+      recent_keywords: allKeywords.slice(0, 10),
     };
   }
 

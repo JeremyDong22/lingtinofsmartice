@@ -1,5 +1,7 @@
 // Main App Layout - Layout with bottom navigation
-// v1.0
+// v1.1 - Added 'use client' to fix Server/Client component boundary issue
+
+'use client';
 
 import { BottomNav } from '@/components/layout/BottomNav';
 

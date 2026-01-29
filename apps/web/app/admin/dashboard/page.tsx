@@ -1,443 +1,200 @@
-// Admin Dashboard Page - Business metrics and analytics for boss role
-// v1.0 - Initial version, reuses manager dashboard with admin-specific navigation
+// Admin Dashboard Page - Multi-store overview for administrator/boss role
+// v3.1 - Added: Keyword sentiment colors (green/red), clickable restaurant cards
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 
-// Types for API responses
-interface CoveragePeriod {
-  period: string;
-  open_count: number;
+// Types for API response
+interface RestaurantOverview {
+  id: string;
+  name: string;
   visit_count: number;
+  open_count: number;
   coverage: number;
-  status: 'good' | 'warning' | 'critical';
+  avg_sentiment: number | null;
+  keywords: string[];
 }
 
-// Conversation context for feedback popover
-interface FeedbackContext {
-  text: string;
-  visitId: string;
-  tableId: string;
-  managerQuestions: string[];
-  customerAnswers: string[];
-  transcript: string;
+interface OverviewResponse {
+  summary: {
+    total_visits: number;
+    avg_sentiment: number | null;
+    restaurant_count: number;
+  };
+  restaurants: RestaurantOverview[];
+  recent_keywords: string[];
 }
 
-interface SentimentFeedback {
-  text: string;
-  count: number;
-  contexts?: FeedbackContext[];
+// Sentiment score to color and label
+function getSentimentDisplay(score: number | null): { color: string; bg: string; label: string } {
+  if (score === null) return { color: 'text-gray-400', bg: 'bg-gray-100', label: '暂无' };
+  if (score >= 0.7) return { color: 'text-green-600', bg: 'bg-green-100', label: '优秀' };
+  if (score >= 0.5) return { color: 'text-yellow-600', bg: 'bg-yellow-100', label: '一般' };
+  return { color: 'text-red-600', bg: 'bg-red-100', label: '需关注' };
 }
 
-interface SentimentSummary {
-  positive_count: number;
-  neutral_count: number;
-  negative_count: number;
-  positive_percent: number;
-  neutral_percent: number;
-  negative_percent: number;
-  total_visits: number;
-  positive_feedbacks: SentimentFeedback[];
-  negative_feedbacks: SentimentFeedback[];
+// Format sentiment score as percentage
+function formatSentiment(score: number | null): string {
+  if (score === null) return '--';
+  return `${Math.round(score * 100)}`;
 }
 
-interface ManagerQuestion {
-  text: string;
-  table: string;
-  time: string;
+// Keyword sentiment detection - returns 'positive', 'negative', or 'neutral'
+const POSITIVE_KEYWORDS = ['好吃', '超好吃', '很好吃', '服务好', '服务热情', '环境好', '环境不错', '干净', '新鲜', '分量足', '实惠', '会再来', '推荐朋友', '肉质好', '火候刚好', '味道好', '蘸料好', '烤肉香', '小菜好吃'];
+const NEGATIVE_KEYWORDS = ['偏咸', '太咸', '太油', '上菜慢', '服务差', '服务一般', '态度不好', '不新鲜', '退菜', '空调冷', '等位久', '一般般', '还行'];
+
+function getKeywordSentiment(keyword: string): 'positive' | 'negative' | 'neutral' {
+  if (POSITIVE_KEYWORDS.some(pk => keyword.includes(pk))) return 'positive';
+  if (NEGATIVE_KEYWORDS.some(nk => keyword.includes(nk))) return 'negative';
+  return 'neutral';
 }
 
-// Calculate date based on selection (using local timezone)
-function getDateForSelection(selection: string): string {
-  const date = new Date();
-  if (selection === '昨日') {
-    date.setDate(date.getDate() - 1);
-  }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-// Response types for SWR
-interface CoverageResponse {
-  periods: CoveragePeriod[];
-}
-
-interface HighlightsResponse {
-  questions: ManagerQuestion[];
+function getKeywordStyle(keyword: string): string {
+  const sentiment = getKeywordSentiment(keyword);
+  if (sentiment === 'positive') return 'bg-green-50 text-green-600';
+  if (sentiment === 'negative') return 'bg-red-50 text-red-600';
+  return 'bg-gray-100 text-gray-600';
 }
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState('今日');
-  const [selectedFeedback, setSelectedFeedback] = useState<{
-    feedback: SentimentFeedback;
-    type: 'positive' | 'negative';
-    rect: DOMRect;
-  } | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
 
-  const { user } = useAuth();
-  const restaurantId = user?.restaurantId;
-
-  const date = getDateForSelection(selectedDate);
-  const params = restaurantId
-    ? new URLSearchParams({ restaurant_id: restaurantId, date }).toString()
-    : null;
-
-  const { data: coverageData, isLoading: coverageLoading } = useSWR<CoverageResponse>(
-    params ? `/api/dashboard/coverage?${params}` : null
-  );
-  const { data: sentimentData, isLoading: sentimentLoading } = useSWR<SentimentSummary>(
-    params ? `/api/dashboard/sentiment-summary?${params}` : null
-  );
-  const { data: highlightsData, isLoading: highlightsLoading } = useSWR<HighlightsResponse>(
-    params ? `/api/dashboard/speech-highlights?${params}` : null
+  // Fetch restaurants overview data
+  const { data, isLoading, error } = useSWR<OverviewResponse>(
+    '/api/dashboard/restaurants-overview'
   );
 
-  const coverage = coverageData ?? { periods: [] };
-  const sentiment = sentimentData ?? null;
-  const managerQuestions = highlightsData?.questions ?? [];
-  const loading = coverageLoading || sentimentLoading || highlightsLoading;
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setSelectedFeedback(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const summary = data?.summary;
+  const restaurants = data?.restaurants || [];
+  const recentKeywords = data?.recent_keywords || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-900">数据看板</h1>
-        <div className="flex items-center gap-3">
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {['今日', '昨日'].map((option) => (
-              <button
-                key={option}
-                onClick={() => setSelectedDate(option)}
-                className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                  selectedDate === option
-                    ? 'bg-white text-gray-900 shadow-sm font-medium'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <UserMenu />
-        </div>
+        <h1 className="text-lg font-semibold text-gray-900">经营看板</h1>
+        <UserMenu />
       </header>
 
       <main className="p-4 space-y-4">
-        {loading && (
-          <div className="text-center py-8 text-gray-500">加载中...</div>
-        )}
-
-        {/* Coverage Table */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">执行覆盖率</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-500 border-b border-gray-100">
-                  <th className="text-left py-2 font-medium">时段</th>
-                  <th className="text-center py-2 font-medium">开台</th>
-                  <th className="text-center py-2 font-medium">桌访</th>
-                  <th className="text-center py-2 font-medium">覆盖率</th>
-                  <th className="text-right py-2 font-medium">状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                {coverage.periods.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={5} className="text-center py-4 text-gray-400">
-                      暂无数据
-                    </td>
-                  </tr>
-                )}
-                {coverage.periods.map((row) => (
-                  <tr key={row.period} className="border-b border-gray-50">
-                    <td className="py-3 font-medium">
-                      {row.period === 'lunch' ? '午市' : '晚市'}
-                    </td>
-                    <td className="text-center text-gray-600">{row.open_count}</td>
-                    <td className="text-center text-gray-600">{row.visit_count}</td>
-                    <td className="text-center">
-                      <span
-                        className={`font-medium ${
-                          row.status === 'good'
-                            ? 'text-green-600'
-                            : row.status === 'warning'
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                        }`}
-                      >
-                        {row.coverage}%
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      {row.status === 'good' ? (
-                        <span className="text-green-600">✓ 正常</span>
-                      ) : row.open_count > row.visit_count ? (
-                        <span className="text-yellow-600">
-                          ⚠ -{row.open_count - row.visit_count}桌
-                        </span>
-                      ) : (
-                        <span className="text-green-600">✓ 正常</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="text-xs text-gray-500 mb-1">今日桌访</div>
+            <div className="text-2xl font-bold text-gray-900">
+              {isLoading ? '--' : summary?.total_visits || 0}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              {summary?.restaurant_count || 0} 家门店
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="text-xs text-gray-500 mb-1">整体情绪</div>
+            <div className={`text-2xl font-bold ${getSentimentDisplay(summary?.avg_sentiment ?? null).color}`}>
+              {isLoading ? '--' : formatSentiment(summary?.avg_sentiment ?? null)}
+              {summary?.avg_sentiment !== null && <span className="text-sm font-normal">分</span>}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              {getSentimentDisplay(summary?.avg_sentiment ?? null).label}
+            </div>
           </div>
         </div>
 
-        {/* Sentiment Summary */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">情绪概览</h2>
-          {sentiment ? (
-            <>
-              <div className="flex items-center justify-around py-4">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-600">
-                    {sentiment.positive_percent}%
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">正面情绪</div>
-                </div>
-                <div className="h-12 w-px bg-gray-200" />
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-gray-600">
-                    {sentiment.neutral_percent}%
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">中性情绪</div>
-                </div>
-                <div className="h-12 w-px bg-gray-200" />
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-red-500">
-                    {sentiment.negative_percent}%
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">负面情绪</div>
-                </div>
-              </div>
-
-              {(sentiment.positive_feedbacks?.length > 0 ||
-                sentiment.negative_feedbacks?.length > 0) && (
-                <div className="border-t border-gray-100 pt-3 mt-2">
-                  {sentiment.positive_feedbacks?.length > 0 && (
-                    <div className="mb-3">
-                      <div className="text-xs text-gray-500 mb-2">正面评价</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sentiment.positive_feedbacks.map((fb: SentimentFeedback, i: number) => (
-                          <button
-                            key={i}
-                            onClick={(e) => {
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setSelectedFeedback({ feedback: fb, type: 'positive', rect });
-                            }}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 hover:bg-green-100 hover:ring-2 hover:ring-green-300 transition-all cursor-pointer"
-                            style={{
-                              fontSize: `${Math.min(12 + fb.count * 2, 16)}px`,
-                              opacity: Math.max(0.6, 1 - i * 0.1),
-                            }}
-                          >
-                            {fb.text}
-                            {fb.count > 1 && (
-                              <span className="ml-1 text-green-500">×{fb.count}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {sentiment.negative_feedbacks?.length > 0 && (
-                    <div>
-                      <div className="text-xs text-gray-500 mb-2">负面评价</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sentiment.negative_feedbacks.map((fb: SentimentFeedback, i: number) => (
-                          <button
-                            key={i}
-                            onClick={(e) => {
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setSelectedFeedback({ feedback: fb, type: 'negative', rect });
-                            }}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-600 hover:bg-red-100 hover:ring-2 hover:ring-red-300 transition-all cursor-pointer"
-                            style={{
-                              fontSize: `${Math.min(12 + fb.count * 2, 16)}px`,
-                              opacity: Math.max(0.6, 1 - i * 0.1),
-                            }}
-                          >
-                            {fb.text}
-                            {fb.count > 1 && (
-                              <span className="ml-1 text-red-400">×{fb.count}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          ) : !loading ? (
-            <div className="text-center py-4 text-gray-400">暂无数据</div>
-          ) : null}
-        </div>
-
-        {/* Manager Questions - 话术使用 */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-gray-700">话术使用</h2>
-            <button
-              onClick={() => {
-                const question = '请你获取我们最近的桌台访问的话术并且以专业餐饮经营者的角度，告诉我该如何优化这些话术，以获得更好的效果';
-                router.push(`/admin/chat?q=${encodeURIComponent(question)}`);
-              }}
-              className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95"
-            >
-              <span className="absolute inset-0 animate-shimmer bg-[linear-gradient(110deg,#8b5cf6,45%,#c084fc,55%,#8b5cf6)] bg-[length:200%_100%]" />
-              <span className="relative flex items-center gap-1.5 text-white">
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" strokeLinecap="round" />
-                  <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-                </svg>
-                <span>AI 优化</span>
-              </span>
-            </button>
-          </div>
-          <div className="space-y-2">
-            {managerQuestions.length === 0 && !loading && (
-              <div className="text-center py-4 text-gray-400 text-sm">暂无数据</div>
-            )}
-            {managerQuestions.map((q: ManagerQuestion, i: number) => (
-              <div
-                key={i}
-                className="bg-blue-50 rounded-lg p-3 text-sm"
-              >
-                <div className="text-blue-800">&quot;{q.text}&quot;</div>
-                <div className="text-blue-500 text-xs mt-1">
-                  {q.table}桌 · {q.time}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
-
-      {/* Feedback Conversation Popover */}
-      {selectedFeedback && (() => {
-        const popoverWidth = 320;
-        const padding = 16;
-        const viewportWidth = window.innerWidth;
-
-        const bubbleCenter = selectedFeedback.rect.left + selectedFeedback.rect.width / 2;
-        let left = bubbleCenter - popoverWidth / 2;
-
-        if (left < padding) {
-          left = padding;
-        }
-        if (left + popoverWidth > viewportWidth - padding) {
-          left = viewportWidth - popoverWidth - padding;
-        }
-
-        return (
-          <div
-            ref={popoverRef}
-            className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 w-80 animate-in fade-in zoom-in-95 duration-200"
-            style={{
-              top: Math.min(selectedFeedback.rect.bottom + 8, window.innerHeight - 300),
-              left,
-            }}
-          >
-          <button
-            onClick={() => setSelectedFeedback(null)}
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          <div className={`inline-block px-2 py-1 rounded-full text-sm font-medium mb-3 ${
-            selectedFeedback.type === 'positive'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-700'
-          }`}>
-            {selectedFeedback.feedback.text}
-          </div>
-
-          {selectedFeedback.feedback.contexts && selectedFeedback.feedback.contexts.length > 0 ? (
-            <div className="space-y-3 max-h-60 overflow-y-auto">
-              {selectedFeedback.feedback.contexts.map((ctx, idx) => (
-                <div key={idx} className="border-l-2 border-gray-200 pl-3">
-                  <div className="text-xs text-gray-400 mb-1">{ctx.tableId}桌</div>
-
-                  {ctx.managerQuestions.length > 0 && (
-                    <div className="mb-2">
-                      <div className="text-xs text-blue-500 mb-0.5">店长:</div>
-                      <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-2 py-1">
-                        {ctx.managerQuestions.join(' ')}
-                      </div>
-                    </div>
-                  )}
-
-                  {ctx.customerAnswers.length > 0 && (
-                    <div>
-                      <div className="text-xs text-gray-500 mb-0.5">顾客:</div>
-                      <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-2 py-1">
-                        {ctx.customerAnswers.map((answer, ansIdx) => {
-                          const keyword = selectedFeedback.feedback.text;
-                          const parts = answer.split(new RegExp(`(${keyword})`, 'gi'));
-                          return (
-                            <span key={ansIdx}>
-                              {parts.map((part, partIdx) =>
-                                part.toLowerCase() === keyword.toLowerCase() ? (
-                                  <mark
-                                    key={partIdx}
-                                    className={`px-0.5 rounded ${
-                                      selectedFeedback.type === 'positive'
-                                        ? 'bg-green-200'
-                                        : 'bg-red-200'
-                                    }`}
-                                  >
-                                    {part}
-                                  </mark>
-                                ) : (
-                                  <span key={partIdx}>{part}</span>
-                                )
-                              )}
-                              {ansIdx < ctx.customerAnswers.length - 1 && ' '}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
+        {/* Recent Keywords */}
+        {recentKeywords.length > 0 && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="text-xs text-gray-500 mb-2">今日关键词</div>
+            <div className="flex flex-wrap gap-2">
+              {recentKeywords.map((kw, idx) => (
+                <span
+                  key={idx}
+                  className={`px-2.5 py-1 rounded-full text-xs ${getKeywordStyle(kw)}`}
+                >
+                  {kw}
+                </span>
               ))}
             </div>
-          ) : (
-            <div className="text-sm text-gray-400 text-center py-2">
-              暂无对话详情
+          </div>
+        )}
+
+        {/* Restaurant List */}
+        <div className="space-y-3">
+          <div className="text-sm font-medium text-gray-700 px-1">门店情况</div>
+
+          {isLoading && (
+            <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-500">
+              加载中...
             </div>
           )}
+
+          {error && (
+            <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-red-500">
+              加载失败，请刷新重试
+            </div>
+          )}
+
+          {!isLoading && !error && restaurants.length === 0 && (
+            <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
+              <div className="text-gray-400 mb-2">
+                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <div className="text-gray-500 text-sm">暂无门店数据</div>
+            </div>
+          )}
+
+          {restaurants.map((rest) => {
+            const sentiment = getSentimentDisplay(rest.avg_sentiment);
+            return (
+              <div
+                key={rest.id}
+                className="bg-white rounded-2xl p-4 shadow-sm active:bg-gray-50 cursor-pointer transition-colors"
+                onClick={() => router.push(`/admin/restaurant/${rest.id}`)}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div className="font-medium text-gray-900">{rest.name}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      今日 {rest.visit_count} 次桌访
+                      {rest.open_count > 0 && ` · 覆盖率 ${rest.coverage}%`}
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1.5 rounded-xl ${sentiment.bg}`}>
+                    <div className={`text-lg font-bold ${sentiment.color} text-center`}>
+                      {formatSentiment(rest.avg_sentiment)}
+                    </div>
+                    <div className={`text-xs ${sentiment.color} text-center`}>
+                      {sentiment.label}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Keywords for this restaurant */}
+                {rest.keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {rest.keywords.map((kw, idx) => (
+                      <span
+                        key={idx}
+                        className={`px-2 py-0.5 rounded text-xs ${getKeywordStyle(kw)}`}
+                      >
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {rest.keywords.length === 0 && rest.visit_count === 0 && (
+                  <div className="text-xs text-gray-400">今日暂无桌访记录</div>
+                )}
+              </div>
+            );
+          })}
         </div>
-        );
-      })()}
+      </main>
     </div>
   );
 }

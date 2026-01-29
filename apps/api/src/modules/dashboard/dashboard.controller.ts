@@ -1,5 +1,6 @@
 // Dashboard Controller - API endpoints for analytics
-// v1.2 - Fixed: Use China timezone for default date
+// v1.4 - Added: /restaurants-overview endpoint for admin dashboard with sentiment scores
+// v1.3 - Added: /restaurants endpoint for multi-store admin view
 
 import { Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
@@ -8,6 +9,18 @@ import { getChinaDateString } from '../../common/utils/date';
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
+
+  // GET /api/dashboard/restaurants - Get all restaurants for admin multi-store view
+  @Get('restaurants')
+  async getRestaurants() {
+    return this.dashboardService.getRestaurantList();
+  }
+
+  // GET /api/dashboard/restaurants-overview - Get all restaurants with sentiment scores
+  @Get('restaurants-overview')
+  async getRestaurantsOverview(@Query('date') date?: string) {
+    return this.dashboardService.getRestaurantsOverview(date || getChinaDateString());
+  }
 
   // GET /api/dashboard/coverage
   @Get('coverage')

@@ -1,5 +1,7 @@
 // Admin Layout - Layout with bottom navigation for boss/administrator role
-// v1.0 - Initial version
+// v1.1 - Added 'use client' to fix Server/Client component boundary issue
+
+'use client';
 
 import { AdminBottomNav } from '@/components/layout/AdminBottomNav';
 
