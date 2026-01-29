@@ -1,5 +1,5 @@
 // Admin Dashboard Page - Multi-store overview for administrator/boss role
-// v3.1 - Added: Keyword sentiment colors (green/red), clickable restaurant cards
+// v3.2 - Added: Responsive grid layout for desktop (multi-column restaurant cards)
 
 'use client';
 
@@ -79,9 +79,9 @@ export default function AdminDashboardPage() {
         <UserMenu />
       </header>
 
-      <main className="p-4 space-y-4">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 gap-3">
+      <main className="p-4 space-y-4 max-w-7xl mx-auto">
+        {/* Summary Cards - responsive grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <div className="text-xs text-gray-500 mb-1">今日桌访</div>
             <div className="text-2xl font-bold text-gray-900">
@@ -120,7 +120,7 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Restaurant List */}
+        {/* Restaurant List - responsive grid */}
         <div className="space-y-3">
           <div className="text-sm font-medium text-gray-700 px-1">门店情况</div>
 
@@ -147,52 +147,55 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {restaurants.map((rest) => {
-            const sentiment = getSentimentDisplay(rest.avg_sentiment);
-            return (
-              <div
-                key={rest.id}
-                className="bg-white rounded-2xl p-4 shadow-sm active:bg-gray-50 cursor-pointer transition-colors"
-                onClick={() => router.push(`/admin/restaurant-detail?id=${rest.id}`)}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="font-medium text-gray-900">{rest.name}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      今日 {rest.visit_count} 次桌访
-                      {rest.open_count > 0 && ` · 覆盖率 ${rest.coverage}%`}
+          {/* Restaurant cards grid - 1 col mobile, 2 cols tablet, 3 cols desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {restaurants.map((rest) => {
+              const sentiment = getSentimentDisplay(rest.avg_sentiment);
+              return (
+                <div
+                  key={rest.id}
+                  className="bg-white rounded-2xl p-4 shadow-sm active:bg-gray-50 cursor-pointer transition-colors hover:shadow-md"
+                  onClick={() => router.push(`/admin/restaurant-detail?id=${rest.id}`)}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">{rest.name}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        今日 {rest.visit_count} 次桌访
+                        {rest.open_count > 0 && ` · 覆盖率 ${rest.coverage}%`}
+                      </div>
+                    </div>
+                    <div className={`px-3 py-1.5 rounded-xl ${sentiment.bg} ml-2 flex-shrink-0`}>
+                      <div className={`text-lg font-bold ${sentiment.color} text-center`}>
+                        {formatSentiment(rest.avg_sentiment)}
+                      </div>
+                      <div className={`text-xs ${sentiment.color} text-center`}>
+                        {sentiment.label}
+                      </div>
                     </div>
                   </div>
-                  <div className={`px-3 py-1.5 rounded-xl ${sentiment.bg}`}>
-                    <div className={`text-lg font-bold ${sentiment.color} text-center`}>
-                      {formatSentiment(rest.avg_sentiment)}
+
+                  {/* Keywords for this restaurant */}
+                  {rest.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {rest.keywords.map((kw, idx) => (
+                        <span
+                          key={idx}
+                          className={`px-2 py-0.5 rounded text-xs ${getKeywordStyle(kw)}`}
+                        >
+                          {kw}
+                        </span>
+                      ))}
                     </div>
-                    <div className={`text-xs ${sentiment.color} text-center`}>
-                      {sentiment.label}
-                    </div>
-                  </div>
+                  )}
+
+                  {rest.keywords.length === 0 && rest.visit_count === 0 && (
+                    <div className="text-xs text-gray-400">今日暂无桌访记录</div>
+                  )}
                 </div>
-
-                {/* Keywords for this restaurant */}
-                {rest.keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {rest.keywords.map((kw, idx) => (
-                      <span
-                        key={idx}
-                        className={`px-2 py-0.5 rounded text-xs ${getKeywordStyle(kw)}`}
-                      >
-                        {kw}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {rest.keywords.length === 0 && rest.visit_count === 0 && (
-                  <div className="text-xs text-gray-400">今日暂无桌访记录</div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </main>
     </div>
