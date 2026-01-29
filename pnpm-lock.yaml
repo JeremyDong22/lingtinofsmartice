@@ -41,6 +41,27 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.45.0
         version: 2.91.1
+      '@types/bcrypt':
+        specifier: ^6.0.0
+        version: 6.0.0
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      '@types/fluent-ffmpeg':
+        specifier: ^2.1.28
+        version: 2.1.28
+      '@types/multer':
+        specifier: ^1.4.11
+        version: 1.4.13
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.30
+      '@types/passport-jwt':
+        specifier: ^4.0.1
+        version: 4.0.1
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0
@@ -75,27 +96,6 @@ importers:
         specifier: ^8.19.0
         version: 8.19.0
     devDependencies:
-      '@types/bcrypt':
-        specifier: ^6.0.0
-        version: 6.0.0
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/fluent-ffmpeg':
-        specifier: ^2.1.28
-        version: 2.1.28
-      '@types/multer':
-        specifier: ^1.4.11
-        version: 1.4.13
-      '@types/node':
-        specifier: ^20.14.0
-        version: 20.19.30
-      '@types/passport-jwt':
-        specifier: ^4.0.1
-        version: 4.0.1
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
       '@typescript-eslint/eslint-plugin':
         specifier: ^7.0.0
         version: 7.18.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)
