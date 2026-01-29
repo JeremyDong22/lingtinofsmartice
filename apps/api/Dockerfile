@@ -1,45 +1,42 @@
-# Dockerfile for Lingtin API - v1.3
+# Dockerfile for Lingtin API - v1.4
 # NestJS backend with FFmpeg support for audio processing
 # Build from monorepo root: docker build -f apps/api/Dockerfile -t <image> .
-# v1.3 - Fixed: Use --prod=false to include devDependencies for nest build
+# v1.4 - Use multi-stage build per pnpm docs to properly handle devDependencies
 
-FROM node:18-alpine
+FROM node:18-slim AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+RUN apk add --no-cache ffmpeg 2>/dev/null || apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
-# Install FFmpeg for audio conversion (WebM -> PCM)
-RUN apk add --no-cache ffmpeg
-
-# Set working directory
+# Build stage - install all deps including devDependencies
+FROM base AS build
 WORKDIR /app
-
-# Install pnpm
-RUN npm install -g pnpm
-
-# Copy root package files for monorepo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-# Copy api and types package.json
 COPY apps/api/package.json ./apps/api/
 COPY packages/types/package.json ./packages/types/
-
-# Install all dependencies including devDependencies (needed for nest build)
-RUN pnpm install --frozen-lockfile --prod=false --filter @lingtin/api...
-
-# Copy source code (api + shared types)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 COPY apps/api ./apps/api
 COPY packages/types ./packages/types
-
-# Build the application
 WORKDIR /app/apps/api
 RUN pnpm build
 
-# Prune devDependencies after build to reduce image size
-RUN pnpm prune --prod
+# Production deps stage
+FROM base AS prod-deps
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/types/package.json ./packages/types/
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --prod
 
-# Expose port
+# Final stage
+FROM base
+WORKDIR /app/apps/api
+COPY --from=prod-deps /app/node_modules /app/node_modules
+COPY --from=prod-deps /app/apps/api/node_modules /app/apps/api/node_modules
+COPY --from=build /app/apps/api/dist /app/apps/api/dist
+COPY apps/api/package.json ./
+
 EXPOSE 3001
-
-# Set environment
 ENV NODE_ENV=production
-
-# Start the application
 CMD ["node", "dist/main.js"]
