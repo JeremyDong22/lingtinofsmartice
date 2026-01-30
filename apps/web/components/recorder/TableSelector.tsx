@@ -1,9 +1,9 @@
 // Table Selector Component - Select table by letter + number
-// v1.1 - Added "外" option for outdoor seating area
+// v1.3 - Updated: reduced letters to A-H, numbers to 1-8, added '包' for private rooms
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 interface TableSelectorProps {
   value: string;
@@ -11,12 +11,20 @@ interface TableSelectorProps {
   disabled?: boolean;
 }
 
-const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', '外'];
-const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', '外', '包'];
+const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export function TableSelector({ value, onChange, disabled = false }: TableSelectorProps) {
   const [selectedLetter, setSelectedLetter] = useState<string>('');
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
+
+  // Sync internal state when value prop is cleared externally (e.g., after recording stops)
+  useEffect(() => {
+    if (value === '') {
+      setSelectedLetter('');
+      setSelectedNumber(null);
+    }
+  }, [value]);
 
   const handleLetterClick = useCallback(
     (letter: string) => {
