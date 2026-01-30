@@ -1,5 +1,5 @@
 // Audio Service - Business logic for recording processing
-// v2.7 - Fixed: URL encode tableId for Supabase Storage (Chinese chars not supported)
+// v2.8 - Migrated storage bucket from 'visit-recordings' to 'lingtin/recordings/'
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -43,22 +43,23 @@ export class AudioService {
     }
 
     // Production: Upload to Supabase Storage
+    // Bucket: 'lingtin', Path: 'recordings/{restaurantId}/{timestamp}_{tableId}.webm'
     const client = this.supabase.getClient();
     // URL encode tableId to handle Chinese characters (e.g., "外13" -> "外13" encoded)
     const safeTableId = encodeURIComponent(tableId);
-    const fileName = `${restaurantId}/${Date.now()}_${safeTableId}.webm`;
+    const filePath = `recordings/${restaurantId}/${Date.now()}_${safeTableId}.webm`;
 
     const { error: uploadError } = await client.storage
-      .from('visit-recordings')
-      .upload(fileName, file.buffer, {
+      .from('lingtin')
+      .upload(filePath, file.buffer, {
         contentType: file.mimetype,
       });
 
     if (uploadError) throw uploadError;
 
     const { data: urlData } = client.storage
-      .from('visit-recordings')
-      .getPublicUrl(fileName);
+      .from('lingtin')
+      .getPublicUrl(filePath);
 
     const hour = getChinaHour();
     const visitPeriod = hour < 15 ? 'lunch' : 'dinner';

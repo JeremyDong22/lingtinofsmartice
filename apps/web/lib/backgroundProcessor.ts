@@ -1,5 +1,24 @@
 // Background Processor - Handles async upload and AI pipeline
-// v2.0 - Fixed: Support retry for recordings with audioUrl but no audioData
+// v2.1 - Added: NOTE for TUS resumable upload upgrade path
+//
+// NOTE: Current architecture uploads via backend proxy (frontend → backend → Supabase).
+// If upload reliability becomes a problem, consider switching to frontend direct upload
+// with TUS resumable protocol:
+//
+// 1. Supabase Storage natively supports TUS: https://supabase.com/docs/guides/storage/uploads/resumable-uploads
+// 2. Use tus-js-client for resumable uploads with automatic retry
+// 3. Endpoint: https://{projectId}.storage.supabase.co/storage/v1/upload/resumable
+// 4. Chunk size must be 6MB, supports findPreviousUploads() for resume after refresh
+// 5. After upload, call backend /api/audio/process to trigger AI pipeline
+//
+// Example:
+//   const upload = new tus.Upload(audioBlob, {
+//     endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
+//     retryDelays: [0, 3000, 5000, 10000, 20000],
+//     headers: { authorization: `Bearer ${token}` },
+//     metadata: { bucketName: 'lingtin', objectName: `recordings/${path}` },
+//   });
+//   upload.findPreviousUploads().then(prev => { if (prev.length) upload.resumeFromPreviousUpload(prev[0]); upload.start(); });
 
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
 import { getAuthHeaders } from '@/contexts/AuthContext';

@@ -1,5 +1,5 @@
 // Recording Store - Database as single source of truth
-// v2.5 - Changed: Direct backend API calls (removed Next.js proxy layer)
+// v2.6 - Fixed: Reset stuck 'uploading' status to 'saved' on page refresh for auto-retry
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getAuthHeaders } from '@/contexts/AuthContext';
@@ -46,11 +46,33 @@ function generateUUID(): string {
 }
 
 // Helper: Get local-only recordings (not yet uploaded)
+// Automatically resets stuck 'uploading' status to 'saved' for retry on page refresh
 function getLocalRecordings(): Recording[] {
   if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) return [];
+
+    const recordings: Recording[] = JSON.parse(stored);
+
+    // Reset stuck 'uploading' status to 'saved' so they can be retried
+    // This handles the case where page was refreshed during upload
+    let hasStuckUploads = false;
+    const fixed = recordings.map(r => {
+      if (r.status === 'uploading' && r.audioData) {
+        hasStuckUploads = true;
+        console.log(`[RecordingStore] Resetting stuck upload: ${r.id} (${r.tableId})`);
+        return { ...r, status: 'saved' as RecordingStatus };
+      }
+      return r;
+    });
+
+    // Save the fixed recordings back to localStorage
+    if (hasStuckUploads) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fixed));
+    }
+
+    return fixed;
   } catch {
     return [];
   }
