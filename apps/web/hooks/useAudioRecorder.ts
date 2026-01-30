@@ -1,9 +1,31 @@
 // Audio Recorder Hook - Handle browser audio recording
-// v1.4 - Slowed down waveform animation with throttle (update every 50ms instead of every frame)
+// v1.5 - Added cross-browser MIME type detection for Safari/iOS compatibility
 
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+
+// MIME type detection with fallback chain for cross-browser compatibility
+// Safari < 18.4 only supports audio/mp4, Chrome/Firefox support audio/webm
+function getSupportedMimeType(): string | undefined {
+  const types = [
+    'audio/webm;codecs=opus', // Best quality: Chrome, Firefox, Safari 18.4+
+    'audio/webm', // Fallback webm
+    'audio/mp4', // Safari < 18.4, iOS Safari, WeChat iOS WebView
+    'audio/ogg;codecs=opus', // Firefox alternative
+  ];
+
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      console.log(`[useAudioRecorder] Using mimeType: ${type}`);
+      return type;
+    }
+  }
+  console.warn(
+    '[useAudioRecorder] No preferred mimeType supported, using browser default'
+  );
+  return undefined;
+}
 
 export interface AudioRecorderState {
   isRecording: boolean;
@@ -119,10 +141,13 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);
 
-      // Set up MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
+      // Set up MediaRecorder with cross-browser MIME type detection
+      const mimeType = getSupportedMimeType();
+      const recorderOptions: MediaRecorderOptions = {};
+      if (mimeType) {
+        recorderOptions.mimeType = mimeType;
+      }
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -131,7 +156,10 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        // Use actual mimeType from recorder for proper format handling
+        const blob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType || 'audio/webm',
+        });
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
         // Reset stopping guard after MediaRecorder fully stops
