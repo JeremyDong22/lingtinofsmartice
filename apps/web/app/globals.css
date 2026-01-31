@@ -1,4 +1,4 @@
-/* Global Styles - v1.2 - Added markdown prose styles for chat messages */
+/* Global Styles - v1.3 - Added update banner slide animation */
 
 @tailwind base;
 @tailwind components;
@@ -179,4 +179,20 @@ body {
 .prose-chat th {
   background-color: rgba(0, 0, 0, 0.05);
   font-weight: 600;
+}
+
+/* Update banner slide animation */
+@keyframes slide-down {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out;
 }

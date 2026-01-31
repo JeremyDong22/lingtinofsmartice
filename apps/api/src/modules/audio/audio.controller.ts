@@ -1,5 +1,5 @@
 // Audio Controller - API endpoints for recording
-// v3.4 - Added PATCH status endpoint for error recovery
+// v3.5 - Added multer config for larger file uploads, better error handling
 
 import {
   Controller,
@@ -13,10 +13,20 @@ import {
   UploadedFile,
   UseInterceptors,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { AudioService } from './audio.service';
 import { AiProcessingService } from './ai-processing.service';
+
+// Multer config: 10MB max file size, memory storage
+const multerOptions = {
+  storage: memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+};
 
 @Controller('audio')
 export class AudioController {
@@ -29,7 +39,7 @@ export class AudioController {
 
   // POST /api/audio/upload
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', multerOptions))
   async uploadAudio(
     @UploadedFile() file: Express.Multer.File,
     @Body('table_id') tableId: string,
@@ -39,7 +49,25 @@ export class AudioController {
   ) {
     this.logger.log(`▶ POST /audio/upload`);
     this.logger.log(`  Table: ${tableId} | Recording: ${recordingId}`);
-    this.logger.log(`  File: ${file?.originalname} (${file?.size} bytes)`);
+    this.logger.log(`  Restaurant: ${restaurantId}`);
+
+    // Validate required fields
+    if (!file) {
+      this.logger.error('Upload failed: No file provided');
+      throw new BadRequestException('No file provided');
+    }
+
+    if (!tableId) {
+      this.logger.error('Upload failed: No table_id provided');
+      throw new BadRequestException('table_id is required');
+    }
+
+    if (!restaurantId) {
+      this.logger.error('Upload failed: No restaurant_id provided');
+      throw new BadRequestException('restaurant_id is required');
+    }
+
+    this.logger.log(`  File: ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
 
     const result = await this.audioService.uploadAndProcess(
       file,

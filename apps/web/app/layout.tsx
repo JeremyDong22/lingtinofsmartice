@@ -1,10 +1,11 @@
 // Root Layout
-// v1.2 - Added SWRProvider for stale-while-revalidate caching
+// v1.3 - Added UpdatePrompt for version update notifications
 
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SWRProvider } from '@/contexts/SWRProvider';
+import { UpdatePrompt } from '@/components/layout/UpdatePrompt';
 
 export const metadata: Metadata = {
   title: 'Lingtin 桌访管理',
@@ -37,7 +38,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-gray-50">
         <AuthProvider>
-          <SWRProvider>{children}</SWRProvider>
+          <SWRProvider>
+            <UpdatePrompt />
+            {children}
+          </SWRProvider>
         </AuthProvider>
       </body>
     </html>

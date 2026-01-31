@@ -1,5 +1,5 @@
 // 讯飞 Speech-to-Text Service
-// v1.2 - Fixed WebSocket import for CommonJS compatibility
+// v1.3 - Increased timeout to 60s, return partial results on timeout
 // Added webm to PCM conversion using ffmpeg
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -17,6 +17,7 @@ const execAsync = promisify(exec);
 const XUNFEI_WSS_URL = 'wss://iat-api.xfyun.cn/v2/iat';
 const FRAME_SIZE = 1280; // Bytes per frame (40ms of 16kHz 16-bit mono audio)
 const FRAME_INTERVAL = 40; // ms between frames
+const STT_TIMEOUT_MS = 60000; // 60 seconds timeout (increased from 30s)
 
 interface XunfeiResponse {
   code: number;
@@ -202,12 +203,26 @@ export class XunfeiSttService {
       const transcriptParts: string[] = [];
       let frameIndex = 0;
       const totalFrames = Math.ceil(audioBuffer.length / FRAME_SIZE);
+      let isResolved = false;
 
-      // Connection timeout
+      // Helper to resolve with current results
+      const resolveWithResults = (reason: string) => {
+        if (isResolved) return;
+        isResolved = true;
+        const finalTranscript = transcriptParts.join('');
+        this.logger.log(`${reason}: "${finalTranscript}" (${transcriptParts.length} parts)`);
+        resolve(finalTranscript);
+      };
+
+      // Connection timeout - return partial results instead of rejecting
       const timeout = setTimeout(() => {
         ws.close();
-        reject(new Error('讯飞 STT timeout (30s)'));
-      }, 30000);
+        if (transcriptParts.length > 0) {
+          resolveWithResults(`Timeout (${STT_TIMEOUT_MS / 1000}s) - returning partial results`);
+        } else {
+          reject(new Error(`讯飞 STT timeout (${STT_TIMEOUT_MS / 1000}s) - no results received`));
+        }
+      }, STT_TIMEOUT_MS);
 
       ws.on('open', () => {
         this.logger.log(`WebSocket connected, sending ${totalFrames} frames...`);
@@ -217,7 +232,6 @@ export class XunfeiSttService {
       ws.on('message', (data: Buffer) => {
         try {
           const response: XunfeiResponse = JSON.parse(data.toString());
-          this.logger.log(`讯飞 response: code=${response.code}, message=${response.message}, status=${response.data?.status}`);
 
           if (response.code !== 0) {
             clearTimeout(timeout);
@@ -232,7 +246,6 @@ export class XunfeiSttService {
             for (const word of response.data.result.ws) {
               for (const cw of word.cw) {
                 if (cw.w) {
-                  this.logger.log(`讯飞 word: "${cw.w}"`);
                   transcriptParts.push(cw.w);
                 }
               }
@@ -243,9 +256,7 @@ export class XunfeiSttService {
           if (response.data?.status === 2) {
             clearTimeout(timeout);
             ws.close();
-            const finalTranscript = transcriptParts.join('');
-            this.logger.log(`Final transcript assembled: "${finalTranscript}"`);
-            resolve(finalTranscript);
+            resolveWithResults('Final response received');
           }
         } catch (error) {
           this.logger.error(`Failed to parse response: ${error.message}`);
@@ -254,14 +265,18 @@ export class XunfeiSttService {
 
       ws.on('error', (error: Error) => {
         clearTimeout(timeout);
-        reject(new Error(`WebSocket error: ${error.message}`));
+        if (transcriptParts.length > 0) {
+          resolveWithResults(`WebSocket error - returning partial results`);
+        } else {
+          reject(new Error(`WebSocket error: ${error.message}`));
+        }
       });
 
       ws.on('close', () => {
         clearTimeout(timeout);
         // If we haven't resolved yet, return what we have
-        if (transcriptParts.length > 0) {
-          resolve(transcriptParts.join(''));
+        if (!isResolved && transcriptParts.length > 0) {
+          resolveWithResults('WebSocket closed - returning collected results');
         }
       });
     });
