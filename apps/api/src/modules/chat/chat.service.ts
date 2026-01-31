@@ -1,9 +1,10 @@
 // Chat Service - AI assistant with tool use for database queries
-// v3.3 - Added role-based system prompts (boss vs manager) and chat history storage
+// v3.4 - Fixed crypto import for session ID generation
 // IMPORTANT: Never return raw_transcript to avoid context explosion
 
 import { Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { getChinaDateString } from '../../common/utils/date';
 
@@ -570,7 +571,7 @@ this.logger.log(`Executing tool: ${name}`);
     const client = this.supabase.getClient();
 
     // Generate session ID if not provided
-    const chatSessionId = sessionId || crypto.randomUUID();
+    const chatSessionId = sessionId || randomUUID();
 
     // Insert user message
     await client.from('chat_history').insert({
