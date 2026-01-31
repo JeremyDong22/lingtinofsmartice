@@ -1,5 +1,5 @@
 // Chat Service - AI assistant with tool use for database queries
-// v3.5 - Fixed keyword validation to allow created_at, updated_at column names
+// v3.6 - Fixed: AI must call tool directly without saying "please wait", added PostgreSQL date syntax
 // IMPORTANT: Never return raw_transcript to avoid context explosion
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -18,7 +18,7 @@ const MANAGER_SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析�
 收到问题后，**先判断用户真正想问什么**：
 - 闲聊、打招呼、问你是谁 → 直接回答，不查数据库
 - 问之前聊过的内容（如"我叫什么"）→ 根据对话历史回答
-- **业务问题**（桌访、菜品、顾客、服务等）→ 使用 query_database 工具
+- **业务问题**（桌访、菜品、顾客、服务等）→ **立即调用 query_database 工具，不要说"请稍等"或"我来查一下"之类的话**
 
 ## 数据库字段（内部使用，绝不向用户暴露）
 **lingtin_visit_records** 表：
@@ -50,6 +50,11 @@ const MANAGER_SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析�
 1. **永远不要查询 raw_transcript** - 太大会崩溃
 2. 限制返回行数 LIMIT 10-20
 3. 按时间倒序 ORDER BY created_at DESC
+4. **日期查询语法（PostgreSQL）**：
+   - 今天: \`visit_date = CURRENT_DATE\`
+   - 本周: \`visit_date >= date_trunc('week', CURRENT_DATE)\`
+   - 日期范围: \`visit_date BETWEEN '2026-01-25' AND '2026-01-31'\`
+   - ❌ 错误: \`date('2026-01-25', '2026-01-31')\` - PostgreSQL 不支持这种语法
 
 ## 回答规范（非常重要）
 1. **像跟同事聊天一样**，亲切、实用、有帮助
@@ -84,7 +89,7 @@ const BOSS_SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析助�
 收到问题后，**先判断用户真正想问什么**：
 - 闲聊、打招呼、问你是谁 → 直接回答，不查数据库
 - 问之前聊过的内容（如"我叫什么"）→ 根据对话历史回答
-- **业务问题**（桌访、菜品、顾客、服务等）→ 使用 query_database 工具
+- **业务问题**（桌访、菜品、顾客、服务等）→ **立即调用 query_database 工具，不要说"请稍等"或"我来查一下"之类的话**
 
 ## 数据库字段（内部使用，绝不向用户暴露）
 **lingtin_visit_records** 表：
@@ -116,6 +121,11 @@ const BOSS_SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析助�
 1. **永远不要查询 raw_transcript** - 太大会崩溃
 2. 限制返回行数 LIMIT 10-20
 3. 按时间倒序 ORDER BY created_at DESC
+4. **日期查询语法（PostgreSQL）**：
+   - 今天: \`visit_date = CURRENT_DATE\`
+   - 本周: \`visit_date >= date_trunc('week', CURRENT_DATE)\`
+   - 日期范围: \`visit_date BETWEEN '2026-01-25' AND '2026-01-31'\`
+   - ❌ 错误: \`date('2026-01-25', '2026-01-31')\` - PostgreSQL 不支持这种语法
 
 ## 回答规范（非常重要）
 1. **像汇报工作一样**，简洁、有洞察、数据驱动
