@@ -1,5 +1,5 @@
 // AI Processing Service - Handles STT and AI tagging pipeline
-// v3.6 - Added error handling: update database status to 'error' on failure
+// v3.7 - Simplified logging output for cleaner console
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -61,43 +61,30 @@ export class AiProcessingService {
 
     // Acquire lock
     this.processingLocks.add(recordingId);
-    this.logger.log(`Lock acquired for recording ${recordingId}`);
 
     try {
       // Update status to 'processing' in database
       await this.updateRecordingStatus(recordingId, 'processing');
 
       const startTime = Date.now();
-      this.logger.log(`========== PIPELINE START ==========`);
-      this.logger.log(`Recording: ${recordingId} | Table: ${tableId}`);
-      this.logger.log(`Audio URL: ${audioUrl}`);
+      this.logger.log(`Pipeline: ${tableId} 开始处理`);
 
       // Step 1: Speech-to-Text (讯飞)
-      this.logger.log(`[Step 1/3] Starting STT (讯飞)...`);
-      const sttStart = Date.now();
       const rawTranscript = await this.transcribeAudio(audioUrl);
-      this.logger.log(`[Step 1/3] STT complete in ${Date.now() - sttStart}ms`);
-      this.logger.log(`[Step 1/3] Transcript: "${rawTranscript}"`);
+      this.logger.log(`STT完成: ${rawTranscript.length}字`);
 
       // Step 2: Correction + Tagging (Gemini) - No dish name dictionary needed
-      this.logger.log(`[Step 2/3] Starting Gemini AI processing...`);
-      const aiStart = Date.now();
       const aiResult = await this.processWithGemini(rawTranscript);
-      this.logger.log(`[Step 2/3] Gemini complete in ${Date.now() - aiStart}ms`);
-      this.logger.log(`[Step 2/3] Summary: "${aiResult.aiSummary}"`);
-      this.logger.log(`[Step 2/3] Score: ${aiResult.sentimentScore}, Feedbacks: ${aiResult.feedbacks.length}`);
+      this.logger.log(`AI完成: ${aiResult.aiSummary}`);
 
       // Step 3: Save results to database
-      this.logger.log(`[Step 3/3] Saving to database...`);
       await this.saveResults(recordingId, {
         rawTranscript,
         ...aiResult,
       });
-      this.logger.log(`[Step 3/3] Saved successfully`);
 
       const totalTime = Date.now() - startTime;
-      this.logger.log(`========== PIPELINE COMPLETE ==========`);
-      this.logger.log(`Total time: ${totalTime}ms`);
+      this.logger.log(`Pipeline: ${tableId} 完成 (${(totalTime / 1000).toFixed(1)}s)`);
 
       return {
         transcript: rawTranscript,
@@ -114,7 +101,6 @@ export class AiProcessingService {
     } finally {
       // Always release lock when done
       this.processingLocks.delete(recordingId);
-      this.logger.log(`Lock released for recording ${recordingId}`);
     }
   }
 
@@ -222,8 +208,6 @@ export class AiProcessingService {
       throw new Error('AI_NOT_CONFIGURED: OpenRouter AI 未配置');
     }
 
-    this.logger.log(`Using OpenRouter API key: ${OPENROUTER_API_KEY.substring(0, 15)}...`);
-
     const systemPrompt = `分析餐饮桌访对话，提取结构化信息。
 
 输出JSON格式（只输出JSON，无其他内容）：
@@ -278,9 +262,6 @@ export class AiProcessingService {
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
-    this.logger.log(`OpenRouter raw response length: ${content?.length || 0}`);
-    this.logger.log(`OpenRouter raw response (first 300 chars): ${content?.substring(0, 300)}`);
-
     if (!content) {
       throw new Error('AI_EMPTY_RESPONSE: OpenRouter 返回空结果');
     }
@@ -293,16 +274,13 @@ export class AiProcessingService {
       cleanContent = cleanContent.replace(/^```\s*/, '').replace(/```\s*$/, '');
     }
 
-    this.logger.log(`Cleaned content (first 200 chars): ${cleanContent.substring(0, 200)}`);
-
     // Parse JSON response - try to find JSON object in the content
     const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      this.logger.error(`No JSON found in cleaned content. Full content: ${cleanContent.substring(0, 500)}`);
+      this.logger.error(`AI返回无效JSON: ${cleanContent.substring(0, 200)}`);
       throw new Error('AI_PARSE_ERROR: 无法解析 AI 返回结果');
     }
 
-    this.logger.log(`Extracted JSON (first 100 chars): ${jsonMatch[0].substring(0, 100)}`);
     const result = JSON.parse(jsonMatch[0]);
 
     return {
@@ -332,12 +310,7 @@ export class AiProcessingService {
   ): Promise<void> {
     // Check if running in mock mode
     if (this.supabase.isMockMode()) {
-      this.logger.log(`[MOCK] Would save results for ${recordingId}:`);
-      this.logger.log(`  - Summary: ${result.aiSummary}`);
-      this.logger.log(`  - Score: ${result.sentimentScore}`);
-      this.logger.log(`  - Feedbacks: ${result.feedbacks.map((f) => f.text).join(', ')}`);
-      this.logger.log(`  - Manager Q: ${result.managerQuestions.join(' | ')}`);
-      this.logger.log(`  - Customer A: ${result.customerAnswers.join(' | ')}`);
+      this.logger.log(`[MOCK] 保存结果: ${result.aiSummary}`);
       return;
     }
 
