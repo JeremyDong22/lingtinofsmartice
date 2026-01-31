@@ -1,5 +1,5 @@
 // Chat Service - AI assistant with tool use for database queries
-// v3.4 - Fixed crypto import for session ID generation
+// v3.5 - Fixed keyword validation to allow created_at, updated_at column names
 // IMPORTANT: Never return raw_transcript to avoid context explosion
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -423,15 +423,28 @@ this.logger.log(`Executing tool: ${name}`);
     }
 
     // Security: Block dangerous keywords that could modify data or schema
+    // Use word boundary regex to avoid false positives (e.g., 'created_at' matching 'create')
     const dangerousKeywords = [
       'drop', 'delete', 'update', 'insert', 'alter', 'truncate',
-      'grant', 'revoke', 'create', 'exec', 'execute', 'call',
-      'into', 'set', 'merge', 'replace', 'upsert',
+      'grant', 'revoke', 'exec', 'execute', 'call',
+      'merge', 'replace', 'upsert',
       'pg_', 'information_schema', 'pg_catalog',
-      '--', '/*', '*/', ';', 'union all select',
+      '--', '/*', '*/', 'union all select',
     ];
+    // Keywords that need word boundary check (to allow created_at, updated_at, etc.)
+    const wordBoundaryKeywords = ['create', 'into', 'set'];
+
     for (const keyword of dangerousKeywords) {
       if (normalizedSql.includes(keyword)) {
+        throw new Error(`Query contains forbidden keyword: ${keyword}`);
+      }
+    }
+
+    // Check word boundary keywords with regex
+    for (const keyword of wordBoundaryKeywords) {
+      // Match keyword as a standalone word (not part of column names like created_at)
+      const regex = new RegExp(`\\b${keyword}\\b(?!_)`, 'i');
+      if (regex.test(normalizedSql)) {
         throw new Error(`Query contains forbidden keyword: ${keyword}`);
       }
     }
