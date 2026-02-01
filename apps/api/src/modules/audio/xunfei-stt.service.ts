@@ -1,5 +1,5 @@
 // 讯飞 Speech-to-Text Service (WebSocket版本)
-// v1.4 - 精简日志输出，减少冗余信息
+// v1.5 - Added retry logic for audio download (network resilience)
 
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
@@ -9,6 +9,7 @@ import * as path from 'path';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import * as WebSocket from 'ws';
+import { fetchWithRetry } from '../../common/utils/fetch-with-retry';
 
 const execAsync = promisify(exec);
 
@@ -84,7 +85,10 @@ export class XunfeiSttService {
   }
 
   private async downloadAudio(url: string): Promise<Buffer> {
-    const response = await fetch(url);
+    const response = await fetchWithRetry(url, undefined, {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+    });
     if (!response.ok) {
       throw new Error(`Download failed: ${response.status}`);
     }

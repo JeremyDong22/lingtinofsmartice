@@ -1,10 +1,11 @@
 // Supabase Service - Database and Storage Client
-// v1.6 - Fixed: Use China timezone (Asia/Shanghai) for visit_date instead of UTC
+// v1.7 - Added retry fetch for network resilience (China → overseas)
 
 import { Injectable, Logger } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
-import { getChinaDateString, getChinaHour } from '../utils/date';
+import { getChinaDateString } from '../utils/date';
+import { createRetryFetch } from '../utils/fetch-with-retry';
 
 // Default restaurant ID for demo/testing
 const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
@@ -30,8 +31,12 @@ export class SupabaseService {
       this.logger.warn('Supabase not configured - running in MOCK MODE');
       this.mockMode = true;
     } else {
-      this.client = createClient(supabaseUrl, supabaseKey);
-      this.logger.log('Supabase client initialized');
+      this.client = createClient(supabaseUrl, supabaseKey, {
+        global: {
+          fetch: createRetryFetch({ maxRetries: 3, baseDelayMs: 1000 }),
+        },
+      });
+      this.logger.log('Supabase client initialized with retry fetch');
     }
   }
 
