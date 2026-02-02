@@ -1,5 +1,5 @@
 // Recording History Component - Display list of recordings with status
-// v1.4 - Added audio playback functionality with play/pause button
+// v1.5 - Added expandable transcript view for completed recordings
 
 'use client';
 
@@ -208,6 +208,7 @@ export function RecordingHistory({
   title = '今日录音',
 }: RecordingHistoryProps) {
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Handle audio playback toggle
@@ -265,7 +266,16 @@ export function RecordingHistory({
             key={recording.id}
             onDelete={() => onDelete?.(recording.id)}
           >
-            <div className="px-4 py-3 hover:bg-gray-50 transition-colors">
+            <div
+              className={`px-4 py-3 transition-colors ${
+                recording.correctedTranscript ? 'cursor-pointer hover:bg-gray-50' : ''
+              }`}
+              onClick={() => {
+                if (recording.correctedTranscript) {
+                  setExpandedId(expandedId === recording.id ? null : recording.id);
+                }
+              }}
+            >
             <div className="flex items-start justify-between gap-3">
               {/* Left: Table ID and time */}
               <div className="flex items-center gap-3">
@@ -299,6 +309,19 @@ export function RecordingHistory({
                 />
                 <SentimentEmoji sentiment={recording.sentiment} />
                 <StatusBadge status={recording.status} />
+                {/* Expand indicator */}
+                {recording.correctedTranscript && (
+                  <svg
+                    className={`w-4 h-4 text-gray-400 transition-transform ${
+                      expandedId === recording.id ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
               </div>
             </div>
 
@@ -309,6 +332,16 @@ export function RecordingHistory({
               </p>
             )}
 
+            {/* Expanded transcript */}
+            {expandedId === recording.id && recording.correctedTranscript && (
+              <div className="mt-3 ml-13 p-3 bg-gray-50 rounded-lg">
+                <div className="text-xs text-gray-500 mb-1">录音全文</div>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {recording.correctedTranscript}
+                </p>
+              </div>
+            )}
+
             {/* Error message with retry */}
             {recording.status === 'error' && (
               <div className="mt-2 flex items-center justify-between ml-13">
@@ -317,7 +350,10 @@ export function RecordingHistory({
                 </span>
                 {onRetry && (
                   <button
-                    onClick={() => onRetry(recording.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRetry(recording.id);
+                    }}
                     className="text-xs text-primary-600 hover:text-primary-700"
                   >
                     重试

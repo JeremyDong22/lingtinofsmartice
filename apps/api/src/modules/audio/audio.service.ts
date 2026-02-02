@@ -148,20 +148,21 @@ export class AudioService {
   }
 
   // Get today's recordings for a restaurant (for frontend sync)
-  async getTodayRecordings(restaurantId: string) {
+  // Supports optional date parameter for viewing historical data
+  async getTodayRecordings(restaurantId: string, date?: string) {
     if (this.supabase.isMockMode()) {
       this.logger.warn('[MOCK] Returning empty today recordings');
       return [];
     }
 
     const client = this.supabase.getClient();
-    const today = getChinaDateString();
+    const targetDate = date || getChinaDateString();
 
     const { data, error } = await client
       .from('lingtin_visit_records')
-      .select('id, table_id, status, ai_summary, sentiment_score, audio_url, created_at')
+      .select('id, table_id, status, ai_summary, sentiment_score, audio_url, corrected_transcript, created_at')
       .eq('restaurant_id', restaurantId)
-      .eq('visit_date', today)
+      .eq('visit_date', targetDate)
       .order('created_at', { ascending: false });
 
     if (error) {

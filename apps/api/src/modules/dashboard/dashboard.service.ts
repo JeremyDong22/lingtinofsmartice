@@ -515,7 +515,7 @@ export class DashboardService {
     // Get all visit records for this restaurant on this date
     const { data: visits, error: visitsError } = await client
       .from('lingtin_visit_records')
-      .select('id, table_id, visit_period, sentiment_score, ai_summary, keywords, manager_questions, customer_answers, created_at')
+      .select('id, table_id, visit_period, sentiment_score, ai_summary, keywords, manager_questions, customer_answers, corrected_transcript, created_at')
       .eq('restaurant_id', restaurantId)
       .eq('visit_date', date)
       .eq('status', 'processed')

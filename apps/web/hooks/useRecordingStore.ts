@@ -131,6 +131,7 @@ function dbRecordToRecording(dbRecord: {
   ai_summary?: string;
   sentiment_score?: number;
   audio_url?: string;
+  corrected_transcript?: string;
   created_at: string;
 }): Recording {
   return {
@@ -142,6 +143,7 @@ function dbRecordToRecording(dbRecord: {
     aiSummary: dbRecord.ai_summary,
     sentimentScore: dbRecord.sentiment_score,
     audioUrl: dbRecord.audio_url,
+    correctedTranscript: dbRecord.corrected_transcript,
   };
 }
 

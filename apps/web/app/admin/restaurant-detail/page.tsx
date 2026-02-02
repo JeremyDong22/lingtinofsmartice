@@ -1,9 +1,9 @@
 // Restaurant Detail Page - View visit records for a specific restaurant
-// v1.1 - Added: Responsive grid layout for desktop (multi-column visit cards)
+// v1.2 - Added: Expandable transcript view for each visit record
 
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 
@@ -17,6 +17,7 @@ interface VisitRecord {
   keywords: string[];
   manager_questions: string[];
   customer_answers: string[];
+  corrected_transcript: string | null;
   created_at: string;
 }
 
@@ -60,9 +61,11 @@ function RestaurantDetailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const restaurantId = searchParams.get('id');
+  const date = searchParams.get('date');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useSWR<RestaurantDetailResponse>(
-    restaurantId ? `/api/dashboard/restaurant/${restaurantId}` : null
+    restaurantId ? `/api/dashboard/restaurant/${restaurantId}${date ? `?date=${date}` : ''}` : null
   );
 
   const restaurant = data?.restaurant;
@@ -119,8 +122,19 @@ function RestaurantDetailContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {visits.map((visit) => {
             const sentiment = getSentimentDisplay(visit.sentiment_score);
+            const isExpanded = expandedId === visit.id;
             return (
-              <div key={visit.id} className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div
+                key={visit.id}
+                className={`bg-white rounded-2xl p-4 shadow-sm transition-shadow ${
+                  visit.corrected_transcript ? 'cursor-pointer hover:shadow-md' : ''
+                }`}
+                onClick={() => {
+                  if (visit.corrected_transcript) {
+                    setExpandedId(isExpanded ? null : visit.id);
+                  }
+                }}
+              >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -134,11 +148,24 @@ function RestaurantDetailContent() {
                       </div>
                     </div>
                   </div>
-                  <div className={`px-2.5 py-1 rounded-lg ${sentiment.bg} flex-shrink-0`}>
-                    <span className={`text-sm font-medium ${sentiment.color}`}>
-                      {visit.sentiment_score !== null ? Math.round(visit.sentiment_score * 100) : '--'}
-                    </span>
-                    <span className={`text-xs ${sentiment.color} ml-0.5`}>{sentiment.label}</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`px-2.5 py-1 rounded-lg ${sentiment.bg} flex-shrink-0`}>
+                      <span className={`text-sm font-medium ${sentiment.color}`}>
+                        {visit.sentiment_score !== null ? Math.round(visit.sentiment_score * 100) : '--'}
+                      </span>
+                      <span className={`text-xs ${sentiment.color} ml-0.5`}>{sentiment.label}</span>
+                    </div>
+                    {/* Expand indicator */}
+                    {visit.corrected_transcript && (
+                      <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
                   </div>
                 </div>
 
@@ -166,6 +193,16 @@ function RestaurantDetailContent() {
                     <div className="bg-gray-50 rounded-lg p-2 text-sm text-gray-700">
                       {visit.customer_answers.join(' ')}
                     </div>
+                  </div>
+                )}
+
+                {/* Expanded transcript */}
+                {isExpanded && visit.corrected_transcript && (
+                  <div className="mb-3 p-3 bg-yellow-50 rounded-lg border border-yellow-100">
+                    <div className="text-xs text-yellow-700 mb-1 font-medium">录音全文</div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {visit.corrected_transcript}
+                    </p>
                   </div>
                 )}
 
