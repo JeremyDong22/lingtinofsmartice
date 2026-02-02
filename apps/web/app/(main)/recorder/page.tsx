@@ -22,14 +22,22 @@ function formatDuration(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Get date string in YYYY-MM-DD format for API
+// Get date string in YYYY-MM-DD format for API (China timezone)
 function getDateString(selection: string): string | undefined {
   if (selection === '今日') return undefined; // Use default (today)
+  // Use China timezone (UTC+8) for date calculation
   const now = new Date();
+  const chinaOffset = 8 * 60; // UTC+8 in minutes
+  const localOffset = now.getTimezoneOffset();
+  const chinaTime = new Date(now.getTime() + (chinaOffset + localOffset) * 60 * 1000);
   if (selection === '昨日') {
-    now.setDate(now.getDate() - 1);
+    chinaTime.setDate(chinaTime.getDate() - 1);
   }
-  return now.toISOString().split('T')[0];
+  // Format as YYYY-MM-DD without using toISOString (which converts back to UTC)
+  const year = chinaTime.getFullYear();
+  const month = String(chinaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(chinaTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export default function RecorderPage() {
