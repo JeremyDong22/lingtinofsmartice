@@ -1,5 +1,5 @@
 // Audio Service - Business logic for recording processing
-// v2.9 - Fixed Chinese tableId causing Supabase Storage 400 error (包1 -> bao1)
+// v3.0 - Use correct file extension from MIME type (mp4 for mobile Safari)
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -48,7 +48,9 @@ export class AudioService {
     // Convert Chinese tableId to ASCII-safe format for Supabase Storage
     // Chinese chars like "包1", "外13" -> "bao1", "wai13" using simple mapping
     const safeTableId = this.toAsciiTableId(tableId);
-    const filePath = `recordings/${restaurantId}/${Date.now()}_${safeTableId}.webm`;
+    // Use correct extension based on MIME type (mobile Safari sends audio/mp4)
+    const ext = file.mimetype?.includes('mp4') ? 'mp4' : 'webm';
+    const filePath = `recordings/${restaurantId}/${Date.now()}_${safeTableId}.${ext}`;
     this.logger.log(`Uploading to path: ${filePath} (original tableId: ${tableId})`);
 
     const { error: uploadError } = await client.storage

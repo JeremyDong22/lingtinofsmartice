@@ -1,5 +1,5 @@
 // 讯飞 Speech-to-Text Service - 方言识别大模型 (SLM)
-// v2.1 - 去掉wpgs流式模式，使用非流式获取最终结果，避免中间结果重复
+// v2.2 - Added mp4/m4a format detection for mobile Safari recordings
 // API文档: https://www.xfyun.cn/doc/spark/spark_slm_iat.html
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -82,6 +82,7 @@ export class XunfeiSttService {
   private detectAudioFormat(url: string, buffer: Buffer): string {
     const urlLower = url.toLowerCase();
     if (urlLower.includes('.webm')) return 'webm';
+    if (urlLower.includes('.mp4') || urlLower.includes('.m4a')) return 'mp4';
     if (urlLower.includes('.wav')) return 'wav';
     if (urlLower.includes('.mp3')) return 'mp3';
     if (urlLower.includes('.ogg')) return 'ogg';
@@ -92,6 +93,8 @@ export class XunfeiSttService {
       if (buffer.toString('ascii', 0, 4) === 'RIFF') return 'wav';
       if ((buffer[0] === 0xff && buffer[1] === 0xfb) || buffer.toString('ascii', 0, 3) === 'ID3') return 'mp3';
       if (buffer.toString('ascii', 0, 4) === 'OggS') return 'ogg';
+      // MP4/M4A: 'ftyp' at offset 4
+      if (buffer.length >= 8 && buffer.toString('ascii', 4, 8) === 'ftyp') return 'mp4';
     }
     return 'webm';
   }

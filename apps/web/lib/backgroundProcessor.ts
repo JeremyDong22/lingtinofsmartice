@@ -1,5 +1,5 @@
 // Background Processor - Handles async upload and AI pipeline
-// v2.2 - Fixed: Don't mark already-processed recordings as error
+// v2.3 - Increased upload timeout to 60s for mobile, use correct file extension per MIME type
 //
 // NOTE: Current architecture uploads via backend proxy (frontend → backend → Supabase).
 // If upload reliability becomes a problem, consider switching to frontend direct upload
@@ -30,13 +30,23 @@ interface ProcessingCallbacks {
 }
 
 // Timeout constants
-const UPLOAD_TIMEOUT_MS = 30000;   // 30 seconds for upload
+const UPLOAD_TIMEOUT_MS = 60000;   // 60 seconds for upload (mobile files are larger)
 const PROCESS_TIMEOUT_MS = 120000; // 2 minutes for AI processing
 const MAX_RETRY_ATTEMPTS = 3;      // Maximum retry attempts
 const RETRY_DELAY_MS = 2000;       // Delay between retries
 
 // Logger prefix for easy filtering
 const LOG_PREFIX = '[Lingtin Pipeline]';
+
+// Handle 401 auth expired: clear stored credentials and redirect to login
+function handleAuthExpired() {
+  log('Auth expired (401), clearing credentials and redirecting to login');
+  localStorage.removeItem('lingtin_auth_token');
+  localStorage.removeItem('lingtin_auth_user');
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login';
+  }
+}
 
 // Track active processing requests for cancellation
 const activeProcessing = new Map<string, AbortController>();
@@ -141,10 +151,12 @@ export async function processRecordingInBackground(
       callbacks.onStatusChange(id, 'uploading');
 
       const audioBlob = base64ToBlob(audioData!);
-      log(`Audio blob created: ${(audioBlob.size / 1024).toFixed(1)} KB`);
+      log(`Audio blob created: ${(audioBlob.size / 1024).toFixed(1)} KB, type: ${audioBlob.type}`);
 
+      // Use correct file extension based on actual MIME type (mobile Safari uses mp4)
+      const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
       const formData = new FormData();
-      formData.append('file', audioBlob, `${tableId}_${Date.now()}.webm`);
+      formData.append('file', audioBlob, `${tableId}_${Date.now()}.${ext}`);
       formData.append('table_id', tableId);
       formData.append('recording_id', id);
       if (restaurantId) {
@@ -161,6 +173,11 @@ export async function processRecordingInBackground(
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
         logError(`Upload failed: ${uploadResponse.status}`, errorText);
+        // 401 = token expired/invalid, redirect to login
+        if (uploadResponse.status === 401) {
+          handleAuthExpired();
+          throw new Error('登录已过期，请重新登录');
+        }
         throw new Error(`上传失败: ${uploadResponse.status}`);
       }
 

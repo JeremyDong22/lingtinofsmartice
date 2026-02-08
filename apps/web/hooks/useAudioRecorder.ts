@@ -1,5 +1,5 @@
 // Audio Recorder Hook - Handle browser audio recording
-// v1.5 - Added cross-browser MIME type detection for Safari/iOS compatibility
+// v1.6 - Added audioBitsPerSecond (48kbps) to reduce mobile file size by 50-70%
 
 'use client';
 
@@ -143,7 +143,11 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
 
       // Set up MediaRecorder with cross-browser MIME type detection
       const mimeType = getSupportedMimeType();
-      const recorderOptions: MediaRecorderOptions = {};
+      // 48kbps is sufficient for voice recording, reduces mobile file size by 50-70%
+      // Mobile Safari uses audio/mp4 (AAC) which defaults to 128kbps+ without this limit
+      const recorderOptions: MediaRecorderOptions = {
+        audioBitsPerSecond: 48000,
+      };
       if (mimeType) {
         recorderOptions.mimeType = mimeType;
       }
