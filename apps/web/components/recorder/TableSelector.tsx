@@ -1,5 +1,5 @@
 // Table Selector Component - Select table by letter + number
-// v1.4 - Updated: expanded numbers to 1-10
+// v1.5 - Updated: expanded numbers to 1-20
 
 'use client';
 
@@ -12,7 +12,7 @@ interface TableSelectorProps {
 }
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', '外', '包'];
-const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 export function TableSelector({ value, onChange, disabled = false }: TableSelectorProps) {
   const [selectedLetter, setSelectedLetter] = useState<string>('');
