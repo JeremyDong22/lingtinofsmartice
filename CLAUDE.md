@@ -26,7 +26,7 @@ lingtin/
 │   │   │   ├── admin/               # 管理端
 │   │   │   └── login/
 │   │   ├── components/              # UI 组件 (recorder/, chat/, layout/)
-│   │   ├── hooks/                   # useAudioRecorder, useRecordingStore, useChatStream
+│   │   ├── hooks/                   # useAudioRecorder, useRecordingStore, useMeetingStore, useChatStream
 │   │   ├── contexts/                # AuthContext, SWRProvider
 │   │   └── lib/                     # api.ts, backgroundProcessor.ts, supabase/
 │   └── api/                          # NestJS 后端 (@lingtin/api)
@@ -61,6 +61,7 @@ supabase start        # 启动本地 Supabase (localhost:54321)
 - **Git commit**：`feat|fix|docs|refactor(scope): description`
 - **API 响应**：统一 `{ data, message }` 格式
 - **认证 header**: 使用 `@/contexts/AuthContext` 导出的 `getAuthHeaders()`，不要在页面中重复定义
+- **Supabase UUID 查询**：所有 service 方法中 `restaurant_id` 参数必须做 UUID 校验，非法值回退 `DEFAULT_RESTAURANT_ID`
 
 > 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
