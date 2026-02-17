@@ -62,6 +62,7 @@ supabase start        # 启动本地 Supabase (localhost:54321)
 - **API 响应**：统一 `{ data, message }` 格式
 - **认证 header**: 使用 `@/contexts/AuthContext` 导出的 `getAuthHeaders()`，不要在页面中重复定义
 - **Supabase UUID 查询**：所有 service 方法中 `restaurant_id` 参数必须做 UUID 校验，非法值回退 `DEFAULT_RESTAURANT_ID`
+- **产品使用指南同步更新** — 每次功能迭代后，同步更新 `docs/user-guides/` 对应角色的手册（店长/管理层/店员），记录功能变更与最佳实践
 
 > 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
@@ -130,4 +131,4 @@ master_employee (1)   ──< visit_records (N)
 
 三个核心页面：录音(`/recorder`) → 看板(`/dashboard`) → AI智库(`/chat`)
 
-> 操作流程、技术参数、状态说明详见 @docs/PRODUCT-USAGE.md
+> 按角色组织的完整使用手册详见 @docs/user-guides/README.md

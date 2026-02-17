@@ -367,3 +367,15 @@ CREATE POLICY "tenant_isolation" ON lingtin_xxx
 1. 端到端测试：录音 → 上传 → STT → AI → 存储 → 展示
 2. 前端部署到 Cloudflare Pages
 3. 后端部署到 Zeabur
+
+---
+
+## 八、产品使用指南维护
+
+每次功能迭代或版本更新时，必须同步更新 `docs/user-guides/` 下的产品使用指南：
+
+1. **确定受影响角色** — 新功能或变更影响哪些角色（店长/管理层/店员）
+2. **更新对应手册** — 在对应角色目录下更新或新增功能说明
+3. **更新术语表** — 如有新概念，补充到 `getting-started/glossary.md`
+4. **更新版本记录** — 在 `docs/user-guides/README.md` 的版本表中添加条目
+5. **内容标准** — 不只写操作步骤，要说明功能的意义、价值和最佳实践方式
