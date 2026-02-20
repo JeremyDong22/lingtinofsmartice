@@ -18,6 +18,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^10.3.0",
+    "@nestjs/schedule": "^6.1.1",
     "@nestjs/schematics": "^10.1.0",
     "@supabase/supabase-js": "^2.45.0",
     "@types/bcrypt": "^6.0.0",

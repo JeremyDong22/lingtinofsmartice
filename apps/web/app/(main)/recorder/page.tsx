@@ -1,5 +1,5 @@
 // Recorder Page - Dual mode: table visit recording + meeting recording
-// v4.0 - Added meeting mode with tab switching
+// v5.0 - Added daily ops loop: agenda card for daily_review, reminder for pre_meal
 
 'use client';
 
@@ -16,6 +16,8 @@ import { RecordingHistory } from '@/components/recorder/RecordingHistory';
 import { StealthOverlay } from '@/components/recorder/StealthOverlay';
 import { QuestionPrompt } from '@/components/recorder/QuestionPrompt';
 import { MeetingTypeSelector } from '@/components/recorder/MeetingTypeSelector';
+import { MeetingAgendaCard } from '@/components/recorder/MeetingAgendaCard';
+import { PreMealReminder } from '@/components/recorder/PreMealReminder';
 import { MeetingHistory } from '@/components/recorder/MeetingHistory';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -481,6 +483,14 @@ export default function RecorderPage() {
               onChange={setMeetingType}
               disabled={isRecording}
             />
+
+            {/* Context cards based on meeting type */}
+            {meetingType === 'daily_review' && (
+              <MeetingAgendaCard restaurantId={restaurantId} />
+            )}
+            {meetingType === 'pre_meal' && (
+              <PreMealReminder restaurantId={restaurantId} />
+            )}
 
             {/* Record Button (no stealth mode for meetings) */}
             <div className="flex justify-center py-2">

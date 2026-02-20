@@ -1,8 +1,9 @@
 // Root Application Module
-// v1.2 - Added StaffModule for boss to view employee data
+// v1.3 - Added DailySummaryModule + ScheduleModule for automated daily ops loop
 
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AudioModule } from './modules/audio/audio.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ChatModule } from './modules/chat/chat.module';
@@ -10,11 +11,13 @@ import { StaffModule } from './modules/staff/staff.module';
 import { ActionItemsModule } from './modules/action-items/action-items.module';
 import { QuestionTemplatesModule } from './modules/question-templates/question-templates.module';
 import { MeetingModule } from './modules/meeting/meeting.module';
+import { DailySummaryModule } from './modules/daily-summary/daily-summary.module';
 import { AuthModule, JwtAuthGuard } from './modules/auth';
 import { SupabaseModule } from './common/supabase/supabase.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     SupabaseModule,
     AuthModule,
     AudioModule,
@@ -24,6 +27,7 @@ import { SupabaseModule } from './common/supabase/supabase.module';
     ActionItemsModule,
     QuestionTemplatesModule,
     MeetingModule,
+    DailySummaryModule,
   ],
   providers: [
     // Apply JWT guard globally - all routes require auth by default

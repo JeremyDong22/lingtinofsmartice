@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html><head><title>Auto Login</title></head>
+<body>
+<script>
+// Clear stale SWR cache to prevent 401 loops
+localStorage.removeItem('lingtin-swr-cache');
+localStorage.setItem('lingtin_auth_token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJ1c2VybmFtZSI6InRlc3QiLCJlbXBsb3llZU5hbWUiOiLmtYvor5Xlupfplb8iLCJyZXN0YXVyYW50SWQiOiIwYjllOTAzMS00MjIzLTQxMjQtYjYzMy1lM2E4NTNhYmZiOGYiLCJyZXN0YXVyYW50TmFtZSI6Iua1i-ivlemXqOW6lyIsInJvbGVDb2RlIjoic3RvcmVfbWFuYWdlciIsImlhdCI6MTc3MTYxMjM2NCwiZXhwIjoxNzcxNjk4NzY0fQ.evhyIonq5SQ3SCRVZIyG063UmQ8dxQrnvSeE-36o8-o');
+localStorage.setItem('lingtin_auth_user', JSON.stringify({id:'test-user',username:'test',employeeName:'测试店长',restaurantId:'0b9e9031-4223-4124-b633-e3a853abfb8f',restaurantName:'测试门店',roleCode:'store_manager'}));
+location.href = '/recorder';
+</script>
+<p>正在登录并跳转...</p>
+</body>
+</html>

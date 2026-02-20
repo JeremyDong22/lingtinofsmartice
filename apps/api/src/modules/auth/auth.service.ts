@@ -65,7 +65,7 @@ export class AuthService {
       .single();
 
     if (error || !user) {
-      this.logger.warn(`User not found: ${username}`);
+      this.logger.warn(`User not found: ${username}, error: ${error?.message || 'no data'}`);
       return null;
     }
 

@@ -1,10 +1,11 @@
 // Meeting AI Processing Service - STT + AI minutes generation
-// v2.0 - DashScope Paraformer-v2 (with Xunfei fallback) + Gemini 2.5 Flash
+// v2.1 - Auto-extract action items to lingtin_action_items after processing
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { XunfeiSttService } from '../audio/xunfei-stt.service';
 import { DashScopeSttService } from '../audio/dashscope-stt.service';
+import { getChinaDateString } from '../../common/utils/date';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -89,6 +90,11 @@ export class MeetingAiProcessingService {
 
       // Step 3: Save results
       await this.saveResults(recordingId, rawTranscript, aiResult);
+
+      // Step 4: Write action items to lingtin_action_items (for review/pre_meal meetings)
+      if (aiResult.actionItems.length > 0) {
+        await this.saveActionItems(recordingId, restaurantId, meetingType, aiResult.actionItems);
+      }
 
       const totalTime = Date.now() - startTime;
       this.logger.log(`Pipeline: ${meetingType} 完成 (${(totalTime / 1000).toFixed(1)}s)`);
@@ -199,6 +205,51 @@ export class MeetingAiProcessingService {
       actionItems: result.actionItems || [],
       keyDecisions: result.keyDecisions || [],
     };
+  }
+
+  private async saveActionItems(
+    meetingId: string,
+    restaurantId: string,
+    meetingType: string,
+    actionItems: Array<{ who: string; what: string; deadline: string }>,
+  ): Promise<void> {
+    try {
+      const client = this.supabase.getClient();
+      const today = getChinaDateString();
+
+      const sourceType = meetingType === 'daily_review' ? 'review_meeting'
+        : meetingType === 'pre_meal' ? 'pre_meal_meeting'
+        : 'meeting';
+
+      const rows = actionItems.map(item => ({
+        restaurant_id: restaurantId,
+        action_date: today,
+        source_type: sourceType,
+        category: 'other',
+        suggestion_text: item.what,
+        priority: 'medium',
+        evidence: [],
+        visit_ids: [],
+        status: 'pending',
+        assignee: item.who !== '待定' ? item.who : null,
+        deadline: item.deadline || null,
+        meeting_id: meetingId,
+      }));
+
+      const { error } = await client
+        .from('lingtin_action_items')
+        .insert(rows);
+
+      if (error) {
+        this.logger.error(`Failed to save action items: ${error.message}`);
+      } else {
+        this.logger.log(`Saved ${rows.length} action items from ${meetingType} meeting`);
+      }
+    } catch (err) {
+      // Non-fatal: don't fail the pipeline if action items insertion fails
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`saveActionItems error (non-fatal): ${msg}`);
+    }
   }
 
   private async getStatus(recordingId: string): Promise<string | null> {
