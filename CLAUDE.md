@@ -31,7 +31,7 @@ lingtin/
 │   │   └── lib/                     # api.ts, backgroundProcessor.ts, supabase/
 │   └── api/                          # NestJS 后端 (@lingtin/api)
 │       └── src/
-│           ├── modules/             # audio/, auth/, chat/, dashboard/, meeting/, question-templates/, staff/
+│           ├── modules/             # audio/, auth/, chat/, dashboard/, daily-summary/, meeting/, question-templates/, staff/
 │           └── common/              # Supabase 客户端, 工具函数
 ├── packages/                         # 共享包
 ├── docs/                             # 产品 & 开发文档 (含 FEEDBACK-LOG.md 产品反馈与需求记录)
@@ -49,6 +49,7 @@ pnpm build:api        # 构建后端
 supabase start        # 启动本地 Supabase (localhost:54321)
 # 注意: zsh 下路径含 (main) 等括号时必须加引号，否则 glob 报错
 # 注意: sw.js 是 PWA build 产物（pnpm build:web 生成），改动前端后需一起提交
+# 注意: rebase 时 sw.js 冲突直接接受任一版本（git checkout --theirs 或 --ours），后续 pnpm build:web 会重新生成
 ```
 
 ## 开发规范摘要
@@ -67,6 +68,8 @@ supabase start        # 启动本地 Supabase (localhost:54321)
 - **STT 回退模式** — DashScope 优先，失败或未配置自动回退讯飞；`extractTranscript` 失败必须抛异常（不能返回空串），否则回退不触发
 - **AI JSON 解析** — OpenRouter 返回的 JSON 必须用 try-catch 包裹 `JSON.parse`，catch 中记录原始内容前 200 字用于调试
 - **面向店长的内容** — 讲功能价值时站在店长角度（省时间、不遗漏、被认可），不要暗示"做给老板看"或"被老板监控"。强调"你的用心会被看见"，而非"老板能看到你的数据"
+- **已知技术债（PR #5 审查）** — ① `saveResults` 方法 DB 写入失败未抛异常 ② `QuestionTemplatesService` / `DailySummaryController` 缺 UUID 校验 ③ API 响应未统一 `{data, message}` 格式 ④ 前端 `onError` 回调未通知用户。新增代码应避免重复这些模式
+- **DATABASE.md 与实际表有差异** — `lingtin_visit_records` 实际含 `feedbacks JSONB` 列（AI 评价短语列表），但 DATABASE.md 未记录。修改 schema 前先查实际表结构
 
 > 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
@@ -90,6 +93,7 @@ IMPORTANT: 遵守以下规则防止上下文过长导致指令丢失：
 - **不要直接操作线上 Supabase 数据库**
 - **Git remotes**: `origin` = 上游 (jeremydong22)，`fork` = 贡献者 (SmartIce-Ray)。push 用 `fork`，PR 目标 `origin/main`
 - **创建 PR**: `gh pr create --repo jeremydong22/lingtinofsmartice --head SmartIce-Ray:<branch> --base main`；若 PR 已存在，用 `gh pr edit <number> --repo ...` 更新
+- **Force push（rebase 后）**: 必须 push 到 `fork`，不是 `origin`。PR head 是 `SmartIce-Ray:<branch>`，push 到 `origin` 不会更新 PR。push 前先 `git fetch fork <branch>` 刷新 tracking info，否则 `--force-with-lease` 会因 stale info 被拒绝
 
 ## 外部服务文档
 
