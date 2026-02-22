@@ -37,7 +37,7 @@ export class DailySummaryService {
   ) {}
 
   // Cron: UTC 13:00 = Beijing 21:00
-  @Cron('0 0 13 * * *')
+  @Cron('0 0 13 * * *', { name: 'daily-summary-cron' })
   async handleDailySummaryCron() {
     this.logger.log('Cron: 每日总结定时任务触发 (21:00 UTC+8)');
 
