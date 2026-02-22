@@ -50,6 +50,7 @@ supabase start        # 启动本地 Supabase (localhost:54321)
 # 注意: zsh 下路径含 (main) 等括号时必须加引号，否则 glob 报错
 # 注意: sw.js 是 PWA build 产物（pnpm build:web 生成），改动前端后需一起提交
 # 注意: rebase 时 sw.js 冲突直接接受任一版本（git checkout --theirs 或 --ours），后续 pnpm build:web 会重新生成
+# 注意: 提交 sw.js 前务必先 pnpm build:web，确保无合并冲突标记残留
 ```
 
 ## 开发规范摘要
@@ -68,7 +69,8 @@ supabase start        # 启动本地 Supabase (localhost:54321)
 - **STT 回退模式** — DashScope 优先，失败或未配置自动回退讯飞；`extractTranscript` 失败必须抛异常（不能返回空串），否则回退不触发
 - **AI JSON 解析** — OpenRouter 返回的 JSON 必须用 try-catch 包裹 `JSON.parse`，catch 中记录原始内容前 200 字用于调试
 - **面向店长的内容** — 讲功能价值时站在店长角度（省时间、不遗漏、被认可），不要暗示"做给老板看"或"被老板监控"。强调"你的用心会被看见"，而非"老板能看到你的数据"
-- **已知技术债（PR #5 审查）** — ① `saveResults` 方法 DB 写入失败未抛异常 ② `QuestionTemplatesService` / `DailySummaryController` 缺 UUID 校验 ③ API 响应未统一 `{data, message}` 格式 ④ 前端 `onError` 回调未通知用户。新增代码应避免重复这些模式
+- **已知技术债（PR #5 审查）** — ① `saveResults` 方法 DB 写入失败未抛异常 ② ~~`QuestionTemplatesService`~~ / `DailySummaryController` 缺 UUID 校验 ③ API 响应未统一 `{data, message}` 格式 ④ 前端 `onError` 回调未通知用户。新增代码应避免重复这些模式
+- **版本号更新** — 每次功能迭代提交前，必须更新 `apps/web/components/layout/UpdatePrompt.tsx` 中的 `APP_VERSION`（递增 patch 版本）和 `BUILD_DATE`（当天日期）
 - **DATABASE.md 与实际表有差异** — `lingtin_visit_records` 实际含 `feedbacks JSONB` 列（AI 评价短语列表），但 DATABASE.md 未记录。修改 schema 前先查实际表结构
 
 > 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)

@@ -6,8 +6,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 
 // Build version - updated on each deployment
-export const APP_VERSION = '1.0.3';
-export const BUILD_DATE = '2026-02-18';
+export const APP_VERSION = '1.0.4';
+export const BUILD_DATE = '2026-02-22';
 
 // Force clear all caches, unregister SW, and hard reload
 async function forceUpdateApp() {

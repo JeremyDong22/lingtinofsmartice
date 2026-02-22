@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { getChinaDateString } from '../../common/utils/date';
+import { ActionItemsService } from '../action-items/action-items.service';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -30,7 +31,10 @@ interface DailySummaryResult {
 export class DailySummaryService {
   private readonly logger = new Logger(DailySummaryService.name);
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly actionItemsService: ActionItemsService,
+  ) {}
 
   // Cron: UTC 13:00 = Beijing 21:00
   @Cron('0 0 13 * * *')
@@ -64,6 +68,9 @@ export class DailySummaryService {
       try {
         await this.generateDailySummary(restaurantId, today);
         this.logger.log(`Cron: Generated summary for ${restaurantId}`);
+        // 保底：自动生成 action items（复盘会已生成的不受影响）
+        await this.actionItemsService.generateActionItems(restaurantId, today);
+        this.logger.log(`Cron: Generated action items for ${restaurantId}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.error(`Cron: Failed for ${restaurantId}: ${msg}`);

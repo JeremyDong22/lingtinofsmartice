@@ -8,5 +8,6 @@ import { ActionItemsService } from './action-items.service';
 @Module({
   controllers: [ActionItemsController],
   providers: [ActionItemsService],
+  exports: [ActionItemsService],
 })
 export class ActionItemsModule {}
