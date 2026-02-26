@@ -605,31 +605,40 @@ this.logger.log(`Executing tool: ${name}`);
 
     const client = this.supabase.getClient();
 
+    // Fix #1: UUID-validate restaurantId before SQL interpolation
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
+    const safeRestaurantId = UUID_RE.test(restaurantId) ? restaurantId : DEFAULT_RESTAURANT_ID;
+
     // Build scope filter based on managed IDs or single restaurant
     let modifiedSql = sql;
     const buildScopeFilter = (alias?: string): string => {
       const prefix = alias ? `${alias}.` : '';
       if (managedRestaurantIds && managedRestaurantIds.length > 0) {
-        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const validIds = managedRestaurantIds.filter(id => UUID_RE.test(id));
-        const idList = (validIds.length > 0 ? validIds : [restaurantId])
+        const idList = (validIds.length > 0 ? validIds : [safeRestaurantId])
           .map(id => `'${id}'`).join(',');
         return `${prefix}restaurant_id IN (${idList})`;
       }
-      return `${prefix}restaurant_id = '${restaurantId}'`;
+      return `${prefix}restaurant_id = '${safeRestaurantId}'`;
     };
 
-    // For tables with restaurant_id, add scope filter for security
+    // Fix #2: For tables with restaurant_id, always add scope filter for security
+    // Check if WHERE clause already has restaurant_id as an equality/IN filter (not just in JOINs)
     const tablesToScope = ['lingtin_visit_records', 'lingtin_action_items', 'lingtin_dish_mentions'];
+    const whereClauseMatch = normalizedSql.match(/\bwhere\b([\s\S]*)/i);
+    const whereClause = whereClauseMatch ? whereClauseMatch[1] : '';
+    const hasRestaurantIdInWhere = whereClause.includes('restaurant_id');
+
     for (const tableName of tablesToScope) {
-      if (normalizedSql.includes(tableName) && !normalizedSql.includes('restaurant_id')) {
+      if (normalizedSql.includes(tableName) && !hasRestaurantIdInWhere) {
         // Check if table has an alias (e.g., "lingtin_visit_records vr")
         const aliasMatch = sql.match(new RegExp(`${tableName}\\s+([a-z]{1,3})(?:\\s|$|,)`, 'i'));
         const alias = aliasMatch?.[1];
         const scopeFilter = buildScopeFilter(alias);
 
         if (normalizedSql.includes('where')) {
-          modifiedSql = modifiedSql.replace(/where/i, `WHERE ${scopeFilter} AND`);
+          modifiedSql = modifiedSql.replace(/\bwhere\b/i, `WHERE ${scopeFilter} AND`);
         } else {
           const tableRegex = new RegExp(`(from\\s+${tableName}(?:\\s+[a-z]{1,3})?)`, 'i');
           modifiedSql = modifiedSql.replace(tableRegex, `$1 WHERE ${scopeFilter}`);

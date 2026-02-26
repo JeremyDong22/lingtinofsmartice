@@ -59,8 +59,8 @@ function ChatContent({ config }: ChatPageProps) {
     messageCount: messages.length,
   });
 
-  // Visible messages (filter out hidden briefing triggers)
-  const visibleMessages = messages.filter(msg => !msg.isHidden);
+  // All messages are visible (briefing triggers use hideUserMessage, so they're never added)
+  const visibleMessages = messages;
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

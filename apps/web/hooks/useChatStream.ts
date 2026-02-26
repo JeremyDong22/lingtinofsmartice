@@ -15,7 +15,6 @@ export interface Message {
   isError?: boolean;        // 标记错误消息，显示重试按钮
   isStopped?: boolean;      // 标记被用户停止的消息，显示灰色
   originalQuestion?: string; // 保存原始问题用于重试
-  isHidden?: boolean;       // 隐藏的触发消息（如 briefing 触发）
 }
 
 export interface SendMessageOptions {
@@ -115,7 +114,7 @@ export function useChatStream(): UseChatStreamReturn {
     // Build conversation history BEFORE adding new messages (to avoid async state issues)
     // Include all previous messages plus the current user message
     const previousMessages = messagesRef.current.filter(
-      msg => !msg.isStreaming && msg.content.trim() && !msg.isHidden
+      msg => !msg.isStreaming && msg.content.trim()
     );
     const historyMessages = [
       ...previousMessages.slice(-9).map(msg => ({ role: msg.role, content: msg.content })),
