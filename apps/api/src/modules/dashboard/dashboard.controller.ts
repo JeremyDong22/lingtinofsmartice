@@ -5,7 +5,7 @@
 // v1.4 - Added: /restaurants-overview endpoint for admin dashboard with sentiment scores
 // v1.3 - Added: /restaurants endpoint for multi-store admin view
 
-import { Controller, Get, Query, Param } from '@nestjs/common';
+import { Controller, Get, Query, Param, BadRequestException } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { getChinaDateString, getYesterdayChinaDateString } from '../../common/utils/date';
 
@@ -137,7 +137,7 @@ export class DashboardController {
   ) {
     const managedIds = DashboardService.parseManagedIds(managedIdsStr);
     if (!managedIds) {
-      return { error: 'managed_ids is required for benchmark' };
+      throw new BadRequestException('managed_ids is required for benchmark');
     }
     return this.dashboardService.getBenchmark(
       managedIds,

@@ -51,13 +51,7 @@ export default function RegionManagePage() {
   const allStores = allStoresData?.data ?? [];
   const allManagers = managersData?.data ?? [];
 
-  // Redirect non-super-admins (hooks must be called before any early return)
-  if (user && !user.isSuperAdmin) {
-    router.replace('/admin/briefing');
-    return null;
-  }
-
-  // UI state
+  // UI state — all hooks BEFORE any conditional return
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -69,6 +63,12 @@ export default function RegionManagePage() {
   const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(new Set());
   const [editingManagersForRegion, setEditingManagersForRegion] = useState<string | null>(null);
   const [selectedManagerIds, setSelectedManagerIds] = useState<Set<string>>(new Set());
+
+  // Redirect non-super-admins (after all hooks)
+  if (user && !user.isSuperAdmin) {
+    router.replace('/admin/briefing');
+    return null;
+  }
 
   const unassignedCount = allStores.filter((s) => !s.region_id).length;
 

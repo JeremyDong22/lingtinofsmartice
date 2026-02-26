@@ -487,7 +487,10 @@ this.logger.log(`Executing tool: ${name}`);
         // Determine the filter: managed IDs (regional), single ID (store), or none (HQ)
         let scopeFilter: string;
         if (managedRestaurantIds && managedRestaurantIds.length > 0) {
-          const idList = managedRestaurantIds.map(id => `'${id}'`).join(',');
+          const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          const validIds = managedRestaurantIds.filter(id => UUID_RE.test(id));
+          const idList = (validIds.length > 0 ? validIds : [restaurantId])
+            .map(id => `'${id}'`).join(',');
           scopeFilter = `restaurant_id IN (${idList})`;
         } else {
           scopeFilter = `restaurant_id = '${restaurantId}'`;

@@ -16,27 +16,37 @@ export class RegionController {
     }
   }
 
+  private requireAdmin(user: JwtPayload): void {
+    if (user?.roleCode !== 'administrator') {
+      throw new ForbiddenException('需要管理员权限');
+    }
+  }
+
   // GET /api/regions — list all regions with store/manager counts
   @Get()
-  async listRegions() {
+  async listRegions(@CurrentUser() user: JwtPayload) {
+    this.requireAdmin(user);
     return this.service.listRegions();
   }
 
   // GET /api/regions/stores-unassigned — list stores not assigned to any region
   @Get('stores-unassigned')
-  async getUnassignedStores() {
+  async getUnassignedStores(@CurrentUser() user: JwtPayload) {
+    this.requireAdmin(user);
     return this.service.getUnassignedStores();
   }
 
   // GET /api/regions/all-stores — list all active stores with region_id
   @Get('all-stores')
-  async getAllStores() {
+  async getAllStores(@CurrentUser() user: JwtPayload) {
+    this.requireAdmin(user);
     return this.service.getAllStores();
   }
 
   // GET /api/regions/managers — list all administrators
   @Get('managers')
-  async listManagers() {
+  async listManagers(@CurrentUser() user: JwtPayload) {
+    this.requireAdmin(user);
     return this.service.listManagers();
   }
 
