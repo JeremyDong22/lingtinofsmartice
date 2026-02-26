@@ -575,7 +575,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
 
     this.logger.log(`Calling OpenRouter with ${messages.length} messages`);
 
-    // Timeout: 60s for regular, 90s for briefing (multiple tool calls)
+    // Timeout: 60s for regular, 90s for briefing (pre-fetch queries + AI generation)
     const timeoutMs = isBriefing ? 90_000 : 60_000;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -742,9 +742,10 @@ this.logger.log(`Executing tool: ${name}`);
           ORDER BY dm.created_at DESC LIMIT 10
         `),
         this.runRawQuery(`
-          SELECT dish_name, feedback_text
-          FROM lingtin_dish_mentions
-          WHERE sentiment = 'positive' AND created_at >= CURRENT_DATE - 1 ${scopeFor()}
+          SELECT dm.dish_name, dm.feedback_text
+          FROM lingtin_dish_mentions dm
+          JOIN lingtin_visit_records vr ON dm.visit_id = vr.id
+          WHERE dm.sentiment = 'positive' AND dm.created_at >= CURRENT_DATE - 1 ${scopeFor('vr')}
           LIMIT 5
         `),
         this.runRawQuery(`
@@ -772,9 +773,10 @@ this.logger.log(`Executing tool: ${name}`);
           LIMIT 5
         `),
         this.runRawQuery(`
-          SELECT dish_name, feedback_text
-          FROM lingtin_dish_mentions
-          WHERE sentiment = 'positive' AND created_at >= CURRENT_DATE - 1 ${scopeFor()}
+          SELECT dm.dish_name, dm.feedback_text
+          FROM lingtin_dish_mentions dm
+          JOIN lingtin_visit_records vr ON dm.visit_id = vr.id
+          WHERE dm.sentiment = 'positive' AND dm.created_at >= CURRENT_DATE - 1 ${scopeFor('vr')}
           LIMIT 5
         `),
         this.runRawQuery(`
