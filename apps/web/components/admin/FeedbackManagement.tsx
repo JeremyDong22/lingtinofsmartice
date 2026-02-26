@@ -88,14 +88,15 @@ export function FeedbackManagement() {
   const handleStatusChange = async (feedbackId: string, newStatus: string) => {
     if (!user) return;
     try {
-      await fetch(getApiUrl(`api/feedback/${feedbackId}/status`), {
+      const res = await fetch(getApiUrl(`api/feedback/${feedbackId}/status`), {
         method: 'PATCH',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, changed_by: user.id }),
       });
+      if (!res.ok) throw new Error(`状态更新失败 (${res.status})`);
       mutate(swrKey);
-    } catch {
-      // ignore
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '操作失败，请重试');
     }
   };
 
@@ -103,16 +104,17 @@ export function FeedbackManagement() {
     if (!user || !replyText.trim()) return;
     setSubmittingReply(true);
     try {
-      await fetch(getApiUrl(`api/feedback/${feedbackId}/reply`), {
+      const res = await fetch(getApiUrl(`api/feedback/${feedbackId}/reply`), {
         method: 'POST',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ reply: replyText.trim(), reply_by: user.id }),
       });
+      if (!res.ok) throw new Error(`回复失败 (${res.status})`);
       setReplyingId(null);
       setReplyText('');
       mutate(swrKey);
-    } catch {
-      // ignore
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '操作失败，请重试');
     } finally {
       setSubmittingReply(false);
     }

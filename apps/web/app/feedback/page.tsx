@@ -344,6 +344,9 @@ export default function FeedbackPage() {
               </button>
             </div>
 
+            {/* Shared hidden file input (rendered once) */}
+            {hiddenFileInput}
+
             {/* Text mode */}
             {mode === 'text' && (
               <div className="space-y-3">
@@ -358,7 +361,6 @@ export default function FeedbackPage() {
                   {cameraButton}
                 </div>
                 {imagePreviewStrip}
-                {hiddenFileInput}
                 <button
                   onClick={handleSubmitText}
                   disabled={!text.trim() || submitting}
@@ -465,7 +467,6 @@ export default function FeedbackPage() {
                       添加图片
                     </button>
                   )}
-                  {hiddenFileInput}
                 </div>
                 {imagePreviewStrip}
 

@@ -17,6 +17,13 @@ export class FeedbackService {
     return UUID_REGEX.test(id) ? id : DEFAULT_RESTAURANT_ID;
   }
 
+  private validateEmployeeId(id: string): string {
+    if (!id || !UUID_REGEX.test(id)) {
+      throw new Error('Invalid employee_id format');
+    }
+    return id;
+  }
+
   async uploadImages(files: Express.Multer.File[], restaurantId: string): Promise<string[]> {
     const client = this.supabase.getClient();
     const safeRid = this.safeRestaurantId(restaurantId);
@@ -55,7 +62,7 @@ export class FeedbackService {
     const record = {
       id,
       restaurant_id: this.safeRestaurantId(restaurantId),
-      employee_id: employeeId,
+      employee_id: this.validateEmployeeId(employeeId),
       input_type: 'text',
       content_text: contentText,
       image_urls: imageUrls,
@@ -108,7 +115,7 @@ export class FeedbackService {
     const record = {
       id,
       restaurant_id: safeRid,
-      employee_id: employeeId,
+      employee_id: this.validateEmployeeId(employeeId),
       input_type: 'voice',
       content_text: '',
       audio_url: urlData.publicUrl,
@@ -183,7 +190,7 @@ export class FeedbackService {
     const { data, error } = await client
       .from('lingtin_product_feedback')
       .select('*')
-      .eq('employee_id', employeeId)
+      .eq('employee_id', this.validateEmployeeId(employeeId))
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -273,7 +280,6 @@ export class FeedbackService {
         admin_reply: reply,
         admin_reply_by: replyBy,
         admin_reply_at: new Date().toISOString(),
-        status: 'read',
       })
       .eq('id', feedbackId)
       .select()
