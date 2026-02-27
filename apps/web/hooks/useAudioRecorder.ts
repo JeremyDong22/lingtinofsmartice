@@ -89,6 +89,9 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
+      if (visibilityHandlerRef.current) {
+        document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
+      }
     };
   }, []);
 
@@ -128,6 +131,7 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
   const emergencySave = useCallback((recorder: MediaRecorder | null) => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
+    isRecordingRef.current = false; // Prevent re-entry from health check
 
     const chunks = audioChunksRef.current;
 
@@ -136,6 +140,8 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       try {
         recorder.stop();
         // onstop callback will handle blob + reset isStoppingRef
+        // Safety: if onstop never fires (mobile browser killed recorder), reset after 2s
+        setTimeout(() => { isStoppingRef.current = false; }, 2000);
       } catch {
         // stop() failed — manually assemble blob from chunks
         if (chunks.length > 0) {
