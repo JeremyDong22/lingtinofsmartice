@@ -898,15 +898,15 @@ export class DashboardService {
       }
 
       // --- Anomaly: low sentiment ---
-      if (avgSentiment !== null && avgSentiment < 0.5) {
+      if (avgSentiment !== null && avgSentiment < 50) {
         problems.push({
           severity: 'red',
           category: 'sentiment',
           restaurantId: rest.id,
           restaurantName: rest.restaurant_name,
-          title: '整体情绪偏低',
+          title: '整体满意度偏低',
           evidence: [],
-          metric: `日均情绪 ${(avgSentiment).toFixed(2)}`,
+          metric: `日均满意度 ${Math.round(avgSentiment)}`,
         });
       }
 
@@ -1178,7 +1178,7 @@ export class DashboardService {
         .select('id', { count: 'exact', head: true })
         .eq('restaurant_id', safeId)
         .eq('status', 'processed')
-        .gte('sentiment_score', 0.8),
+        .gte('sentiment_score', 80),
       client
         .from('lingtin_action_items')
         .select('id', { count: 'exact', head: true })
@@ -1322,7 +1322,7 @@ export class DashboardService {
             severity: 'high',
             storeName: rest.restaurant_name,
             storeId: rest.id,
-            message: `情绪分连续 3 天下降（${lastThree.map(v => (v * 100).toFixed(0)).join(' → ')}）`,
+            message: `满意度连续 3 天下降（${lastThree.map(v => Math.round(v)).join(' → ')}）`,
           });
         }
       }
@@ -1353,8 +1353,8 @@ export class DashboardService {
         type: 'sentiment_leader',
         storeName: s.name,
         storeId: s.id,
-        metricValue: Math.round(s.avgSentiment! * 100),
-        description: idx === 0 ? '情绪分最高' : `情绪分 TOP ${idx + 1}`,
+        metricValue: Math.round(s.avgSentiment!),
+        description: idx === 0 ? '满意度最高' : `满意度 TOP ${idx + 1}`,
         isMyStore: managedIds.includes(s.id),
       });
     });

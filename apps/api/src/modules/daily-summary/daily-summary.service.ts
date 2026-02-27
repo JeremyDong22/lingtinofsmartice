@@ -165,8 +165,8 @@ export class DailySummaryService {
       if (v.sentiment_score !== null && v.sentiment_score !== undefined) {
         sentimentSum += Number(v.sentiment_score);
         sentimentCount++;
-        if (v.sentiment_score >= 0.6) positiveCount++;
-        else if (v.sentiment_score <= 0.4) negativeCount++;
+        if (v.sentiment_score >= 60) positiveCount++;
+        else if (v.sentiment_score <= 40) negativeCount++;
         else neutralCount++;
       }
     });
@@ -267,7 +267,7 @@ export class DailySummaryService {
 
     const userContent = `今日桌访数据：
 - 总桌访数: ${totalVisits}
-- 平均情绪分: ${avgSentiment ?? '无数据'}
+- 平均满意度: ${avgSentiment ?? '无数据'}
 
 各桌反馈详情:
 ${feedbackLines.join('\n')}`;
