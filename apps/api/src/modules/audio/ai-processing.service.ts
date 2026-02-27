@@ -323,6 +323,8 @@ export class AiProcessingService {
   /**
    * Core incremental dedup: if the same prefix is repeated with 1-3 extra chars each time,
    * keep only the final (longest) version.
+   * Verifies the incremental growth pattern (each occurrence adds 1-3 chars) to avoid
+   * false positives on text that legitimately repeats a phrase.
    */
   private deduplicateIncrementalRaw(text: string): string {
     if (text.length < 20) return text;
@@ -330,24 +332,35 @@ export class AiProcessingService {
     // Try to find a repeated seed (4-10 chars) that starts multiple "incremental" copies
     for (let seedLen = 4; seedLen <= Math.min(10, Math.floor(text.length / 3)); seedLen++) {
       const seed = text.substring(0, seedLen);
-      // Count how many times this seed appears
-      let count = 0;
+      // Find all non-overlapping positions of the seed
+      const positions: number[] = [];
       let idx = 0;
       while ((idx = text.indexOf(seed, idx)) !== -1) {
-        count++;
-        idx += 1;
+        positions.push(idx);
+        idx += seedLen; // non-overlapping
       }
-      // If the seed appears many times (>5), likely incremental repetition
-      if (count >= 5) {
-        // Find all occurrences and take the text from the last occurrence
-        let lastIdx = text.lastIndexOf(seed);
-        // The final version extends from lastIdx to the next seed occurrence or end of text
-        const remaining = text.substring(lastIdx);
-        // But there might be more content after the incremental block ends
-        // Check if the remaining is reasonable (not too short)
-        if (remaining.length >= seedLen * 2) {
-          return remaining;
+      // Need at least 5 occurrences
+      if (positions.length < 5) continue;
+
+      // Verify incremental growth pattern: each gap between positions should be
+      // seedLen + 0-3 chars (the "growing" part of the repetition)
+      let incrementalCount = 1;
+      for (let i = 1; i < positions.length; i++) {
+        const gap = positions[i] - positions[i - 1];
+        if (gap >= seedLen && gap <= seedLen + 3) {
+          incrementalCount++;
+        } else {
+          // Non-incremental gap — the block ends here
+          break;
         }
+      }
+
+      // Only treat as incremental if a significant consecutive run was found
+      if (incrementalCount >= 5) {
+        // The last occurrence in the incremental block is the longest version
+        const blockEnd = positions[incrementalCount - 1];
+        // Return from the last seed occurrence onward (the final, longest version + any trailing content)
+        return text.substring(blockEnd);
       }
     }
 
