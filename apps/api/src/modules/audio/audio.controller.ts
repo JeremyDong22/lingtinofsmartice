@@ -195,6 +195,11 @@ export class AudioController {
       throw new BadRequestException('No file provided');
     }
 
+    const allowedMimes = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/mp4'];
+    if (!file.mimetype || !allowedMimes.includes(file.mimetype)) {
+      throw new BadRequestException('Only audio files are accepted');
+    }
+
     this.logger.log(`  File: ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
 
     const client = this.supabaseService.getClient();
