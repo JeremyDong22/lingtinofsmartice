@@ -702,25 +702,27 @@ this.logger.log(`Executing tool: ${name}`);
           SELECT vr.restaurant_id, mr.restaurant_name, COUNT(*) as total
           FROM lingtin_visit_records vr
           JOIN master_restaurant mr ON vr.restaurant_id = mr.id
-          WHERE vr.visit_date = CURRENT_DATE - 1 ${scopeFor('vr')}
+          WHERE vr.visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1 ${scopeFor('vr')}
           GROUP BY vr.restaurant_id, mr.restaurant_name
         `),
         this.runRawQuery(`
           SELECT vr.restaurant_id, mr.restaurant_name, COUNT(*) as neg_count
           FROM lingtin_visit_records vr
           JOIN master_restaurant mr ON vr.restaurant_id = mr.id
-          WHERE vr.visit_date = CURRENT_DATE - 1 AND vr.sentiment_score < 0.4 ${scopeFor('vr')}
+          WHERE vr.visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1 AND vr.sentiment_score < 0.4 ${scopeFor('vr')}
           GROUP BY vr.restaurant_id, mr.restaurant_name
           ORDER BY neg_count DESC LIMIT 3
         `),
         this.runRawQuery(`
-          SELECT dm.dish_name, COUNT(DISTINCT dm.visit_id) as mention_count
-          FROM lingtin_dish_mentions dm
-          JOIN lingtin_visit_records vr ON dm.visit_id = vr.id
-          WHERE dm.sentiment = 'negative' AND dm.created_at >= CURRENT_DATE - 1 ${scopeFor('vr')}
-          GROUP BY dm.dish_name
-          HAVING COUNT(DISTINCT dm.visit_id) >= 2
-          ORDER BY mention_count DESC LIMIT 3
+          SELECT f->>'text' as feedback_text, COUNT(*) as mention_count,
+                 mr.restaurant_name
+          FROM lingtin_visit_records vr
+          JOIN master_restaurant mr ON vr.restaurant_id = mr.id,
+               jsonb_array_elements(vr.feedbacks) f
+          WHERE vr.visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1
+            AND f->>'sentiment' = 'negative' ${scopeFor('vr')}
+          GROUP BY f->>'text', mr.restaurant_name
+          ORDER BY mention_count DESC LIMIT 5
         `),
         this.runRawQuery(`
           SELECT ai.restaurant_id, mr.restaurant_name, COUNT(*) as pending_count
@@ -738,17 +740,19 @@ this.logger.log(`Executing tool: ${name}`);
     } else if (isChef) {
       const [negDishes, posDishes, pendingTasks] = await Promise.all([
         this.runRawQuery(`
-          SELECT dm.dish_name, dm.feedback_text, vr.table_id
-          FROM lingtin_dish_mentions dm
-          JOIN lingtin_visit_records vr ON dm.visit_id = vr.id
-          WHERE dm.sentiment = 'negative' AND dm.created_at >= CURRENT_DATE - 1 ${scopeFor('vr')}
-          ORDER BY dm.created_at DESC LIMIT 10
+          SELECT vr.table_id, f->>'text' as feedback_text, f->>'sentiment' as sentiment
+          FROM lingtin_visit_records vr,
+               jsonb_array_elements(vr.feedbacks) f
+          WHERE vr.visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1
+            AND f->>'sentiment' = 'negative' ${scopeFor('vr')}
+          ORDER BY vr.created_at DESC LIMIT 10
         `),
         this.runRawQuery(`
-          SELECT dm.dish_name, dm.feedback_text
-          FROM lingtin_dish_mentions dm
-          JOIN lingtin_visit_records vr ON dm.visit_id = vr.id
-          WHERE dm.sentiment = 'positive' AND dm.created_at >= CURRENT_DATE - 1 ${scopeFor('vr')}
+          SELECT f->>'text' as feedback_text
+          FROM lingtin_visit_records vr,
+               jsonb_array_elements(vr.feedbacks) f
+          WHERE vr.visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1
+            AND f->>'sentiment' = 'positive' ${scopeFor('vr')}
           LIMIT 5
         `),
         this.runRawQuery(`
@@ -767,19 +771,20 @@ this.logger.log(`Executing tool: ${name}`);
         this.runRawQuery(`
           SELECT COUNT(*) as total
           FROM lingtin_visit_records
-          WHERE visit_date = CURRENT_DATE - 1 ${scopeFor()}
+          WHERE visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1 ${scopeFor()}
         `),
         this.runRawQuery(`
           SELECT table_id, feedbacks, ai_summary
           FROM lingtin_visit_records
-          WHERE visit_date = CURRENT_DATE - 1 AND sentiment_score < 0.4 ${scopeFor()}
+          WHERE visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1 AND sentiment_score < 0.4 ${scopeFor()}
           LIMIT 5
         `),
         this.runRawQuery(`
-          SELECT dm.dish_name, dm.feedback_text
-          FROM lingtin_dish_mentions dm
-          JOIN lingtin_visit_records vr ON dm.visit_id = vr.id
-          WHERE dm.sentiment = 'positive' AND dm.created_at >= CURRENT_DATE - 1 ${scopeFor('vr')}
+          SELECT f->>'text' as feedback_text
+          FROM lingtin_visit_records vr,
+               jsonb_array_elements(vr.feedbacks) f
+          WHERE vr.visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1
+            AND f->>'sentiment' = 'positive' ${scopeFor('vr')}
           LIMIT 5
         `),
         this.runRawQuery(`
