@@ -550,11 +550,11 @@ export class DashboardService {
   async getRestaurantsOverview(startDate: string, endDate: string, managedIds: string[] | null = null) {
     if (this.supabase.isMockMode()) {
       return {
-        summary: { total_visits: 28, avg_sentiment: 0.72, restaurant_count: 3 },
+        summary: { total_visits: 28, avg_sentiment: 72, restaurant_count: 3 },
         restaurants: [
-          { id: 'mock-rest-1', name: '望京旗舰店', visit_count: 15, open_count: 20, coverage: 75, avg_sentiment: 0.68, keywords: ['清蒸鲈鱼', '服务热情', '偏咸', '红烧肉'] },
-          { id: 'mock-rest-2', name: '三里屯店', visit_count: 8, open_count: 15, coverage: 53, avg_sentiment: 0.65, keywords: ['上菜慢', '环境不错', '宫保鸡丁'] },
-          { id: 'mock-rest-3', name: '国贸店', visit_count: 5, open_count: 6, coverage: 83, avg_sentiment: 0.88, keywords: ['味道好', '分量足'] },
+          { id: 'mock-rest-1', name: '望京旗舰店', visit_count: 15, open_count: 20, coverage: 75, avg_sentiment: 68, keywords: ['清蒸鲈鱼', '服务热情', '偏咸', '红烧肉'] },
+          { id: 'mock-rest-2', name: '三里屯店', visit_count: 8, open_count: 15, coverage: 53, avg_sentiment: 65, keywords: ['上菜慢', '环境不错', '宫保鸡丁'] },
+          { id: 'mock-rest-3', name: '国贸店', visit_count: 5, open_count: 6, coverage: 83, avg_sentiment: 88, keywords: ['味道好', '分量足'] },
         ],
         recent_keywords: ['清蒸鲈鱼', '服务热情', '偏咸', '上菜慢', '环境不错', '味道好', '红烧肉', '宫保鸡丁', '分量足'],
       };
@@ -798,7 +798,7 @@ export class DashboardService {
         ],
         healthy_count: 1,
         restaurant_count: 3,
-        avg_sentiment: 0.68,
+        avg_sentiment: 68,
         avg_coverage: 78,
       };
     }

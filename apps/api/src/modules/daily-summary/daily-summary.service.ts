@@ -111,7 +111,7 @@ export class DailySummaryService {
           restaurant_id: restaurantId,
           summary_date: date,
           total_visits: 5,
-          avg_sentiment: 0.72,
+          avg_sentiment: 72,
           positive_count: 3,
           negative_count: 1,
           neutral_count: 1,
@@ -183,7 +183,7 @@ export class DailySummaryService {
       const summary = v.ai_summary || '';
       const feedbacks = v.feedbacks || [];
 
-      let line = `${tableId}桌 (情绪:${sentiment ?? '未知'})`;
+      let line = `${tableId}桌 (满意度:${sentiment ?? '未知'})`;
       if (summary) line += ` — ${summary}`;
       if (feedbacks.length > 0) {
         const fbTexts = feedbacks

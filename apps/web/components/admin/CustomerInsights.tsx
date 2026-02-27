@@ -328,14 +328,14 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                 </div>
                 {hasNeg && (
                   <div>
-                    <div className="px-4 pt-1 pb-1"><span className="text-xs text-gray-400">差评</span></div>
+                    <div className="px-4 pt-1 pb-1"><span className="text-xs text-gray-400">不满意</span></div>
                     {rest.negative_feedbacks.map((fb, idx) => renderFeedbackRow(fb, 'neg', keyPrefix, idx))}
                   </div>
                 )}
                 {hasNeg && hasPos && <div className="mx-4 border-t border-gray-100" />}
                 {hasPos && (
                   <div>
-                    <div className="px-4 pt-1 pb-1"><span className="text-xs text-gray-400">好评</span></div>
+                    <div className="px-4 pt-1 pb-1"><span className="text-xs text-gray-400">满意</span></div>
                     {rest.positive_feedbacks.map((fb, idx) => renderFeedbackRow(fb, 'pos', keyPrefix, idx))}
                   </div>
                 )}
