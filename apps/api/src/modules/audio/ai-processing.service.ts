@@ -238,6 +238,7 @@ export class AiProcessingService {
     limit: number,
     cutoffDate: string,
     onlyMissingFeedbacks = false,
+    onlyMissingProfile = false,
   ): Promise<{
     total: number;
     processed: number;
@@ -256,6 +257,10 @@ export class AiProcessingService {
 
     if (onlyMissingFeedbacks) {
       query = query.or('feedbacks.is.null,feedbacks.eq.[]');
+    }
+
+    if (onlyMissingProfile) {
+      query = query.is('customer_source', null);
     }
 
     const { data: records, error } = await query;

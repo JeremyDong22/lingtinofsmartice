@@ -254,6 +254,7 @@ export class AudioController {
     @Body('limit') limit?: number,
     @Body('cutoff_date') cutoffDate?: string,
     @Body('only_missing_feedbacks') onlyMissingFeedbacks?: boolean,
+    @Body('only_missing_profile') onlyMissingProfile?: boolean,
   ) {
     if (cutoffDate && !/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$/.test(cutoffDate)) {
       throw new BadRequestException('cutoff_date must be a valid ISO date string');
@@ -261,9 +262,9 @@ export class AudioController {
     const batchLimit = Math.min(Math.max(limit || 20, 1), 100);
     const cutoff = cutoffDate || new Date().toISOString();
 
-    this.logger.log(`▶ POST /audio/reanalyze-batch (limit=${batchLimit}, cutoff=${cutoff}, missing_only=${!!onlyMissingFeedbacks})`);
+    this.logger.log(`▶ POST /audio/reanalyze-batch (limit=${batchLimit}, cutoff=${cutoff}, missing_feedbacks=${!!onlyMissingFeedbacks}, missing_profile=${!!onlyMissingProfile})`);
 
-    const result = await this.aiProcessingService.reanalyzeBatch(batchLimit, cutoff, !!onlyMissingFeedbacks);
+    const result = await this.aiProcessingService.reanalyzeBatch(batchLimit, cutoff, !!onlyMissingFeedbacks, !!onlyMissingProfile);
 
     this.logger.log(`◀ Reanalyze batch: ${result.processed}/${result.total} ok, ${result.failed} failed`);
 
