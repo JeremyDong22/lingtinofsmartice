@@ -94,7 +94,7 @@ export default function GuidePage() {
 
   // Mark as seen on mount → clear red dot
   useEffect(() => {
-    localStorage.setItem(LS_KEY, APP_VERSION);
+    try { localStorage.setItem(LS_KEY, APP_VERSION); } catch {}
     window.dispatchEvent(new CustomEvent('lingtin-guide-seen'));
   }, []);
 
@@ -113,7 +113,7 @@ export default function GuidePage() {
       <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => window.history.length > 1 ? router.back() : router.push('/')}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
           >
             <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

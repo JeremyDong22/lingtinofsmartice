@@ -18,29 +18,41 @@ export function WhatsNewModal() {
 
   useEffect(() => {
     if (!user) return;
-    const seen = localStorage.getItem(LS_KEY);
-    if (seen === APP_VERSION) return;
+    try {
+      const seen = localStorage.getItem(LS_KEY);
+      if (seen === APP_VERSION) return;
 
-    const found = getLatestNoteForRole(APP_VERSION, user.roleCode);
-    if (!found) {
-      // No update content for this role, silently mark as seen
-      localStorage.setItem(LS_KEY, APP_VERSION);
-      return;
+      const found = getLatestNoteForRole(APP_VERSION, user.roleCode);
+      if (!found) {
+        localStorage.setItem(LS_KEY, APP_VERSION);
+        return;
+      }
+
+      setNote({ title: found.title, date: found.date, items: found.items });
+      requestAnimationFrame(() => {
+        setVisible(true);
+        setAnimating(true);
+      });
+    } catch {
+      // localStorage unavailable (Safari private browsing), skip modal
     }
-
-    setNote({ title: found.title, date: found.date, items: found.items });
-    // Delay to let the page render first
-    requestAnimationFrame(() => {
-      setVisible(true);
-      setAnimating(true);
-    });
   }, [user]);
+
+  // Escape key to close
+  useEffect(() => {
+    if (!visible) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [visible]);
 
   const handleClose = () => {
     setAnimating(false);
     setTimeout(() => {
       setVisible(false);
-      localStorage.setItem(LS_KEY, APP_VERSION);
+      try { localStorage.setItem(LS_KEY, APP_VERSION); } catch {}
     }, 200);
   };
 
@@ -54,6 +66,9 @@ export function WhatsNewModal() {
       onClick={handleClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`版本 ${APP_VERSION} 更新内容`}
         className={`w-full max-w-lg bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out ${
           animating ? 'translate-y-0' : 'translate-y-full'
         }`}

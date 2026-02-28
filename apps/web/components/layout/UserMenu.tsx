@@ -23,8 +23,12 @@ export function UserMenu() {
 
   // Check for unread guide updates
   useEffect(() => {
-    const seen = localStorage.getItem(GUIDE_SEEN_KEY);
-    setHasUnread(seen !== APP_VERSION);
+    try {
+      const seen = localStorage.getItem(GUIDE_SEEN_KEY);
+      setHasUnread(seen !== APP_VERSION);
+    } catch {
+      setHasUnread(false);
+    }
 
     const handleGuideSeen = () => setHasUnread(false);
     window.addEventListener('lingtin-guide-seen', handleGuideSeen);
