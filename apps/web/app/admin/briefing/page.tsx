@@ -134,6 +134,10 @@ export default function AdminBriefingPage() {
   const { data, isLoading } = useSWR<BriefingResponse>(`/api/dashboard/briefing?${dateRangeParams(dateRange)}${managedIdsParam}`);
   // Fetch overview data (keywords + store grid)
   const { data: overviewData } = useSWR<OverviewResponse>(`/api/dashboard/restaurants-overview?${dateRangeParams(dateRange)}${managedIdsParam}`);
+  // Fetch customer profile data
+  const { data: profileData } = useSWR<{
+    summary: { repeat_ratio: number | null; data_coverage: number };
+  }>(`/api/dashboard/customer-profile?${dateRangeParams(dateRange)}${managedIdsParam}`);
 
   const userName = user?.employeeName || user?.username || '您';
   const greeting = data?.greeting || '您好';
@@ -205,29 +209,34 @@ export default function AdminBriefingPage() {
           )}
         </div>
 
-        {/* Compact metrics row */}
+        {/* Compact metrics grid (2×2) */}
         {!isLoading && (
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">桌访</div>
-              <div className="text-xl font-bold text-gray-900">
-                {summary?.total_visits ?? 0}
-              </div>
-              <div className="text-xs text-gray-400">
-                {restaurantCount} 家门店
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-xl p-3 text-center">
               <div className="text-xs text-gray-500 mb-0.5">满意度</div>
               <div className={`text-xl font-bold ${getSatisfactionDisplay(avgSentiment ?? null).color}`}>
                 {avgSentiment != null ? `${Math.round(avgSentiment)}分` : '--'}
               </div>
               <div className="text-xs text-gray-400">
-                {getSatisfactionDisplay(avgSentiment ?? null).label}
+                {summary?.total_visits ?? 0}次桌访
               </div>
             </div>
             <div className="bg-white rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">复盘完成率</div>
+              <div className="text-xs text-gray-500 mb-0.5">覆盖率</div>
+              <div className={`text-xl font-bold ${
+                (data?.avg_coverage ?? 0) >= 60 ? 'text-green-600' :
+                (data?.avg_coverage ?? 0) >= 30 ? 'text-yellow-600' :
+                data?.avg_coverage != null ? 'text-red-600' :
+                'text-gray-400'
+              }`}>
+                {data?.avg_coverage != null ? `${Math.round(data.avg_coverage)}%` : '--'}
+              </div>
+              <div className="text-xs text-gray-400">
+                {restaurantCount} 家门店
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-3 text-center">
+              <div className="text-xs text-gray-500 mb-0.5">复盘完成</div>
               <div className={`text-xl font-bold ${
                 avgReviewCompletion >= 80 ? 'text-green-600' :
                 avgReviewCompletion >= 50 ? 'text-yellow-600' :
@@ -237,6 +246,26 @@ export default function AdminBriefingPage() {
                 {data?.avg_review_completion != null ? `${Math.round(avgReviewCompletion)}%` : '--'}
               </div>
               <div className="text-xs text-gray-400">&nbsp;</div>
+            </div>
+            <div className="bg-white rounded-xl p-3 text-center">
+              <div className="text-xs text-gray-500 mb-0.5">老客占比</div>
+              {(() => {
+                const ratio = profileData?.summary?.repeat_ratio;
+                const coverage = profileData?.summary?.data_coverage ?? 0;
+                const color = ratio == null ? 'text-gray-400'
+                  : ratio >= 40 ? 'text-green-600'
+                  : 'text-yellow-600';
+                return (
+                  <>
+                    <div className={`text-xl font-bold ${color}`}>
+                      {ratio != null ? `${ratio}%` : '--'}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {ratio != null && coverage < 80 ? `基于${coverage}%数据` : '\u00A0'}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

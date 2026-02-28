@@ -1564,4 +1564,109 @@ export class DashboardService {
       highlights,
     };
   }
+
+  // --- Customer Profile Analytics ---
+
+  async getCustomerProfile(startDate: string, endDate: string, managedIds: string[] | null = null) {
+    if (this.supabase.isMockMode()) {
+      return {
+        summary: {
+          total_visits: 50,
+          repeat_ratio: 38,
+          frequency: { first: 20, repeat: 12, regular: 7, unknown: 5, no_data: 6 },
+          source_distribution: [
+            { source: '美团', count: 12, ratio: 30 },
+            { source: '朋友介绍', count: 8, ratio: 20 },
+            { source: '大众点评', count: 6, ratio: 15 },
+          ],
+          data_coverage: 42,
+        },
+        by_restaurant: [],
+      };
+    }
+
+    const client = this.supabase.getClient();
+    const restaurants = await this.getVisibleRestaurants(managedIds);
+    const restIds = restaurants.map(r => r.id);
+    const restMap = new Map(restaurants.map(r => [r.id, r.restaurant_name]));
+
+    // Fetch all processed visit records in date range
+    let query = client
+      .from('lingtin_visit_records')
+      .select('id, restaurant_id, customer_source, visit_frequency')
+      .gte('visit_date', startDate)
+      .lte('visit_date', endDate)
+      .eq('status', 'processed');
+
+    if (managedIds) {
+      query = query.in('restaurant_id', restIds);
+    }
+
+    const { data: records, error } = await query;
+    if (error) throw error;
+
+    const allRecords = records || [];
+
+    // Helper to compute profile stats for a set of records
+    const computeStats = (recs: typeof allRecords) => {
+      const total = recs.length;
+      const freq = { first: 0, repeat: 0, regular: 0, unknown: 0, no_data: 0 };
+      const sourceCount = new Map<string, number>();
+
+      for (const r of recs) {
+        // Frequency
+        if (r.visit_frequency && ['first', 'repeat', 'regular', 'unknown'].includes(r.visit_frequency)) {
+          freq[r.visit_frequency as keyof typeof freq]++;
+        } else {
+          freq.no_data++;
+        }
+        // Source
+        if (r.customer_source) {
+          sourceCount.set(r.customer_source, (sourceCount.get(r.customer_source) || 0) + 1);
+        }
+      }
+
+      const withData = total - freq.no_data;
+      const repeatAndRegular = freq.repeat + freq.regular;
+      const repeat_ratio = withData > 0 ? Math.round((repeatAndRegular / withData) * 100) : null;
+      const data_coverage = total > 0 ? Math.round((withData / total) * 100) : 0;
+
+      // Sort sources by count descending
+      const source_distribution = Array.from(sourceCount.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([source, count]) => ({
+          source,
+          count,
+          ratio: withData > 0 ? Math.round((count / withData) * 100) : 0,
+        }));
+
+      return { total_visits: total, repeat_ratio, frequency: freq, source_distribution, data_coverage };
+    };
+
+    // Compute summary across all records
+    const summary = computeStats(allRecords);
+
+    // Compute per-restaurant stats
+    const byRestaurantMap = new Map<string, typeof allRecords>();
+    for (const r of allRecords) {
+      const existing = byRestaurantMap.get(r.restaurant_id) || [];
+      existing.push(r);
+      byRestaurantMap.set(r.restaurant_id, existing);
+    }
+
+    const by_restaurant = restaurants
+      .map(rest => {
+        const recs = byRestaurantMap.get(rest.id) || [];
+        if (recs.length === 0) return null;
+        const stats = computeStats(recs);
+        return {
+          restaurant_id: rest.id,
+          restaurant_name: restMap.get(rest.id) || rest.id,
+          ...stats,
+        };
+      })
+      .filter(Boolean);
+
+    return { summary, by_restaurant };
+  }
 }

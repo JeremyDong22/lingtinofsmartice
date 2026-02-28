@@ -20,6 +20,29 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.1.0',
+    date: '2026-03-01',
+    roles: ['administrator'],
+    title: '客户画像分析',
+    items: [
+      {
+        title: '新增「画像」洞察页',
+        howToUse: '进入「洞察」页，点击「画像」Tab，查看新客/回头客/常客占比和来源渠道排行，支持按门店展开详情。',
+        value: '了解顾客从哪来、是否回头，帮你评估获客渠道效果和客户忠诚度。',
+      },
+      {
+        title: '总览新增老客占比指标',
+        howToUse: '打开「总览」页，指标卡最后一格显示老客占比，绿色表示 ≥40%（忠诚度好），黄色表示 <40%（需关注）。',
+        value: '一眼看到客户留存表现，不用翻报表。',
+      },
+      {
+        title: '产品洞察入口调整',
+        howToUse: '点击右上角头像，在下拉菜单中找到「产品洞察」入口。',
+        value: '洞察页 Tab 更精简，常用功能更突出。',
+      },
+    ],
+  },
+  {
     version: '2.0.2',
     date: '2026-02-28',
     roles: ['manager', 'administrator', 'head_chef'],

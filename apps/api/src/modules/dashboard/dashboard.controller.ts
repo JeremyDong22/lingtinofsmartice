@@ -198,6 +198,18 @@ export class DashboardController {
     );
   }
 
+  // GET /api/dashboard/customer-profile - Customer source + visit frequency analytics
+  @Get('customer-profile')
+  async getCustomerProfile(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Query('managed_ids') managedIdsStr?: string,
+  ) {
+    const managedIds = DashboardService.parseManagedIds(managedIdsStr);
+    const range = resolveRange(undefined, startDate, endDate, getYesterdayChinaDateString);
+    return this.dashboardService.getCustomerProfile(range.start, range.end, managedIds);
+  }
+
   // GET /api/dashboard/restaurant/:id - Get restaurant detail with visit records
   @Get('restaurant/:id')
   async getRestaurantDetail(

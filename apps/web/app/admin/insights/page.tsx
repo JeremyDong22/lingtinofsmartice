@@ -1,35 +1,56 @@
-// Admin Insights Page - Customer insights + Product insights + Employee feedback
-// Segmented control to switch between views
+// Admin Insights Page - Customer insights + Customer profile + Employee feedback
+// Product insights accessible via URL param ?tab=product (superadmin only, hidden from tab bar)
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { useManagedScope } from '@/hooks/useManagedScope';
 import { CustomerInsights } from '@/components/admin/CustomerInsights';
 import { ProductInsights } from '@/components/admin/ProductInsights';
+import { CustomerProfile } from '@/components/admin/CustomerProfile';
 import { FeedbackManagement } from '@/components/admin/FeedbackManagement';
-import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
+import { getChinaYesterday, singleDay } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, adminPresets } from '@/components/shared/DatePicker';
 
-type InsightTab = 'customer' | 'product' | 'feedback';
+type InsightTab = 'customer' | 'profile' | 'feedback' | 'product';
 
-export default function InsightsPage() {
+function InsightsContent() {
   const { user } = useAuth();
   const { managedIdsParam } = useManagedScope();
   const isSuperAdmin = user?.isSuperAdmin === true;
-  const [activeTab, setActiveTab] = useState<InsightTab>('customer');
+  const searchParams = useSearchParams();
+
+  // Check URL for ?tab=product (hidden from tab bar, superadmin only)
+  const urlTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<InsightTab>(() => {
+    if (urlTab === 'product' && isSuperAdmin) return 'product';
+    return 'customer';
+  });
+
+  // React to URL param changes
+  useEffect(() => {
+    if (urlTab === 'product' && isSuperAdmin) {
+      setActiveTab('product');
+    }
+  }, [urlTab, isSuperAdmin]);
+
   const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaYesterday()));
+
+  const showDatePicker = activeTab !== 'feedback';
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-900">洞察</h1>
+        <h1 className="text-lg font-semibold text-gray-900">
+          {activeTab === 'product' ? '产品洞察' : '洞察'}
+        </h1>
         <div className="flex items-center gap-2">
-          {activeTab !== 'feedback' && (
+          {showDatePicker && (
             <DatePicker
               value={dateRange}
               onChange={setDateRange}
@@ -41,47 +62,48 @@ export default function InsightsPage() {
         </div>
       </header>
 
-      {/* Segmented Control */}
-      <div className="px-4 pt-3 pb-1">
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          <button
-            onClick={() => setActiveTab('customer')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeTab === 'customer'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            顾客
-          </button>
-          {isSuperAdmin && (
+      {/* Segmented Control — hide when showing product (URL-only) */}
+      {activeTab !== 'product' && (
+        <div className="px-4 pt-3 pb-1">
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button
-              onClick={() => setActiveTab('product')}
+              onClick={() => setActiveTab('customer')}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'product'
+                activeTab === 'customer'
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              产品
+              顾客
             </button>
-          )}
-          <button
-            onClick={() => setActiveTab('feedback')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeTab === 'feedback'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            员工反馈
-          </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'profile'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              画像
+            </button>
+            <button
+              onClick={() => setActiveTab('feedback')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'feedback'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              员工反馈
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Content */}
       <div className="px-4 py-3">
         {activeTab === 'customer' && <CustomerInsights startDate={dateRange.startDate} endDate={dateRange.endDate} managedIdsParam={managedIdsParam} />}
+        {activeTab === 'profile' && <CustomerProfile startDate={dateRange.startDate} endDate={dateRange.endDate} managedIdsParam={managedIdsParam} />}
         {activeTab === 'product' && <ProductInsights />}
         {activeTab === 'feedback' && <FeedbackManagement />}
       </div>
@@ -89,5 +111,17 @@ export default function InsightsPage() {
       {/* Bottom spacing for nav */}
       <div className="h-4" />
     </div>
+  );
+}
+
+export default function InsightsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">加载中...</div>
+      </div>
+    }>
+      <InsightsContent />
+    </Suspense>
   );
 }
