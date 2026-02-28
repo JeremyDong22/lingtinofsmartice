@@ -650,7 +650,7 @@ this.logger.log(`Executing tool: ${name}`);
     // Must trim: template literal SQL has leading \n that PostgreSQL TRIM() doesn't remove,
     // causing the RPC's "LIKE 'select%'" check to fail
     const trimmedSql = sql.replace(/\s+/g, ' ').trim();
-    const QUERY_TIMEOUT = 15_000; // 15s per query, fail fast
+    const QUERY_TIMEOUT = 10_000; // 10s per query, fail fast
 
     try {
       const queryPromise = client.rpc('execute_readonly_query', {
@@ -658,7 +658,7 @@ this.logger.log(`Executing tool: ${name}`);
       });
       let timer: NodeJS.Timeout;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Query timeout (15s)')), QUERY_TIMEOUT);
+        timer = setTimeout(() => reject(new Error('Query timeout (10s)')), QUERY_TIMEOUT);
       });
 
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]).finally(() => clearTimeout(timer!));
@@ -682,7 +682,7 @@ this.logger.log(`Executing tool: ${name}`);
     restaurantId: string,
     managedRestaurantIds: string[] | null,
   ): Promise<string> {
-    const PREFETCH_TIMEOUT = 30_000; // 30s total for all queries
+    const PREFETCH_TIMEOUT = 20_000; // 20s total for all queries
 
     try {
       const dataPromise = this.doPrefetchBriefingData(roleCode, restaurantId, managedRestaurantIds);

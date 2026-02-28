@@ -19,7 +19,7 @@ import { getAuthHeaders } from '@/contexts/AuthContext';
 import type { MeetingRecord } from '@/hooks/useMeetingStore';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
 import { PRIORITY_CONFIG } from '@/lib/action-item-constants';
-import { getDateForSelection } from '@/lib/date-utils';
+import { getDateForSelection, getChinaToday } from '@/lib/date-utils';
 
 // Types matching API response
 interface AgendaItem {
@@ -340,9 +340,10 @@ export default function ChefMeetingsPage() {
   const summary = summaryData?.summary;
   const agendaItems = summary?.agenda_items ?? [];
 
-  // Date display
-  const now = new Date();
-  const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日`;
+  // Date display (China timezone)
+  const todayStr = getChinaToday();
+  const [, mm, dd] = todayStr.split('-');
+  const dateLabel = `${Number(mm)}月${Number(dd)}日`;
 
   // Start recording
   const handleStart = useCallback(async () => {

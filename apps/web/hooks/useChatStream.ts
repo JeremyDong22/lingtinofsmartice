@@ -178,8 +178,8 @@ export function useChatStream(): UseChatStreamReturn {
 
       const decoder = new TextDecoder();
 
-      // Streaming timeout: if no data for 90s, abort
-      const STREAM_TIMEOUT_MS = 90_000;
+      // Streaming timeout: if no data for 60s, abort
+      const STREAM_TIMEOUT_MS = 60_000;
       let streamTimer = setTimeout(() => {
         abortControllerRef.current?.abort();
       }, STREAM_TIMEOUT_MS);
