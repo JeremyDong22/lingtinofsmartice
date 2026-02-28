@@ -152,12 +152,33 @@ export class DashboardController {
   async getSuggestions(
     @Query('restaurant_id') restaurantId: string,
     @Query('days') days?: string,
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
     @Query('managed_ids') managedIdsStr?: string,
   ) {
     const managedIds = DashboardService.parseManagedIds(managedIdsStr);
+    if (startDate && endDate) {
+      return this.dashboardService.getSuggestions(
+        restaurantId,
+        startDate,
+        endDate,
+        managedIds,
+      );
+    }
+    // Fallback: use days param
+    const d = parseInt(days || '7', 10);
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - d + 1);
+    const toDateStr = (dt: Date) => {
+      const offset = 8 * 60;
+      const local = new Date(dt.getTime() + offset * 60 * 1000);
+      return local.toISOString().slice(0, 10);
+    };
     return this.dashboardService.getSuggestions(
       restaurantId,
-      parseInt(days || '7', 10),
+      toDateStr(start),
+      toDateStr(end),
       managedIds,
     );
   }
