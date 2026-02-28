@@ -251,6 +251,7 @@ export class AiProcessingService {
       .select('id')
       .eq('status', 'processed')
       .not('raw_transcript', 'is', null)
+      .neq('raw_transcript', '')
       .lt('processed_at', cutoffDate)
       .order('processed_at', { ascending: true })
       .limit(limit);
