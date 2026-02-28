@@ -656,11 +656,12 @@ this.logger.log(`Executing tool: ${name}`);
       const queryPromise = client.rpc('execute_readonly_query', {
         query_text: trimmedSql,
       });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Query timeout (15s)')), QUERY_TIMEOUT),
-      );
+      let timer: NodeJS.Timeout;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Query timeout (15s)')), QUERY_TIMEOUT);
+      });
 
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]).finally(() => clearTimeout(timer!));
       if (error) {
         this.logger.error(`[runRawQuery] RPC failed: ${error.message} | SQL: ${trimmedSql.slice(0, 80)}`);
         return [];
@@ -685,10 +686,11 @@ this.logger.log(`Executing tool: ${name}`);
 
     try {
       const dataPromise = this.doPrefetchBriefingData(roleCode, restaurantId, managedRestaurantIds);
-      const timeoutPromise = new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error('数据查询超时')), PREFETCH_TIMEOUT),
-      );
-      return await Promise.race([dataPromise, timeoutPromise]);
+      let timer: NodeJS.Timeout;
+      const timeoutPromise = new Promise<string>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('数据查询超时')), PREFETCH_TIMEOUT);
+      });
+      return await Promise.race([dataPromise, timeoutPromise]).finally(() => clearTimeout(timer!));
     } catch (err) {
       this.logger.error(`[prefetchBriefingData] Failed: ${err.message}`);
       // Return minimal fallback so AI can still generate a useful response
