@@ -26,7 +26,7 @@ function parseMarkdown(text: string): { html: string; quickQuestions: string[] }
     quickQuestions = content
       .split('\n')
       .map((line: string) => line.replace(/^[\-\*\d\.]\s*/, '').trim())
-      .filter(Boolean);
+      .filter((line: string) => line && !/^[:：]{2,}$/.test(line));
     return ''; // Remove from output
   });
 
