@@ -251,18 +251,59 @@ export const RELEASE_NOTES: ReleaseNote[] = [
 // chef is an alias for head_chef in the role system
 const ROLE_ALIASES: Record<string, RoleCode> = { chef: 'head_chef' };
 
+// Management roles see ALL role updates (not just their own)
+const MANAGEMENT_ROLES = new Set<string>(['administrator', 'ceo', 'brand_director']);
+
 function normalizeRole(role: string): RoleCode {
   return ROLE_ALIASES[role] ?? role as RoleCode;
+}
+
+function isManagement(role: RoleCode): boolean {
+  return MANAGEMENT_ROLES.has(role);
+}
+
+/** Merge multiple notes (same version, different roles) into one combined note */
+function mergeNotes(notes: ReleaseNote[]): ReleaseNote {
+  const adminNote = notes.find(n => n.roles.includes('administrator'));
+  const base = adminNote || notes[0];
+  const seen = new Set<string>();
+  const mergedItems: ReleaseNoteItem[] = [];
+  for (const note of notes) {
+    for (const item of note.items) {
+      if (!seen.has(item.title)) {
+        seen.add(item.title);
+        mergedItems.push(item);
+      }
+    }
+  }
+  return { ...base, roles: Array.from(new Set(notes.flatMap(n => n.roles))), items: mergedItems };
+}
+
+/** Group notes by version and merge each group */
+function mergeByVersion(notes: ReleaseNote[]): ReleaseNote[] {
+  const grouped = new Map<string, ReleaseNote[]>();
+  for (const note of notes) {
+    const existing = grouped.get(note.version) || [];
+    existing.push(note);
+    grouped.set(note.version, existing);
+  }
+  return Array.from(grouped.values()).map(group => mergeNotes(group));
 }
 
 /** Get all notes visible to a specific role, newest first */
 export function getNotesForRole(role: string): ReleaseNote[] {
   const r = normalizeRole(role);
+  if (isManagement(r)) return mergeByVersion(RELEASE_NOTES);
   return RELEASE_NOTES.filter(n => n.roles.includes(r));
 }
 
 /** Get the note for a specific version and role (for modal display) */
 export function getLatestNoteForRole(version: string, role: string): ReleaseNote | undefined {
   const r = normalizeRole(role);
+  if (isManagement(r)) {
+    const notesForVersion = RELEASE_NOTES.filter(n => n.version === version);
+    if (notesForVersion.length === 0) return undefined;
+    return mergeNotes(notesForVersion);
+  }
   return RELEASE_NOTES.find(n => n.version === version && n.roles.includes(r));
 }
