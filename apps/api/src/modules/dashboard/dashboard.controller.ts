@@ -157,28 +157,21 @@ export class DashboardController {
     @Query('managed_ids') managedIdsStr?: string,
   ) {
     const managedIds = DashboardService.parseManagedIds(managedIdsStr);
-    if (startDate && endDate) {
-      return this.dashboardService.getSuggestions(
-        restaurantId,
-        startDate,
-        endDate,
-        managedIds,
-      );
+    let range: { start: string; end: string };
+    if (startDate || endDate) {
+      range = resolveRange(undefined, startDate, endDate);
+    } else {
+      const d = parseInt(days || '7', 10);
+      const now = new Date();
+      const start = new Date();
+      start.setDate(now.getDate() - d + 1);
+      const toCST = (dt: Date) => dt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+      range = { start: toCST(start), end: toCST(now) };
     }
-    // Fallback: use days param
-    const d = parseInt(days || '7', 10);
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - d + 1);
-    const toDateStr = (dt: Date) => {
-      const offset = 8 * 60;
-      const local = new Date(dt.getTime() + offset * 60 * 1000);
-      return local.toISOString().slice(0, 10);
-    };
     return this.dashboardService.getSuggestions(
       restaurantId,
-      toDateStr(start),
-      toDateStr(end),
+      range.start,
+      range.end,
       managedIds,
     );
   }

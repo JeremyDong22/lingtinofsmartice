@@ -1303,9 +1303,14 @@ export class DashboardService {
           });
         }
         const entry = byRestMap.get(rid)!;
-        // Add suggestion if not already present for this restaurant
+        // Add suggestion with evidence filtered to this restaurant only
         if (!entry.suggestions.find(s => s.text === sug.text)) {
-          entry.suggestions.push(sug);
+          const filteredEvidence = sug.evidence.filter(e => e.restaurantId === rid);
+          entry.suggestions.push({
+            ...sug,
+            evidence: filteredEvidence,
+            count: filteredEvidence.length,
+          });
         }
       }
     }
