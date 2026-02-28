@@ -1,7 +1,7 @@
 // Release Notes - Version update content organized by role
 // Each version contains role-specific update items with title, usage, and value
 
-export type RoleCode = 'manager' | 'administrator' | 'head_chef';
+export type RoleCode = 'manager' | 'administrator' | 'head_chef' | 'ceo' | 'brand_director';
 
 export interface ReleaseNoteItem {
   title: string;      // What changed (one sentence)
@@ -252,7 +252,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
 const ROLE_ALIASES: Record<string, RoleCode> = { chef: 'head_chef' };
 
 // Management roles see ALL role updates (not just their own)
-const MANAGEMENT_ROLES = new Set<string>(['administrator', 'ceo', 'brand_director']);
+const MANAGEMENT_ROLES = new Set<RoleCode>(['administrator', 'ceo', 'brand_director']);
 
 function normalizeRole(role: string): RoleCode {
   return ROLE_ALIASES[role] ?? role as RoleCode;
