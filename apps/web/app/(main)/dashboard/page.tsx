@@ -10,7 +10,7 @@ import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { ActionItemsCard } from '@/components/dashboard/ActionItemsCard';
-import { getChinaToday, singleDay, dateRangeParams, isMultiDay } from '@/lib/date-utils';
+import { getChinaToday, singleDay, dateRangeParams, isMultiDay, shiftDate } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, storePresets } from '@/components/shared/DatePicker';
 
@@ -223,11 +223,7 @@ export default function DashboardPage() {
   const multiDay = isMultiDay(dateRange);
 
   // Build yesterday's params for trend comparison (only when single day)
-  const yesterdayDate = (() => {
-    const d = new Date(dateRange.startDate);
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
-  })();
+  const yesterdayDate = shiftDate(dateRange.startDate, -1);
   const yesterdayParams = restaurantId && !multiDay
     ? `restaurant_id=${restaurantId}&start_date=${yesterdayDate}&end_date=${yesterdayDate}`
     : null;

@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-03-01
+
+### 修复 (Fixed)
+- **前端日期偏差** — `date-utils.ts` 时区计算 bug 导致数据停留在 2/26。改用 `toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })` 重写 5 个函数，与后端保持一致
+- **AI 智库加载卡住** — 缩短超时保护：查询 15s→10s、预取 30s→20s、流式 90s→60s，冷启动恢复后更快失败回退
+- **反馈提交 500** — 补建 `lingtin_product_feedback` 表迁移文件（需在 Supabase Dashboard 手动执行）
+
 ## [2.0.4] - 2026-02-28
 
 ### 修复 (Fixed)
