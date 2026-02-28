@@ -90,6 +90,9 @@ function groupByDate(items: ActionItem[]): Array<{ date: string; label: string; 
     .map(([date, groupItems]) => ({ date, label: formatActionDate(date), items: groupItems }));
 }
 
+// Priority sort order (high → medium → low)
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
 // Priority dot color
 const PRIORITY_DOT: Record<string, string> = {
   high: 'bg-red-500',
@@ -126,7 +129,6 @@ function PendingItemsSection({ items, collapsed, onToggleCollapse, updatingItemI
     );
   }
 
-  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
   const groups = groupByDate(items);
 
   return (
@@ -491,7 +493,7 @@ export default function ChefMeetingsPage() {
                 {agendaItems.map((item, idx) => {
                   const severity = SEVERITY_CONFIG[item.severity] || SEVERITY_CONFIG.low;
                   const categoryLabel = CATEGORY_LABELS[item.category] || item.category;
-                  const isKitchen = isKitchenRelevant({ category: item.category, suggestion_text: item.title });
+                  const isKitchen = isKitchenRelevant({ category: item.category, suggestion_text: `${item.title} ${item.detail}` });
 
                   return (
                     <div
