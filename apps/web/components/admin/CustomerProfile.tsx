@@ -195,7 +195,8 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
 // --- Inline sub-components ---
 
 function FrequencyBar({ frequency }: { frequency: FrequencyData }) {
-  const total = frequency.first + frequency.repeat + frequency.regular;
+  // Include unknown in total to match backend repeat_ratio denominator
+  const total = frequency.first + frequency.repeat + frequency.regular + frequency.unknown;
   if (total === 0) {
     return (
       <div className="h-6 bg-gray-100 rounded-full flex items-center justify-center">
@@ -205,7 +206,8 @@ function FrequencyBar({ frequency }: { frequency: FrequencyData }) {
   }
   const firstPct = Math.round((frequency.first / total) * 100);
   const repeatPct = Math.round((frequency.repeat / total) * 100);
-  const regularPct = 100 - firstPct - repeatPct;
+  const regularPct = Math.round((frequency.regular / total) * 100);
+  const unknownPct = Math.max(0, 100 - firstPct - repeatPct - regularPct);
 
   return (
     <div>
@@ -225,6 +227,11 @@ function FrequencyBar({ frequency }: { frequency: FrequencyData }) {
             {regularPct >= 15 && <span className="text-[10px] text-white font-medium">{regularPct}%</span>}
           </div>
         )}
+        {unknownPct > 0 && (
+          <div className="bg-gray-300 flex items-center justify-center" style={{ width: `${unknownPct}%` }}>
+            {unknownPct >= 15 && <span className="text-[10px] text-gray-600 font-medium">{unknownPct}%</span>}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-500">
         <span className="flex items-center gap-1">
@@ -236,6 +243,11 @@ function FrequencyBar({ frequency }: { frequency: FrequencyData }) {
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-green-700" />常客 {regularPct}%
         </span>
+        {unknownPct > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-gray-300" />未知 {unknownPct}%
+          </span>
+        )}
       </div>
     </div>
   );
