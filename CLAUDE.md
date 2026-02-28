@@ -148,10 +148,13 @@ May discard:
 ## 协作工作流
 
 - **本地开发**: `supabase start` + `pnpm dev` → 本地测试
-- **数据库变更**: SQL 迁移文件放 `supabase/migrations/`，由 Jeremy 在线上 Supabase 执行
+- **数据库变更（自动执行）**: SQL 迁移文件放 `supabase/migrations/`，同时通过 Supabase Management API 直接执行迁移。命令：`curl -s -X POST "https://api.supabase.com/v1/projects/wdpeoyugsxqnpwwtkqsl/database/query" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" -d '{"query": "..."}'`。**禁止告诉用户去 Dashboard 手动执行 SQL**
+- **外部服务操作全部自主执行** — 用户已授权直接操作 Supabase / Cloudflare / Zeabur。每次 session 开始时若需要 token 则从环境变量读取，读不到就**一次性向用户要齐所有需要的 token**，不要说"没有权限"或"请手动操作"
+  - Supabase: 环境变量 `SUPABASE_ACCESS_TOKEN`，Management API 执行迁移
+  - Cloudflare: 环境变量 `CLOUDFLARE_API_TOKEN`，用 `npx wrangler` 查看部署状态/日志
+  - Zeabur: 已通过 `zeabur auth` 全局登录，直接用 `zeabur` CLI 操作
 - **发布流程**: 代码改动 + 构建通过 → **提示用户 `pnpm dev` 本地测试** → 用户确认无误 → commit + push → PR 给 Jeremy → Jeremy 负责线上部署
 - **提交前必须等用户确认** — 构建通过后不要自动 commit + push，必须先停下来让用户手动验证功能，用户明确说"OK/没问题/可以提交"后才执行 commit + push
-- **不要直接操作线上 Supabase 数据库**
 - **Git remotes**: `origin` = 上游 (jeremydong22)，`fork` = 贡献者 (SmartIce-Ray)。SmartIce-Ray 已是 collaborator，可直接 push 到 `origin`
 - **Push 策略**: 默认 push 到 `origin`（Jeremy 仓库），可同时 push 到 `fork` 作为备份（`git push fork <branch>`）
 - **创建 PR**: `gh pr create --repo jeremydong22/lingtinofsmartice --base main`；若 PR 已存在，用 `gh pr edit <number> --repo ...` 更新
@@ -214,16 +217,11 @@ master_employee (1)   ──< visit_records (N)
 
 | 任务 | 分支 | 状态 | 关键笔记 |
 |------|------|------|----------|
-| v1.8.1 AI 分析质量优化 | feat/ai-analysis-v2 | ✅ 已合并 | PR #29。Prompt V2（连续值情绪分+一致性约束+兜底提取+few-shot）+ temperature 0 + 增量去重。analysis/ 目录含完整审查数据（已 gitignore） |
-| v1.7.1 日期范围选择器 | feat/date-range-picker | ✅ 已合并 | PR #16 已 merge。DateRange 类型 + 日历范围选择 UX + 8 个 API 端点支持 start_date/end_date + 预设（近7天/近30天）|
-| v1.7.0 门店区域分组 | feat/date-range-picker | ✅ 已合并 | PR #16 含区域编辑内联修复。master_region 表 + 4 个初始区域 + RegionModule 8 端点 + 前端区域管理页 |
-| v1.6.0 区域管理层支持 | feat/date-range-picker | ✅ 已合并 | 认证+6个API端点+前端全部适配 |
-| v1.5.0 员工产品反馈 | feat/product-feedback | ✅ 已合并 | PR #12 已 merge。文字/语音+图片附件提交反馈，AI分类，管理层查看/回复 |
-| v1.4.0 管理层会议功能 | feat/meeting-recording | ✅ 已合并 | PR #7 → #10 已 merge |
-| 顾客洞察按门店分组展示 | feat/meeting-recording | ✅ 已合并 | PR #11 已 merge |
-| v2.0.1 总览崩溃+洞察重设计 | fix/briefing-crash-insights-redesign | ✅ 已合并 | PR #36。总览页 Array.isArray 守卫 + 顾客洞察按门店折叠 + suggestions API start_date/end_date |
-| v2.0.0 管理闭环升级 | feat/review-completion-briefing-v2 | ✅ 已合并 | PR #34。复盘完成率+简报重设计+厨房响应+厨师长语音输入。迁移已执行 |
-| fix: reanalyze only_missing_feedbacks | fix/reanalyze-missing-feedbacks | ✅ 已合并 | PR #35。reanalyze-batch 新增 only_missing_feedbacks 参数防止覆盖已有数据 |
-| 后台任务：重跑缺 feedbacks 的记录 | — | ⏸️ 暂停 | 约 1285 条 processed 记录有 transcript 但无 feedbacks（Prompt V1 遗留）。用 `only_missing_feedbacks: true` + cutoff `2026-03-01` 分批重跑。上次跑了约 279 条后被中断。用户要求暂停，后续继续。**检查方法**：`SELECT COUNT(*) FROM lingtin_visit_records WHERE status='processed' AND (feedbacks IS NULL OR feedbacks::text='[]' OR feedbacks::text='null') AND raw_transcript IS NOT NULL AND LENGTH(raw_transcript) > 10` |
+| v2.0.4 厨师长会议页折叠+总览修复 | fix/chef-meetings-accordion | ✅ 已合并 | PR #41。待办按日折叠手风琴 + isKitchenRelevant 过滤增强 + briefing 对象安全渲染 |
+| v2.0.3 H-3 宣纸素墨配色 | feat/h3-color-scheme | ✅ 已合并 | PR #40 |
+| v2.0.2 版本更新指南 | — | ✅ 已合并 | PR #39 |
+| v2.0.1 总览崩溃+洞察重设计 | — | ✅ 已合并 | PR #36 |
+| v2.0.0 管理闭环升级 | — | ✅ 已合并 | PR #34 |
+| 后台任务：重跑缺 feedbacks 的记录 | — | ⏸️ 暂停 | 剩余 **1247 条**（2026-02-28 查）。用 `only_missing_feedbacks: true` + cutoff `2026-03-01` 分批重跑。**检查方法**：`SELECT COUNT(*) FROM lingtin_visit_records WHERE status='processed' AND (feedbacks IS NULL OR feedbacks::text='[]' OR feedbacks::text='null') AND raw_transcript IS NOT NULL AND LENGTH(raw_transcript) > 10` |
 | 本地 .env service key 无效 | — | 待修复 | `apps/api/.env` 中 `SUPABASE_SERVICE_KEY` 无效。线上 Zeabur 有正确 key 所以生产正常 |
 | 本地测试局限 | — | 已知问题 | `pnpm dev` 前端连线上 API，本地后端因 service key 无效运行在 MOCK MODE |

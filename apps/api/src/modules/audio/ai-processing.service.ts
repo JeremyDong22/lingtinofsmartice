@@ -16,7 +16,7 @@ export interface FeedbackItem {
   score: number; // 0-100 per-item satisfaction score
 }
 
-// Simplified MVP result structure (5 dimensions)
+// Simplified MVP result structure (5 dimensions + customer profile)
 interface ProcessingResult {
   transcript: string;
   correctedTranscript: string;
@@ -25,6 +25,8 @@ interface ProcessingResult {
   feedbacks: FeedbackItem[];    // 评价短语列表（带情绪标签）
   managerQuestions: string[];   // 店长问了什么
   customerAnswers: string[];    // 顾客怎么回答
+  customerSource: string | null;   // 来源渠道（美团/大众点评/朋友介绍/etc.）
+  visitFrequency: string | null;   // 到店频次（first/repeat/regular/unknown）
 }
 
 @Injectable()
@@ -86,6 +88,8 @@ export class AiProcessingService {
           feedbacks: [],
           managerQuestions: [],
           customerAnswers: [],
+          customerSource: null as string | null,
+          visitFrequency: null as string | null,
         };
         await this.saveResults(recordingId, {
           rawTranscript: '',
@@ -111,6 +115,8 @@ export class AiProcessingService {
           feedbacks: [] as FeedbackItem[],
           managerQuestions: [] as string[],
           customerAnswers: [] as string[],
+          customerSource: null as string | null,
+          visitFrequency: null as string | null,
         };
         await this.saveResults(recordingId, { rawTranscript, ...fillerResult });
         return { transcript: rawTranscript, ...fillerResult };
@@ -186,6 +192,8 @@ export class AiProcessingService {
           feedbacks: [],
           managerQuestions: [],
           customerAnswers: [],
+          customerSource: null,
+          visitFrequency: null,
         });
         return { success: true, aiSummary: '无法识别语音内容' };
       }
@@ -201,6 +209,8 @@ export class AiProcessingService {
           feedbacks: [],
           managerQuestions: [],
           customerAnswers: [],
+          customerSource: null,
+          visitFrequency: null,
         });
         return { success: true, aiSummary: '语音内容无有效信息' };
       }
@@ -563,7 +573,9 @@ export class AiProcessingService {
     {"text": "分量再多点就好了", "sentiment": "suggestion", "score": 50}
   ],
   "managerQuestions": ["菜品口感怎么样", "是第几次来"],
-  "customerAnswers": ["还不错", "第1次，朋友介绍来的"]
+  "customerAnswers": ["还不错", "第1次，朋友介绍来的"],
+  "customerSource": "朋友介绍",
+  "visitFrequency": "first"
 }
 
 ## 规则
@@ -621,21 +633,33 @@ export class AiProcessingService {
 提取顾客的所有实质性回应
 
 ### 4. 空数据处理
-某项为空返回空数组[]
+某项为空返回空数组[]，customerSource/visitFrequency为空返回null
+
+### 5. customerSource — 顾客来源渠道
+从对话中提取顾客如何得知这家店：
+- 规范化为：美团、大众点评、抖音、小红书、朋友介绍、路过、老顾客、外卖平台、公司附近、住附近
+- 未提及返回 null，不要推测
+
+### 6. visitFrequency — 来访频次
+- "first": 第一次来（"第1次"、"头一次"、"第一次"）
+- "repeat": 来过几次（"第2次"、"之前来过"、"来过几次"）
+- "regular": 常客（"经常来"、"老顾客"、"每周都来"、"常来"）
+- "unknown": 提到了频次话题但无法判断
+- null: 对话中完全未提及频次
 
 ## 参考案例
 
-案例1 — 简短正面：
-输入："你好打扰一下，菜品口感怎么样？还不错啊，有什么建议吗？没有，挺好的，祝你们用餐愉快。"
-输出：{"aiSummary":"顾客对菜品满意，无建议","feedbacks":[{"text":"菜品口感还不错","sentiment":"positive","score":72},{"text":"整体挺好的","sentiment":"positive","score":70}],"managerQuestions":["菜品口感怎么样","有什么建议吗"],"customerAnswers":["还不错","没有，挺好的"]}
+案例1 — 简短正面+来源频次：
+输入："你好打扰一下，菜品口感怎么样？还不错啊，是第几次来？第1次，朋友介绍来的，有什么建议吗？没有，挺好的，祝你们用餐愉快。"
+输出：{"aiSummary":"顾客对菜品满意，朋友介绍首次来","feedbacks":[{"text":"菜品口感还不错","sentiment":"positive","score":72},{"text":"整体挺好的","sentiment":"positive","score":70}],"managerQuestions":["菜品口感怎么样","是第几次来","有什么建议吗"],"customerAnswers":["还不错","第1次，朋友介绍来的","没有，挺好的"],"customerSource":"朋友介绍","visitFrequency":"first"}
 
 案例2 — 有具体不满：
 输入："两位打扰一下，今天菜品怎么样？嗯，那个酸菜鱼有点太辣了不太习惯，还有上菜速度有点慢等了差不多半个小时，其他的都还行，好的我跟厨房反映一下。"
-输出：{"aiSummary":"顾客反馈酸菜鱼太辣、上菜慢","feedbacks":[{"text":"酸菜鱼有点太辣了","sentiment":"negative","score":28},{"text":"上菜速度有点慢","sentiment":"negative","score":25},{"text":"其他菜品还行","sentiment":"neutral","score":52}],"managerQuestions":["今天菜品怎么样"],"customerAnswers":["酸菜鱼有点太辣了不太习惯","上菜速度有点慢等了差不多半个小时","其他的都还行"]}
+输出：{"aiSummary":"顾客反馈酸菜鱼太辣、上菜慢","feedbacks":[{"text":"酸菜鱼有点太辣了","sentiment":"negative","score":28},{"text":"上菜速度有点慢","sentiment":"negative","score":25},{"text":"其他菜品还行","sentiment":"neutral","score":52}],"managerQuestions":["今天菜品怎么样"],"customerAnswers":["酸菜鱼有点太辣了不太习惯","上菜速度有点慢等了差不多半个小时","其他的都还行"],"customerSource":null,"visitFrequency":null}
 
 案例3 — 纯寒暄无反馈：
 输入："你好两位新年快乐，菜品有什么意见吗？噢好谢谢你们的肯定，祝用餐愉快。"
-输出：{"aiSummary":"店长问候，顾客未给具体反馈","feedbacks":[],"managerQuestions":["菜品有什么意见吗"],"customerAnswers":[]}`;
+输出：{"aiSummary":"店长问候，顾客未给具体反馈","feedbacks":[],"managerQuestions":["菜品有什么意见吗"],"customerAnswers":[],"customerSource":null,"visitFrequency":null}`;
 
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
@@ -701,6 +725,13 @@ export class AiProcessingService {
     // Calculate overall satisfaction from per-item scores (system-calculated, not AI)
     const sentimentScore = this.calculateSatisfaction(feedbacks);
 
+    // Parse customer profile fields
+    const customerSource: string | null = result.customerSource || null;
+    const validFrequencies = ['first', 'repeat', 'regular', 'unknown'];
+    const visitFrequency: string | null = validFrequencies.includes(result.visitFrequency)
+      ? result.visitFrequency
+      : (result.visitFrequency ? 'unknown' : null);
+
     return {
       correctedTranscript: '', // 由调用方设置为rawTranscript
       aiSummary: result.aiSummary || '无摘要',
@@ -708,6 +739,8 @@ export class AiProcessingService {
       feedbacks,
       managerQuestions: result.managerQuestions || [],
       customerAnswers: result.customerAnswers || [],
+      customerSource,
+      visitFrequency,
     };
   }
 
@@ -724,6 +757,8 @@ export class AiProcessingService {
       feedbacks: FeedbackItem[];
       managerQuestions: string[];
       customerAnswers: string[];
+      customerSource: string | null;
+      visitFrequency: string | null;
     },
   ): Promise<void> {
     // Check if running in mock mode
@@ -751,6 +786,8 @@ export class AiProcessingService {
         keywords,
         manager_questions: result.managerQuestions,
         customer_answers: result.customerAnswers,
+        customer_source: result.customerSource,
+        visit_frequency: result.visitFrequency,
         status: 'processed',
         processed_at: new Date().toISOString(),
       })

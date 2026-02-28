@@ -65,33 +65,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isLoading, user, pathname, router]);
 
   const login = useCallback(async (username: string, password: string) => {
-    const response = await fetch(getApiUrl('api/auth/login'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
+    const MAX_RETRIES = 2;
+    const TIMEOUT_MS = 15000; // 15s per attempt
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || '登录失败');
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      try {
+        const response = await fetch(getApiUrl('api/auth/login'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          let errorMessage = '登录失败';
+          try {
+            const error = await response.json();
+            errorMessage = error.message || '登录失败';
+          } catch {
+            errorMessage = response.status === 401
+              ? '用户名或密码错误'
+              : `服务器错误 (${response.status})，请稍后重试`;
+          }
+          // 401 is a credential error — don't retry
+          if (response.status === 401) {
+            throw new Error(errorMessage);
+          }
+          lastError = new Error(errorMessage);
+          // Retry on server errors (5xx)
+          if (attempt < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            continue;
+          }
+          throw lastError;
+        }
+
+        const data = await response.json();
+
+        // Clear any previous error on success
+        lastError = null;
+
+        // Store in state and localStorage
+        setToken(data.access_token);
+        setUser(data.user);
+        localStorage.setItem(TOKEN_KEY, data.access_token);
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+
+        // Route based on role — AI 智库 as home for all roles
+        if (data.user.roleCode === 'administrator') {
+          router.push('/admin/chat');
+        } else if (data.user.roleCode === 'head_chef' || data.user.roleCode === 'chef') {
+          router.push('/chef/chat');
+        } else {
+          router.push('/chat');
+        }
+        return; // Success — exit retry loop
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          lastError = new Error('登录超时，请检查网络后重试');
+        } else if (err instanceof TypeError && err.message.includes('fetch')) {
+          lastError = new Error('无法连接服务器，请检查网络');
+        } else if (err instanceof Error) {
+          // Credential errors (401) — don't retry
+          if (err.message === '用户名或密码错误') {
+            throw err;
+          }
+          lastError = err;
+        } else {
+          lastError = new Error('登录失败');
+        }
+        // Retry on timeout/network errors
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+          continue;
+        }
+      }
     }
-
-    const data = await response.json();
-
-    // Store in state and localStorage
-    setToken(data.access_token);
-    setUser(data.user);
-    localStorage.setItem(TOKEN_KEY, data.access_token);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-
-    // Route based on role — AI 智库 as home for all roles
-    if (data.user.roleCode === 'administrator') {
-      router.push('/admin/chat');
-    } else if (data.user.roleCode === 'head_chef' || data.user.roleCode === 'chef') {
-      router.push('/chef/chat');
-    } else {
-      router.push('/chat');
-    }
+    // All retries exhausted
+    throw lastError || new Error('登录失败，请稍后重试');
   }, [router]);
 
   const logout = useCallback(() => {

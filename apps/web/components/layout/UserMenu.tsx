@@ -109,6 +109,20 @@ export function UserMenu() {
             </button>
           )}
 
+          {/* Product Insights (super admin only) */}
+          {user.isSuperAdmin && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                router.push('/admin/insights?tab=product');
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <span className="text-gray-400">📊</span>
+              产品洞察
+            </button>
+          )}
+
           {/* Submit Feedback (all roles) */}
           <button
             onClick={() => {
