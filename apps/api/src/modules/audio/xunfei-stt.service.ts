@@ -1,6 +1,7 @@
-// 讯飞 Speech-to-Text Service - 方言识别大模型 (SLM)
-// v2.3 - code !== 0 时若已有部分结果则 resolve 而非 reject，避免 11203 等非致命错误丢弃已转写内容
-// API文档: https://www.xfyun.cn/doc/spark/spark_slm_iat.html
+// 讯飞 Speech-to-Text Service - 方言识别大模型 (SLM) + 中文识别大模型 fallback
+// v2.4 - 方言大模型 license 失败(11201/11203)时自动 fallback 到中文识别大模型
+// API文档(方言): https://www.xfyun.cn/doc/spark/spark_slm_iat.html
+// API文档(中文): https://www.xfyun.cn/doc/asr/voicedictation/API.html
 
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
@@ -14,13 +15,22 @@ import { fetchWithRetry } from '../../common/utils/fetch-with-retry';
 
 const execAsync = promisify(exec);
 
-// 讯飞方言大模型 API Configuration
+// 方言识别大模型 API 配置
 const XUNFEI_WSS_URL = 'wss://iat.cn-huabei-1.xf-yun.com/v1';
 const XUNFEI_HOST = 'iat.cn-huabei-1.xf-yun.com';
 const XUNFEI_PATH = '/v1';
+
+// 中文识别大模型 API 配置（fallback）
+const CHINESE_WSS_URL = 'wss://iat-api.xfyun.cn/v2/iat';
+const CHINESE_HOST = 'iat-api.xfyun.cn';
+const CHINESE_PATH = '/v2/iat';
+
 const FRAME_SIZE = 1280;
 const FRAME_INTERVAL = 40;
 const STT_TIMEOUT_MS = 60000;
+
+// 触发 fallback 的 license 相关错误码
+const LICENSE_ERROR_CODES = new Set([11201, 11203]);
 
 // 方言大模型响应格式
 interface SlmResponse {
@@ -72,11 +82,26 @@ export class XunfeiSttService {
       this.logger.log(`Converted ${format}→PCM: ${(pcmBuffer.length / 1024).toFixed(1)}KB`);
     }
 
-    // Step 3: Send to 讯飞 STT
-    const wsUrl = this.buildAuthUrl(apiKey, apiSecret);
-    const transcript = await this.sendAudioAndGetTranscript(wsUrl, appId, pcmBuffer, timeoutMs);
+    // Step 3: 优先用方言大模型，license 失败时 fallback 到中文识别大模型
+    try {
+      const wsUrl = this.buildAuthUrl(apiKey, apiSecret, XUNFEI_HOST, XUNFEI_PATH, XUNFEI_WSS_URL);
+      return await this.sendAudioAndGetTranscript(wsUrl, appId, pcmBuffer, timeoutMs);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = this.extractErrorCode(msg);
+      if (LICENSE_ERROR_CODES.has(code)) {
+        this.logger.warn(`方言大模型 license 失败(${code})，fallback 到中文识别大模型`);
+        const wsUrl = this.buildAuthUrl(apiKey, apiSecret, CHINESE_HOST, CHINESE_PATH, CHINESE_WSS_URL);
+        return await this.sendAudioChineseModel(wsUrl, appId, pcmBuffer, timeoutMs);
+      }
+      throw err;
+    }
+  }
 
-    return transcript;
+  // 从错误消息中提取错误码（如 "STT错误: 11201 - licc failed" → 11201）
+  private extractErrorCode(message: string): number {
+    const match = message.match(/(\d{4,5})/);
+    return match ? parseInt(match[1], 10) : 0;
   }
 
   private detectAudioFormat(url: string, buffer: Buffer): string {
@@ -131,11 +156,11 @@ export class XunfeiSttService {
     }
   }
 
-  // 方言大模型鉴权URL构建
-  private buildAuthUrl(apiKey: string, apiSecret: string): string {
+  // 通用鉴权URL构建，支持方言大模型和中文大模型两个端点
+  private buildAuthUrl(apiKey: string, apiSecret: string, host: string, path: string, wssBase: string): string {
     const date = new Date().toUTCString();
 
-    const signatureOrigin = `host: ${XUNFEI_HOST}\ndate: ${date}\nGET ${XUNFEI_PATH} HTTP/1.1`;
+    const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`;
     const signature = crypto
       .createHmac('sha256', apiSecret)
       .update(signatureOrigin)
@@ -144,8 +169,8 @@ export class XunfeiSttService {
     const authorizationOrigin = `api_key="${apiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signature}"`;
     const authorization = Buffer.from(authorizationOrigin).toString('base64');
 
-    const params = new URLSearchParams({ authorization, date, host: XUNFEI_HOST });
-    return `${XUNFEI_WSS_URL}?${params.toString()}`;
+    const params = new URLSearchParams({ authorization, date, host });
+    return `${wssBase}?${params.toString()}`;
   }
 
   // 方言大模型WebSocket通信 + 响应解析（非流式，直接拼接最终结果）
@@ -296,6 +321,140 @@ export class XunfeiSttService {
       if (status !== 2) {
         setTimeout(sendNext, FRAME_INTERVAL);
       }
+    };
+
+    sendNext();
+  }
+
+  // 中文识别大模型 WebSocket 通信（v2/iat 标准协议）
+  // 响应格式与方言大模型不同：code/data.result.ws 结构
+  private sendAudioChineseModel(wsUrl: string, appId: string, audioBuffer: Buffer, timeoutMs: number = STT_TIMEOUT_MS): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      // 中文大模型用 sn→text Map 处理 pgs=rpl（替换）场景
+      const resultMap = new Map<number, string>();
+      let isResolved = false;
+
+      const resolveWithResults = (reason: string) => {
+        if (isResolved) return;
+        isResolved = true;
+        // 按 sn 顺序拼接所有片段
+        const finalTranscript = Array.from(resultMap.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([, text]) => text)
+          .join('');
+        this.logger.log(`STT完成(中文大模型-${reason}): ${finalTranscript.length}字`);
+        resolve(finalTranscript);
+      };
+
+      const timeout = setTimeout(() => {
+        ws.close();
+        if (resultMap.size > 0) resolveWithResults('timeout-partial');
+        else reject(new Error(`STT超时(${timeoutMs / 1000}s)`));
+      }, timeoutMs);
+
+      ws.on('open', () => {
+        this.logger.log(`STT开始(中文识别大模型): ${Math.ceil(audioBuffer.length / FRAME_SIZE)}帧`);
+        this.sendFramesChinese(ws, appId, audioBuffer);
+      });
+
+      ws.on('message', (data: Buffer) => {
+        try {
+          const resp = JSON.parse(data.toString());
+          const code = resp.code ?? 0;
+
+          if (code !== 0) {
+            clearTimeout(timeout);
+            ws.close();
+            if (resultMap.size > 0) {
+              this.logger.warn(`STT中文大模型 code ${code}，已有内容，使用部分结果`);
+              resolveWithResults('error-partial');
+            } else {
+              reject(new Error(`STT错误: ${code} - ${resp.message ?? ''}`));
+            }
+            return;
+          }
+
+          // 解析 ws 词段，处理 pgs=rpl（替换之前的 sn）
+          const result = resp.data?.result;
+          if (result?.ws) {
+            const text = (result.ws as Array<{ cw: Array<{ w: string }> }>)
+              .map(w => w.cw.map(c => c.w).join(''))
+              .join('');
+            const sn: number = result.sn ?? 1;
+            if (result.pgs === 'rpl' && result.rg) {
+              // 替换 rg 范围内的已有片段
+              const [start, end] = result.rg as [number, number];
+              for (let i = start; i <= end; i++) resultMap.delete(i);
+            }
+            if (text) resultMap.set(sn, text);
+          }
+
+          // status=2 且 ls=true 表示识别结束
+          if (resp.data?.status === 2) {
+            clearTimeout(timeout);
+            ws.close();
+            resolveWithResults('complete');
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      });
+
+      ws.on('error', (error: Error) => {
+        clearTimeout(timeout);
+        if (resultMap.size > 0) resolveWithResults('error-partial');
+        else reject(new Error(`WebSocket错误: ${error.message}`));
+      });
+
+      ws.on('close', () => {
+        clearTimeout(timeout);
+        if (!isResolved && resultMap.size > 0) resolveWithResults('closed');
+      });
+    });
+  }
+
+  // 中文大模型帧发送：首帧带 common+business+data，后续帧只带 data
+  private sendFramesChinese(ws: WebSocket, appId: string, audioBuffer: Buffer): void {
+    const totalFrames = Math.ceil(audioBuffer.length / FRAME_SIZE);
+    let frameIndex = 0;
+
+    const sendNext = () => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+
+      const start = frameIndex * FRAME_SIZE;
+      const end = Math.min(start + FRAME_SIZE, audioBuffer.length);
+      const chunk = audioBuffer.subarray(start, end);
+      const status = frameIndex === 0 ? 0 : frameIndex >= totalFrames - 1 ? 2 : 1;
+
+      const audioPayload = {
+        status,
+        format: 'audio/L16;rate=16000',
+        encoding: 'raw',
+        audio: chunk.toString('base64'),
+      };
+
+      let message: any;
+      if (frameIndex === 0) {
+        message = {
+          common:   { app_id: appId },
+          business: {
+            language: 'zh_cn',
+            domain:   'iat',
+            accent:   'mandarin',
+            eos:      10000,   // 静音检测(ms)
+            ptt:      1,       // 标点
+            nunum:    1,       // 数字规整
+          },
+          data: audioPayload,
+        };
+      } else {
+        message = { data: audioPayload };
+      }
+
+      ws.send(JSON.stringify(message));
+      frameIndex++;
+      if (status !== 2) setTimeout(sendNext, FRAME_INTERVAL);
     };
 
     sendNext();

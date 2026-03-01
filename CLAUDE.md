@@ -168,6 +168,28 @@ May discard:
 | 讯飞开放平台控制台 | https://console.xfyun.cn/ | API密钥管理、服务开通 |
 | DashScope | https://help.aliyun.com/zh/model-studio/paraformer-recorded-speech-recognition-restful-api | Paraformer-v2 录音文件识别 REST API |
 | DashScope 控制台 | https://dashscope.console.aliyun.com/ | API Key 管理 |
+| Hume AI Expression Measurement | https://dev.hume.ai/docs/expression-measurement/overview | 语音情绪识别 API（48 维情绪），纯音频 $0.0639/min，支持中文（EV4-mini） |
+| Hume AI 定价 | https://www.hume.ai/pricing | 按量付费，单店桌访场景约 ¥410~770/月 |
+
+## 语音情绪识别调研（2026-02）
+
+> 备选方案评估，尚未集成
+
+| 服务 | 情绪粒度 | 单价 | 适合 Lingtin |
+|------|----------|------|-------------|
+| **Hume AI** | 48 维（admiration, awe, distress 等） | 音频 $0.0639/min（~¥0.46/min） | **最佳选择** — 直接分析音频，不依赖 STT 文本，能捕捉语气/停顿/叹气 |
+| AssemblyAI | 3 级（正/负/中） | $0.02/小时 | 粒度太粗，但 STT+情感一体化 |
+| ElevenLabs | N/A（只做 TTS 生成） | — | 不做情绪识别 |
+| DeepAffects | 声学特征（音高/语速/振幅） | 按量 | 底层特征，需自建分类层 |
+| emotion2vec | 开源模型，自部署 | 免费 | 数据隐私好，但需 GPU 运维 |
+
+**Lingtin 成本估算**（Hume AI，基于 3,923 条真实数据）：
+- 实际数据：单条录音平均 **40 秒（0.66 min）**，中位数 31 秒，P90 = 68 秒；平均转录 122 字符
+- 单条成本：$0.0639 × 0.66 = **$0.042/条（¥0.30）**
+- 8 家门店，单店日均 22-84 条桌访（中位 45 条）
+- 单店月费：¥410（日均 45 条）~ ¥770（最活跃店 84 条/天）
+- 全 8 店总计：日均 ~300 条 → **¥2,750/月**
+- 结论：单店 ¥400-800/月 可接受，全量部署需评估 ROI
 
 ## 核心信息流
 
