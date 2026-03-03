@@ -8,6 +8,8 @@
 | 讯飞控制台 | https://console.xfyun.cn/ | API 密钥管理 |
 | DashScope | https://help.aliyun.com/zh/model-studio/paraformer-recorded-speech-recognition-restful-api | Paraformer-v2 录音识别 |
 | DashScope 控制台 | https://dashscope.console.aliyun.com/ | API Key 管理 |
+| Hume AI Expression Measurement | https://dev.hume.ai/docs/expression-measurement/overview | 语音情绪识别 API（48 维情绪） |
+| Hume AI 定价 | https://www.hume.ai/pricing | 按量付费 |
 
 ## 语音情绪识别调研（2026-02，尚未集成）
 

@@ -48,6 +48,7 @@ pnpm build:web        # 构建前端
 pnpm build:api        # 构建后端
 # 注意: zsh 下路径含 (main) 等括号时必须加引号
 # 注意: sw.js 是 PWA build 产物，改动前端后需 pnpm build:web 再提交
+# 注意: rebase 时 sw.js 冲突直接接受任一版本，pnpm build:web 会重新生成
 ```
 
 ## 开发规范摘要
@@ -60,7 +61,7 @@ pnpm build:api        # 构建后端
 - **Git commit**：`feat|fix|docs|refactor(scope): description`
 - **API 响应**：统一 `{ data, message }` 格式
 - **认证 header**: 使用 `@/contexts/AuthContext` 导出的 `getAuthHeaders()`
-- **Supabase UUID 查询**：所有 service 方法中 `restaurant_id` 必须做 UUID 校验
+- **Supabase UUID 查询**：所有 service 方法中 `restaurant_id` 必须做 UUID 校验，非法值回退 `DEFAULT_RESTAURANT_ID`
 - **角色路由** — 新增角色改 3 处：`AuthContext.tsx`、`app/page.tsx`、新 layout。当前：`administrator`→`/admin/`、`manager`→`/recorder`、`head_chef`→`/chef/`
 - **区域管理层** — `managed_restaurant_ids`：有值=区域管理层，NULL=总部。前端 `useManagedScope()`，API 用 `managed_ids` 过滤
 - **面向店长的内容** — 站在店长角度讲价值，不暗示"被监控"
@@ -84,11 +85,15 @@ pnpm build:api        # 构建后端
 只读引用：`master_restaurant`、`master_employee`、`master_region`、`mt_dish_sales`
 视图：`lingtin_dishname_view`
 废弃：`lingtin_dish_mentions`（v1.3.3 起全用 feedbacks JSONB）
+新增字段（v2.1.0）：`customer_source VARCHAR(50)`、`visit_frequency VARCHAR(20)`（first/repeat/regular/unknown）
 
 ```
 master_region (1)     ──< master_restaurant (N)
-master_restaurant (1) ──< visit_records (N) ──< action_items (N) ──< table_sessions (N)
+master_restaurant (1) ──< visit_records (N)
+                      ──< action_items (N)
+                      ──< table_sessions (N)
 master_employee (1)   ──< visit_records (N)
+                      ──> master_region (M:N via managed_region_ids[])
 ```
 
 > 完整 schema 详见 @docs/DATABASE.md
@@ -102,6 +107,8 @@ master_employee (1)   ──< visit_records (N)
 
 > 部署配置详见 @docs/DEPLOYMENT.md，工作流详见 `.claude/rules/workflow.md`
 
+> 产品使用手册详见 @docs/user-guides/README.md
+
 ## 上下文管理
 
 - **读文件前先想清楚** — 只读与当前任务相关的文件
@@ -109,6 +116,7 @@ master_employee (1)   ──< visit_records (N)
 - **大文件用 offset/limit** — 超过 300 行的文件分段读取
 - **长任务用 Task 子代理** — 探索、搜索、代码审查委托子代理
 - **每次只改一个功能** — 不在一轮对话中处理多个不相关功能
+- **回复保持简洁** — 给出关键信息即可，不要重复粘贴大段代码
 - **每个版本完成后立即提交** — 不攒多个版本
 - **提交前主动 compact** — 确保提交流程有足够上下文空间
 
@@ -123,6 +131,6 @@ Discard: old exploration outputs, historical context, large git diffs (use `--st
 
 | 任务 | 状态 | 关键笔记 |
 |------|------|----------|
-| 重跑缺 feedbacks 的记录 | ⏸️ 暂停 | 剩余 1247 条。`only_missing_feedbacks: true` + cutoff `2026-03-01` |
+| 重跑缺 feedbacks 的记录 | ⏸️ 暂停 | 剩余 1247 条。`only_missing_feedbacks: true` + cutoff `2026-03-01`。检查：`SELECT COUNT(*) FROM lingtin_visit_records WHERE status='processed' AND (feedbacks IS NULL OR feedbacks::text='[]' OR feedbacks::text='null') AND raw_transcript IS NOT NULL AND LENGTH(raw_transcript) > 10` |
 | 重跑缺画像的记录 | 待评估 | `only_missing_profile: true` |
 | 本地 .env service key 无效 | 待修复 | 线上 Zeabur 正常，本地 MOCK MODE |
