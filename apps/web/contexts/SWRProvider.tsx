@@ -32,12 +32,12 @@ function getTodayDate(): string {
 // Persist cache to localStorage (shared by beforeunload + periodic sync)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function persistCache(map: Map<string, any>) {
-  const entries = Array.from(map.entries()).filter(([key]) => isCacheableKey(key));
+  let entries = Array.from(map.entries()).filter(([key]) => isCacheableKey(key));
   let json = JSON.stringify(entries);
-  // Enforce 2MB size limit — drop oldest entries until it fits
-  if (json.length > MAX_CACHE_BYTES) {
-    const trimmed = entries.slice(-Math.floor(entries.length / 2));
-    json = JSON.stringify(trimmed);
+  // Enforce 2MB size limit — keep halving until it fits
+  while (json.length > MAX_CACHE_BYTES && entries.length > 1) {
+    entries = entries.slice(-Math.floor(entries.length / 2));
+    json = JSON.stringify(entries);
   }
   try {
     localStorage.setItem(CACHE_KEY, json);
@@ -73,8 +73,12 @@ function clearStaleChatKeys() {
   }
 }
 
+interface CacheWithCleanup extends SWRCache {
+  _cleanup?: () => void;
+}
+
 // Create localStorage-based cache provider for SWR persistence
-function createLocalStorageProvider(): SWRCache {
+function createLocalStorageProvider(): CacheWithCleanup {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let cachedData: [string, any][] = [];
 
@@ -98,15 +102,24 @@ function createLocalStorageProvider(): SWRCache {
 
   const map = new Map(cachedData);
 
+  const cache = map as CacheWithCleanup;
+
   if (typeof window !== 'undefined') {
     // Save on page unload (works for normal tab close)
-    window.addEventListener('beforeunload', () => persistCache(map));
+    const onUnload = () => persistCache(map);
+    window.addEventListener('beforeunload', onUnload);
 
     // Periodic sync every 30s (covers PWA being killed without beforeunload)
-    setInterval(() => persistCache(map), 30_000);
+    const intervalId = setInterval(() => persistCache(map), 30_000);
+
+    // Cleanup for HMR / remount
+    cache._cleanup = () => {
+      clearInterval(intervalId);
+      window.removeEventListener('beforeunload', onUnload);
+    };
   }
 
-  return map as SWRCache;
+  return cache;
 }
 
 // Auth keys (must match AuthContext.tsx)
@@ -159,11 +172,13 @@ interface SWRProviderProps {
 }
 
 export function SWRProvider({ children }: SWRProviderProps) {
-  const [provider, setProvider] = useState<SWRCache | null>(null);
+  const [provider, setProvider] = useState<CacheWithCleanup | null>(null);
 
   // Initialize provider on client side only
   useEffect(() => {
-    setProvider(createLocalStorageProvider());
+    const cache = createLocalStorageProvider();
+    setProvider(cache);
+    return () => cache._cleanup?.();
   }, []);
 
   // Don't render SWRConfig until provider is ready (SSR safety)
