@@ -557,7 +557,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
     }
 
     const requestBody: Record<string, any> = {
-      model: 'minimax/minimax-m2.5',
+      model: 'deepseek/deepseek-chat-v3-0324',
       max_tokens: 2048,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -615,7 +615,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
     if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
 
     const requestBody = {
-      model: 'minimax/minimax-m2.5',
+      model: 'deepseek/deepseek-chat-v3-0324',
       max_tokens: 1536,
       temperature: 0,
       stream: true,
