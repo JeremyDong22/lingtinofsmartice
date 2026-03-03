@@ -25,10 +25,18 @@ async function forceUpdateApp() {
       await Promise.all(cacheNames.map(name => caches.delete(name)));
       console.log(`[Lingtin] Cleared ${cacheNames.length} cache(s): ${cacheNames.join(', ')}`);
     }
+    // 3. Clear chat & SWR localStorage caches (prevents PWA stuck on stale data)
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('lingtin_chat_') || key === 'lingtin-swr-cache' || key === 'lingtin-swr-cache-date') {
+        localStorage.removeItem(key);
+      }
+    }
+    console.log('[Lingtin] Cleared localStorage chat caches');
   } catch (err) {
     console.error('[Lingtin] Error during force update:', err);
   }
-  // 3. Hard reload (bypass browser cache)
+  // 4. Hard reload (bypass browser cache)
   window.location.reload();
 }
 
