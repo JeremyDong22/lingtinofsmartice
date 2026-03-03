@@ -30,10 +30,13 @@ export class ChatController {
     console.log('[ChatController] managedRestaurantIds:', managedRestaurantIds?.length ?? 'all');
     console.log('[ChatController] history length:', history?.length || 0);
 
-    // Set headers for SSE streaming
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    // Set headers for SSE streaming (anti-buffering for nginx/Cloudflare proxies)
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    // Disable TCP Nagle algorithm — send small SSE chunks immediately
+    res.socket?.setNoDelay(true);
 
     console.log('[ChatController] Headers set, calling streamResponse');
     await this.chatService.streamResponse(
