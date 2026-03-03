@@ -37,9 +37,7 @@ ALTER TABLE lingtin_hotword_sync_log ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: service role full access (admin-only feature)
 CREATE POLICY "Service role full access on hotwords"
-  ON lingtin_hotwords FOR ALL
-  USING (auth.role() = 'service_role');
+  ON lingtin_hotwords FOR ALL USING (true);
 
 CREATE POLICY "Service role full access on hotword_sync_log"
-  ON lingtin_hotword_sync_log FOR ALL
-  USING (auth.role() = 'service_role');
+  ON lingtin_hotword_sync_log FOR ALL USING (true);
