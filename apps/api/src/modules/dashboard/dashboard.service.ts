@@ -96,29 +96,28 @@ export class DashboardService {
     }
     const client = this.supabase.getClient();
 
-    // Days with completed visit records
-    const { data: visitDays, error: ve } = await client
-      .from('lingtin_visit_records')
-      .select('visit_date')
-      .eq('restaurant_id', restaurantId)
-      .eq('status', 'processed')
-      .gte('visit_date', startDate)
-      .lte('visit_date', endDate);
-    if (ve) throw ve;
+    // Parallel: visit dates + meeting dates
+    const [visitDaysRes, meetingDaysRes] = await Promise.all([
+      client
+        .from('lingtin_visit_records')
+        .select('visit_date')
+        .eq('restaurant_id', restaurantId)
+        .eq('status', 'processed')
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate),
+      client
+        .from('lingtin_meeting_records')
+        .select('meeting_date')
+        .eq('restaurant_id', restaurantId)
+        .eq('meeting_type', 'daily_review')
+        .gte('meeting_date', startDate)
+        .lte('meeting_date', endDate),
+    ]);
+    if (visitDaysRes.error) throw visitDaysRes.error;
+    if (meetingDaysRes.error) throw meetingDaysRes.error;
 
-    const uniqueVisitDates = [...new Set((visitDays || []).map(v => v.visit_date))].sort();
-
-    // Days with daily_review meetings
-    const { data: meetingDays, error: me } = await client
-      .from('lingtin_meeting_records')
-      .select('meeting_date')
-      .eq('restaurant_id', restaurantId)
-      .eq('meeting_type', 'daily_review')
-      .gte('meeting_date', startDate)
-      .lte('meeting_date', endDate);
-    if (me) throw me;
-
-    const reviewedDatesSet = new Set((meetingDays || []).map(m => m.meeting_date));
+    const uniqueVisitDates = [...new Set((visitDaysRes.data || []).map(v => v.visit_date))].sort();
+    const reviewedDatesSet = new Set((meetingDaysRes.data || []).map(m => m.meeting_date));
 
     const totalDays = uniqueVisitDates.length;
     const reviewedDays = uniqueVisitDates.filter(d => reviewedDatesSet.has(d)).length;
@@ -178,27 +177,27 @@ export class DashboardService {
       return this.getMultiRestaurantCoverage(startDate, endDate, managedIds);
     }
 
-    // Single restaurant mode (original logic)
-    // Get table sessions count by period
-    const { data: sessions, error: sessionsError } = await client
-      .from('lingtin_table_sessions')
-      .select('period')
-      .eq('restaurant_id', restaurantId)
-      .gte('session_date', startDate)
-      .lte('session_date', endDate);
+    // Single restaurant mode — parallel queries
+    const [sessionsRes, visitsRes] = await Promise.all([
+      client
+        .from('lingtin_table_sessions')
+        .select('period')
+        .eq('restaurant_id', restaurantId)
+        .gte('session_date', startDate)
+        .lte('session_date', endDate),
+      client
+        .from('lingtin_visit_records')
+        .select('visit_period')
+        .eq('restaurant_id', restaurantId)
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate)
+        .eq('status', 'processed'),
+    ]);
 
-    if (sessionsError) throw sessionsError;
-
-    // Get visit records count by period
-    const { data: visits, error: visitsError } = await client
-      .from('lingtin_visit_records')
-      .select('visit_period')
-      .eq('restaurant_id', restaurantId)
-      .gte('visit_date', startDate)
-      .lte('visit_date', endDate)
-      .eq('status', 'processed');
-
-    if (visitsError) throw visitsError;
+    if (sessionsRes.error) throw sessionsRes.error;
+    if (visitsRes.error) throw visitsRes.error;
+    const sessions = sessionsRes.data;
+    const visits = visitsRes.data;
 
     // Aggregate by period
     const periods = ['lunch', 'dinner'];
@@ -224,27 +223,26 @@ export class DashboardService {
   private async getMultiRestaurantCoverage(startDate: string, endDate: string, managedIds: string[] | null = null) {
     const client = this.supabase.getClient();
 
-    // Get visible restaurants (scoped or all)
-    const restaurants = await this.getVisibleRestaurants(managedIds);
+    // Parallel: restaurants + sessions + visits
+    const [restaurants, sessionsRes, visitsRes] = await Promise.all([
+      this.getVisibleRestaurants(managedIds),
+      client
+        .from('lingtin_table_sessions')
+        .select('restaurant_id, period')
+        .gte('session_date', startDate)
+        .lte('session_date', endDate),
+      client
+        .from('lingtin_visit_records')
+        .select('restaurant_id, visit_period')
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate)
+        .eq('status', 'processed'),
+    ]);
 
-    // Get all sessions for the date range
-    const { data: allSessions, error: sessionsError } = await client
-      .from('lingtin_table_sessions')
-      .select('restaurant_id, period')
-      .gte('session_date', startDate)
-      .lte('session_date', endDate);
-
-    if (sessionsError) throw sessionsError;
-
-    // Get all visits for the date range
-    const { data: allVisits, error: visitsError } = await client
-      .from('lingtin_visit_records')
-      .select('restaurant_id, visit_period')
-      .gte('visit_date', startDate)
-      .lte('visit_date', endDate)
-      .eq('status', 'processed');
-
-    if (visitsError) throw visitsError;
+    if (sessionsRes.error) throw sessionsRes.error;
+    if (visitsRes.error) throw visitsRes.error;
+    const allSessions = sessionsRes.data;
+    const allVisits = visitsRes.data;
 
     // Calculate per-restaurant stats
     const periods = ['lunch', 'dinner'];
@@ -498,7 +496,12 @@ export class DashboardService {
       query = query.in('restaurant_id', managedIds);
     }
 
-    const { data, error } = await query;
+    // Parallel: start restaurant lookup alongside the main query when cross-restaurant
+    const restaurantsPromise = restaurantId === 'all'
+      ? this.getVisibleRestaurants(managedIds)
+      : Promise.resolve(null);
+
+    const [{ data, error }, restaurants] = await Promise.all([query, restaurantsPromise]);
 
     if (error) throw error;
 
@@ -574,8 +577,7 @@ export class DashboardService {
       negative_feedbacks: { text: string; count: number; contexts: FeedbackWithContext[] }[];
     }[] | undefined;
 
-    if (restaurantId === 'all') {
-      const restaurants = await this.getVisibleRestaurants(managedIds);
+    if (restaurantId === 'all' && restaurants) {
       const restNameMap = new Map(restaurants.map(r => [r.id, r.restaurant_name]));
 
       const restBuckets = new Map<string, { positive: FeedbackWithContext[]; negative: FeedbackWithContext[] }>();
@@ -636,36 +638,72 @@ export class DashboardService {
     const restaurants = await this.getVisibleRestaurants(managedIds);
     const restIds = restaurants.map(r => r.id);
 
-    // Get visits for the date range with sentiment and keywords (scoped)
+    // Batch: visits, sessions, and meetings in parallel
     let visitsQuery = client
       .from('lingtin_visit_records')
-      .select('restaurant_id, visit_period, sentiment_score, keywords')
+      .select('restaurant_id, visit_date, visit_period, sentiment_score, keywords')
       .gte('visit_date', startDate)
       .lte('visit_date', endDate)
       .eq('status', 'processed');
-    if (managedIds) visitsQuery = visitsQuery.in('restaurant_id', restIds);
-    const { data: allVisits, error: visitsError } = await visitsQuery;
-    if (visitsError) throw visitsError;
-
-    // Get table sessions for coverage calculation (scoped)
     let sessionsQuery = client
       .from('lingtin_table_sessions')
       .select('restaurant_id, period')
       .gte('session_date', startDate)
       .lte('session_date', endDate);
-    if (managedIds) sessionsQuery = sessionsQuery.in('restaurant_id', restIds);
-    const { data: allSessions, error: sessionsError } = await sessionsQuery;
-    if (sessionsError) throw sessionsError;
+    let meetingsQuery = client
+      .from('lingtin_meeting_records')
+      .select('restaurant_id, meeting_date, ai_summary, action_items, key_decisions')
+      .eq('meeting_type', 'daily_review')
+      .gte('meeting_date', startDate)
+      .lte('meeting_date', endDate)
+      .order('meeting_date', { ascending: false });
 
-    // Calculate per-restaurant stats
+    if (managedIds) {
+      visitsQuery = visitsQuery.in('restaurant_id', restIds);
+      sessionsQuery = sessionsQuery.in('restaurant_id', restIds);
+      meetingsQuery = meetingsQuery.in('restaurant_id', restIds);
+    }
+
+    const [visitsRes, sessionsRes, meetingsRes] = await Promise.all([
+      visitsQuery, sessionsQuery, meetingsQuery,
+    ]);
+    if (visitsRes.error) throw visitsRes.error;
+    if (sessionsRes.error) throw sessionsRes.error;
+    const allVisits = visitsRes.data || [];
+    const allSessions = sessionsRes.data || [];
+    const allMeetingsData = meetingsRes.data || [];
+
+    // Pre-index meetings by restaurant for O(1) lookup
+    const meetingsByRestaurant = new Map<string, typeof allMeetingsData>();
+    for (const m of allMeetingsData) {
+      const list = meetingsByRestaurant.get(m.restaurant_id) || [];
+      list.push(m);
+      meetingsByRestaurant.set(m.restaurant_id, list);
+    }
+
+    // Pre-index visits and sessions by restaurant for O(1) lookup
+    const visitsByRestaurant = new Map<string, typeof allVisits>();
+    for (const v of allVisits) {
+      const list = visitsByRestaurant.get(v.restaurant_id) || [];
+      list.push(v);
+      visitsByRestaurant.set(v.restaurant_id, list);
+    }
+    const sessionsByRestaurant = new Map<string, typeof allSessions>();
+    for (const s of allSessions) {
+      const list = sessionsByRestaurant.get(s.restaurant_id) || [];
+      list.push(s);
+      sessionsByRestaurant.set(s.restaurant_id, list);
+    }
+
+    // Calculate per-restaurant stats + review completion in single pass
     let totalVisits = 0;
     let totalSentimentSum = 0;
     let totalSentimentCount = 0;
-    const allKeywords: string[] = [];
+    const allKeywordsSet = new Set<string>();
 
-    const restaurantStats = (restaurants || []).map((rest) => {
-      const restVisits = allVisits?.filter((v) => v.restaurant_id === rest.id) || [];
-      const restSessions = allSessions?.filter((s) => s.restaurant_id === rest.id) || [];
+    const enrichedStats = (restaurants || []).map((rest) => {
+      const restVisits = visitsByRestaurant.get(rest.id) || [];
+      const restSessions = sessionsByRestaurant.get(rest.id) || [];
 
       // Visit count
       const visitCount = restVisits.length;
@@ -689,19 +727,37 @@ export class DashboardService {
       const coverage = openCount > 0 ? Math.round((visitCount / openCount) * 100) : 0;
 
       // Recent keywords (flatten and dedupe)
-      const keywords: string[] = [];
+      const keywordsSet = new Set<string>();
       restVisits.forEach((v) => {
         if (Array.isArray(v.keywords)) {
           v.keywords.forEach((kw: string) => {
-            if (kw && !keywords.includes(kw)) {
-              keywords.push(kw);
-            }
-            if (kw && !allKeywords.includes(kw)) {
-              allKeywords.push(kw);
+            if (kw) {
+              keywordsSet.add(kw);
+              allKeywordsSet.add(kw);
             }
           });
         }
       });
+
+      // Review completion: days with visits that also have a daily_review meeting
+      const visitDates = [...new Set(restVisits.map(v => v.visit_date))];
+      const restMeetings = meetingsByRestaurant.get(rest.id) || [];
+      const meetingDatesSet = new Set(restMeetings.map(m => m.meeting_date));
+      const reviewedDays = visitDates.filter(d => meetingDatesSet.has(d)).length;
+      const reviewCompletion = visitDates.length > 0
+        ? Math.round((reviewedDays / visitDates.length) * 100)
+        : 0;
+
+      // Latest daily_review meeting (already ordered by meeting_date desc)
+      let latestReview: { ai_summary: string; action_items: string[]; key_decisions: string[] } | null = null;
+      if (restMeetings.length > 0) {
+        const m = restMeetings[0];
+        latestReview = {
+          ai_summary: m.ai_summary || '',
+          action_items: m.action_items || [],
+          key_decisions: m.key_decisions || [],
+        };
+      }
 
       return {
         id: rest.id,
@@ -710,48 +766,11 @@ export class DashboardService {
         open_count: openCount,
         coverage,
         avg_sentiment: avgSentiment !== null ? Math.round(avgSentiment * 100) / 100 : null,
-        keywords: keywords.slice(0, 5),
+        keywords: [...keywordsSet].slice(0, 5),
+        review_completion: reviewCompletion,
+        latest_review: latestReview,
       };
     });
-
-    // Enrich with review completion + latest review meeting per restaurant
-    const enrichedStats = await Promise.all(
-      restaurantStats.map(async (stat) => {
-        // Review completion for the date range
-        let reviewCompletion = 0;
-        try {
-          const rc = await this.getReviewCompletionStats(stat.id, startDate, endDate);
-          reviewCompletion = rc.completion_rate;
-        } catch {
-          /* ignore */
-        }
-
-        // Latest daily_review meeting
-        let latestReview: { ai_summary: string; action_items: string[]; key_decisions: string[] } | null = null;
-        try {
-          const { data: meetings } = await client
-            .from('lingtin_meeting_records')
-            .select('ai_summary, action_items, key_decisions')
-            .eq('restaurant_id', stat.id)
-            .eq('meeting_type', 'daily_review')
-            .gte('meeting_date', startDate)
-            .lte('meeting_date', endDate)
-            .order('meeting_date', { ascending: false })
-            .limit(1);
-          if (meetings && meetings.length > 0) {
-            latestReview = {
-              ai_summary: meetings[0].ai_summary || '',
-              action_items: meetings[0].action_items || [],
-              key_decisions: meetings[0].key_decisions || [],
-            };
-          }
-        } catch {
-          /* ignore */
-        }
-
-        return { ...stat, review_completion: reviewCompletion, latest_review: latestReview };
-      }),
-    );
 
     // Sort by visit count descending
     enrichedStats.sort((a, b) => b.visit_count - a.visit_count);
@@ -765,7 +784,7 @@ export class DashboardService {
         restaurant_count: restaurants?.length || 0,
       },
       restaurants: enrichedStats,
-      recent_keywords: allKeywords.slice(0, 10),
+      recent_keywords: [...allKeywordsSet].slice(0, 10),
     };
   }
 
@@ -825,25 +844,26 @@ export class DashboardService {
   async getRestaurantDetail(restaurantId: string, date: string) {
     const client = this.supabase.getClient();
 
-    // Get restaurant info
-    const { data: restaurant, error: restError } = await client
-      .from('master_restaurant')
-      .select('id, restaurant_name')
-      .eq('id', restaurantId)
-      .single();
+    // Parallel: restaurant info + visit records
+    const [restRes, visitsRes] = await Promise.all([
+      client
+        .from('master_restaurant')
+        .select('id, restaurant_name')
+        .eq('id', restaurantId)
+        .single(),
+      client
+        .from('lingtin_visit_records')
+        .select('id, table_id, visit_period, sentiment_score, ai_summary, keywords, manager_questions, customer_answers, corrected_transcript, created_at')
+        .eq('restaurant_id', restaurantId)
+        .eq('visit_date', date)
+        .eq('status', 'processed')
+        .order('created_at', { ascending: false }),
+    ]);
 
-    if (restError) throw restError;
-
-    // Get all visit records for this restaurant on this date
-    const { data: visits, error: visitsError } = await client
-      .from('lingtin_visit_records')
-      .select('id, table_id, visit_period, sentiment_score, ai_summary, keywords, manager_questions, customer_answers, corrected_transcript, created_at')
-      .eq('restaurant_id', restaurantId)
-      .eq('visit_date', date)
-      .eq('status', 'processed')
-      .order('created_at', { ascending: false });
-
-    if (visitsError) throw visitsError;
+    if (restRes.error) throw restRes.error;
+    if (visitsRes.error) throw visitsRes.error;
+    const restaurant = restRes.data;
+    const visits = visitsRes.data;
 
     // Calculate summary
     const sentimentScores = (visits || [])
@@ -933,7 +953,7 @@ export class DashboardService {
 
     // Build scoped queries
     let visitsQ = client.from('lingtin_visit_records')
-      .select('id, restaurant_id, table_id, feedbacks, sentiment_score, audio_url, keywords, status, manager_questions, customer_answers')
+      .select('id, restaurant_id, table_id, visit_date, feedbacks, sentiment_score, audio_url, keywords, status, manager_questions, customer_answers')
       .gte('visit_date', startDate)
       .lte('visit_date', endDate)
       .eq('status', 'processed');
@@ -950,22 +970,38 @@ export class DashboardService {
       .select('restaurant_id, sentiment_score')
       .eq('visit_date', isMultiDay ? '1970-01-01' : yesterdayStr)
       .eq('status', 'processed');
+    // Batch: daily_review meetings for review completion (replaces per-store getReviewCompletionStats)
+    let meetingsQ = client.from('lingtin_meeting_records')
+      .select('restaurant_id, meeting_date')
+      .eq('meeting_type', 'daily_review')
+      .gte('meeting_date', startDate)
+      .lte('meeting_date', endDate);
 
     if (managedIds) {
       visitsQ = visitsQ.in('restaurant_id', restIds);
       actionsQ = actionsQ.in('restaurant_id', restIds);
       sessionsQ = sessionsQ.in('restaurant_id', restIds);
       yesterdayQ = yesterdayQ.in('restaurant_id', restIds);
+      meetingsQ = meetingsQ.in('restaurant_id', restIds);
     }
 
-    const [visitsRes, actionsRes, sessionsRes, yesterdayVisitsRes] = await Promise.all([
-      visitsQ, actionsQ, sessionsQ, yesterdayQ,
+    const [visitsRes, actionsRes, sessionsRes, yesterdayVisitsRes, meetingsRes] = await Promise.all([
+      visitsQ, actionsQ, sessionsQ, yesterdayQ, meetingsQ,
     ]);
 
     const visits = visitsRes.data || [];
     const actions = actionsRes.data || [];
     const sessions = sessionsRes.data || [];
     const yesterdayVisits = isMultiDay ? [] : (yesterdayVisitsRes.data || []);
+    const allMeetings = meetingsRes.data || [];
+
+    // Pre-compute review meeting dates per restaurant for in-memory review completion
+    const meetingDatesByRestaurant = new Map<string, Set<string>>();
+    for (const m of allMeetings) {
+      const dates = meetingDatesByRestaurant.get(m.restaurant_id) || new Set<string>();
+      dates.add(m.meeting_date);
+      meetingDatesByRestaurant.set(m.restaurant_id, dates);
+    }
 
     // 3. Per-restaurant anomaly detection
     const problems: BriefingProblem[] = [];
@@ -973,6 +1009,7 @@ export class DashboardService {
     let totalSentimentCount = 0;
     let totalOpen = 0;
     let totalVisit = 0;
+    const perRestCompletionRates: number[] = []; // collect for avg computation
 
     for (const rest of restaurants) {
       const restVisits = visits.filter(v => v.restaurant_id === rest.id);
@@ -1038,22 +1075,27 @@ export class DashboardService {
         });
       }
 
-      // --- Anomaly: low review completion (< 50%) ---
-      try {
-        const rc = await this.getReviewCompletionStats(rest.id, startDate, endDate);
-        if (rc.total_days > 0 && rc.completion_rate < 50) {
-          problems.push({
-            severity: rc.completion_rate < 30 ? 'red' : 'yellow',
-            category: 'review_completion',
-            restaurantId: rest.id,
-            restaurantName: rest.restaurant_name,
-            title: '复盘执行不足',
-            evidence: [],
-            metric: `复盘完成率 ${rc.completion_rate}%（${rc.reviewed_days}/${rc.total_days}天）`,
-          });
+      // --- Anomaly: low review completion (< 50%) — computed in-memory ---
+      {
+        const visitDates = [...new Set(restVisits.map(v => v.visit_date))];
+        const reviewDates = meetingDatesByRestaurant.get(rest.id) || new Set<string>();
+        const totalDays = visitDates.length;
+        const reviewedDays = visitDates.filter(d => reviewDates.has(d)).length;
+        const completionRate = totalDays > 0 ? Math.round((reviewedDays / totalDays) * 100) : 0;
+        if (totalDays > 0) {
+          perRestCompletionRates.push(completionRate);
+          if (completionRate < 50) {
+            problems.push({
+              severity: completionRate < 30 ? 'red' : 'yellow',
+              category: 'review_completion',
+              restaurantId: rest.id,
+              restaurantName: rest.restaurant_name,
+              title: '复盘执行不足',
+              evidence: [],
+              metric: `复盘完成率 ${completionRate}%（${reviewedDays}/${totalDays}天）`,
+            });
+          }
         }
-      } catch {
-        /* ignore review completion errors */
       }
 
       // --- Anomaly: negative feedbacks by category ---
@@ -1137,14 +1179,10 @@ export class DashboardService {
       : null;
     const overallCoverage = totalOpen > 0 ? Math.round((totalVisit / totalOpen) * 100) : 0;
 
-    // Compute avg review completion across all restaurants
-    let avgReviewCompletion = 0;
-    try {
-      const rc = await this.getMultiRestaurantReviewCompletion(startDate, endDate, managedIds);
-      avgReviewCompletion = rc.avg_completion_rate;
-    } catch {
-      /* ignore */
-    }
+    // Avg review completion — reuse rates collected in the per-restaurant loop above
+    const avgReviewCompletion = perRestCompletionRates.length > 0
+      ? Math.round(perRestCompletionRates.reduce((a, b) => a + b, 0) / perRestCompletionRates.length)
+      : 0;
 
     return {
       date: startDate,
@@ -1231,15 +1269,18 @@ export class DashboardService {
       query = query.in('restaurant_id', managedIds);
     }
 
-    const { data, error } = await query;
+    // Parallel: start restaurant lookup alongside the main query when cross-restaurant
+    const restaurantsPromise = restaurantId === 'all'
+      ? this.getVisibleRestaurants(managedIds)
+      : Promise.resolve(null);
+
+    const [{ data, error }, restaurants] = await Promise.all([query, restaurantsPromise]);
     if (error) throw error;
 
     // Build restaurant name lookup if cross-restaurant
-    let restMap = new Map<string, string>();
-    if (restaurantId === 'all') {
-      const restaurants = await this.getVisibleRestaurants(managedIds);
-      restMap = new Map(restaurants.map(r => [r.id, r.restaurant_name]));
-    }
+    const restMap = restaurants
+      ? new Map(restaurants.map(r => [r.id, r.restaurant_name]))
+      : new Map<string, string>();
 
     // Collect all suggestion feedbacks
     const suggestionMap = new Map<string, {
@@ -1586,11 +1627,8 @@ export class DashboardService {
     }
 
     const client = this.supabase.getClient();
-    const restaurants = await this.getVisibleRestaurants(managedIds);
-    const restIds = restaurants.map(r => r.id);
-    const restMap = new Map(restaurants.map(r => [r.id, r.restaurant_name]));
 
-    // Fetch all processed visit records in date range
+    // Parallel: restaurants + visit records
     let query = client
       .from('lingtin_visit_records')
       .select('id, restaurant_id, customer_source, visit_frequency')
@@ -1599,13 +1637,21 @@ export class DashboardService {
       .eq('status', 'processed');
 
     if (managedIds) {
-      query = query.in('restaurant_id', restIds);
+      query = query.in('restaurant_id', managedIds);
     }
 
-    const { data: records, error } = await query;
+    const [restaurants, { data: records, error }] = await Promise.all([
+      this.getVisibleRestaurants(managedIds),
+      query,
+    ]);
     if (error) throw error;
 
-    const allRecords = records || [];
+    const restIds = restaurants.map(r => r.id);
+    const restMap = new Map(restaurants.map(r => [r.id, r.restaurant_name]));
+    const restIdSet = new Set(restIds);
+
+    // Filter to active restaurants only (managedIds may include inactive ones)
+    const allRecords = (records || []).filter(r => restIdSet.has(r.restaurant_id));
 
     // Helper to compute profile stats for a set of records
     const computeStats = (recs: typeof allRecords) => {
