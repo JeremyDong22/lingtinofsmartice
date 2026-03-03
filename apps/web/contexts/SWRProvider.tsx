@@ -172,19 +172,18 @@ interface SWRProviderProps {
 }
 
 export function SWRProvider({ children }: SWRProviderProps) {
-  const [provider, setProvider] = useState<CacheWithCleanup | null>(null);
+  // Start with an empty Map so SWRConfig wraps children from the very first render.
+  // This ensures useSWR hooks always have access to the fetcher — no "null provider" window.
+  const [provider, setProvider] = useState<CacheWithCleanup>(
+    () => new Map() as CacheWithCleanup,
+  );
 
-  // Initialize provider on client side only
+  // Replace the placeholder Map with the real localStorage-backed cache on mount
   useEffect(() => {
     const cache = createLocalStorageProvider();
     setProvider(cache);
     return () => cache._cleanup?.();
   }, []);
-
-  // Don't render SWRConfig until provider is ready (SSR safety)
-  if (!provider) {
-    return <>{children}</>;
-  }
 
   return (
     <SWRConfig
