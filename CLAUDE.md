@@ -153,7 +153,7 @@ May discard:
   - Supabase: 环境变量 `SUPABASE_ACCESS_TOKEN`，Management API 执行迁移
   - Cloudflare: 环境变量 `CLOUDFLARE_API_TOKEN`，用 `npx wrangler` 查看部署状态/日志
   - Zeabur: 已通过 `zeabur auth` 全局登录，直接用 `zeabur` CLI 操作
-- **发布流程**: 代码改动 + 构建通过 → **提示用户 `pnpm dev` 本地测试** → 用户确认无误 → commit + push → PR 给 Jeremy → Jeremy 负责线上部署
+- **发布流程**: 代码改动 + 构建通过 → **提示用户 `pnpm dev` 本地测试** → 用户确认无误 → commit + push → PR → review → merge → **`zeabur service redeploy --id 697a6376f2339c9e766cb99d -y -i=false` 触发后端部署**（Cloudflare 前端自动部署无需手动）
 - **提交前必须等用户确认** — 构建通过后不要自动 commit + push，必须先停下来让用户手动验证功能，用户明确说"OK/没问题/可以提交"后才执行 commit + push
 - **Git remotes**: `origin` = 上游 (jeremydong22)，`fork` = 贡献者 (SmartIce-Ray)。SmartIce-Ray 已是 collaborator，可直接 push 到 `origin`
 - **Push 策略**: 默认 push 到 `origin`（Jeremy 仓库），可同时 push 到 `fork` 作为备份（`git push fork <branch>`）
