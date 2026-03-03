@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-03-03
+
+### 修复 (Fixed)
+- **Chat 缓存持久化** — 消息从 sessionStorage 迁移到 localStorage，同一天关闭 PWA 再打开秒恢复汇报（0 秒 vs 5-15 秒），跨天自动清空重新生成
+- **SWR 切回不刷新** — 关闭 `revalidateOnFocus`，切换 App 回来不再触发并发请求；`dedupingInterval` 从 2s 提高到 60s
+- **SWR 缓存增强** — 新增 30 秒定时同步（防止 PWA 被杀时丢失缓存）、白名单增加 question-templates、2MB 大小限制替代 50 条硬限、跨天自动过期
+- **产品反馈 stt_status 约束** — 补建 `lingtin_product_feedback_stt_status_check` 约束，增加缺失的 `processing` 状态值
+
 ## [2.1.0] - 2026-03-01
 
 ### 新增 (Added)

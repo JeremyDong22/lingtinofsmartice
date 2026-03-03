@@ -2,9 +2,8 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getApiUrl } from '@/lib/api';
-import { getAuthHeaders } from '@/contexts/AuthContext';
+import { useState, useMemo } from 'react';
+import useSWR from 'swr';
 
 interface ActionItem {
   id: string;
@@ -33,37 +32,19 @@ function getYesterdayDateString(): string {
 }
 
 export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
-  const [items, setItems] = useState<ActionItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
-    if (!restaurantId) return;
+  const yesterday = getYesterdayDateString();
+  const { data, isLoading: loading } = useSWR<{ actions: ActionItem[] }>(
+    restaurantId ? `/api/action-items?restaurant_id=${restaurantId}&date=${yesterday}` : null,
+  );
 
-    const fetchItems = async () => {
-      try {
-        const yesterday = getYesterdayDateString();
-        const response = await fetch(
-          getApiUrl(`api/action-items?restaurant_id=${restaurantId}&date=${yesterday}`),
-          { headers: getAuthHeaders() },
-        );
-        if (response.ok) {
-          const { actions } = await response.json();
-          // Only show pending/acknowledged items (not resolved/dismissed)
-          const pending = (actions || []).filter(
-            (a: ActionItem) => a.status === 'pending' || a.status === 'acknowledged',
-          );
-          setItems(pending);
-        }
-      } catch {
-        // Silently ignore
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchItems();
-  }, [restaurantId]);
+  const items = useMemo(() => {
+    if (!data?.actions) return [];
+    return data.actions.filter(
+      (a: ActionItem) => a.status === 'pending' || a.status === 'acknowledged',
+    );
+  }, [data]);
 
   if (loading) {
     return (

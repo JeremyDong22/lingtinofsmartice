@@ -2,9 +2,8 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getApiUrl } from '@/lib/api';
-import { getAuthHeaders } from '@/contexts/AuthContext';
+import { useState } from 'react';
+import useSWR from 'swr';
 
 interface AgendaItem {
   category: string;
@@ -42,32 +41,13 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function MeetingAgendaCard({ restaurantId }: MeetingAgendaCardProps) {
-  const [summary, setSummary] = useState<DailySummary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
-    if (!restaurantId) return;
+  const { data, isLoading: loading } = useSWR<{ summary: DailySummary }>(
+    restaurantId ? `/api/daily-summary?restaurant_id=${restaurantId}` : null,
+  );
 
-    const fetchSummary = async () => {
-      try {
-        const response = await fetch(
-          getApiUrl(`api/daily-summary?restaurant_id=${restaurantId}`),
-          { headers: getAuthHeaders() },
-        );
-        if (response.ok) {
-          const { summary: data } = await response.json();
-          setSummary(data);
-        }
-      } catch {
-        // Silently ignore — card just won't show
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSummary();
-  }, [restaurantId]);
+  const summary = data?.summary ?? null;
 
   if (loading) {
     return (
