@@ -10,6 +10,7 @@
 ## [2.1.3] - 2026-03-03
 
 ### 优化 (Changed)
+- **AI 模型切回 DeepSeek V3** — MiniMax M2.5 长 prompt TTFB 过高（16s），切回 `deepseek/deepseek-chat-v3-0324`（TTFB ~3s）
 - **AI 智库汇报真流式** — 汇报生成从非流式（等 15-40 秒一次性返回）改为真实 SSE 流式（2-4 秒首字出现），OpenRouter `stream: true` 逐 token 转发给前端
 - **汇报 prompt 瘦身** — 店长差评查询移除 feedbacks JSONB（单行 2-5KB），改用 ai_summary + sentiment_score（~50 字），prompt token 量减半
 - **feedbacks GIN 索引** — `lingtin_visit_records.feedbacks` 新增 GIN 索引，加速管理端/厨师长端 `jsonb_array_elements` 查询
