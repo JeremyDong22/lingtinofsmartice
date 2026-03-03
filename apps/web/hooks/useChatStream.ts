@@ -1,4 +1,5 @@
 // Chat Stream Hook - Handle streaming chat responses with localStorage persistence
+// v3.3 - Version-gated cache: clear stale messages on app update (fixes PWA stuck)
 // v3.2 - localStorage + cross-day auto-clear (fixes PWA reopen re-generation)
 // v3.1 - Streaming timeout + reader error recovery (fixes "正在思考" stuck forever)
 // v3.0 - Added hideUserMessage option, role-based STORAGE_KEY, removed static welcome message
@@ -6,6 +7,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getAuthHeaders, useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
+import { APP_VERSION } from '@/components/layout/UpdatePrompt';
 
 export interface Message {
   id: string;
@@ -43,15 +45,15 @@ function getTodayDate(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
 }
 
-// Load messages from localStorage (cross-day auto-clear)
+// Load messages from localStorage (cross-day + version auto-clear)
 function getStoredMessages(storageKey: string): Message[] {
   if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored) {
-      const parsed = JSON.parse(stored) as { date: string; messages: Message[] };
-      // Cross-day: discard stale messages so briefing regenerates
-      if (parsed.date !== getTodayDate()) {
+      const parsed = JSON.parse(stored) as { date: string; version?: string; messages: Message[] };
+      // Cross-day or version change: discard stale messages so briefing regenerates
+      if (parsed.date !== getTodayDate() || parsed.version !== APP_VERSION) {
         localStorage.removeItem(storageKey);
         return [];
       }
@@ -67,14 +69,14 @@ function getStoredMessages(storageKey: string): Message[] {
 // Max messages to persist (prevents unbounded growth)
 const MAX_PERSISTED_MESSAGES = 100;
 
-// Save messages to localStorage with today's date
+// Save messages to localStorage with today's date and app version
 function saveMessages(messages: Message[], storageKey: string) {
   if (typeof window === 'undefined') return;
   // Keep only the latest messages to limit storage usage
   const trimmed = messages.length > MAX_PERSISTED_MESSAGES
     ? messages.slice(-MAX_PERSISTED_MESSAGES)
     : messages;
-  const payload = JSON.stringify({ date: getTodayDate(), messages: trimmed });
+  const payload = JSON.stringify({ date: getTodayDate(), version: APP_VERSION, messages: trimmed });
   try {
     localStorage.setItem(storageKey, payload);
   } catch (e) {

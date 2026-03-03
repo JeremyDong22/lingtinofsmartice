@@ -57,6 +57,7 @@ function ChatContent({ config }: ChatPageProps) {
     isLoading,
     isInitialized,
     messageCount: messages.length,
+    messages,
   });
 
   // All messages are visible (briefing triggers use hideUserMessage, so they're never added)
