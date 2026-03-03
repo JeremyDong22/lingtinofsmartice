@@ -4,8 +4,6 @@
 'use client';
 
 import useSWR from 'swr';
-import { getApiUrl } from '@/lib/api';
-import { getAuthHeaders } from '@/contexts/AuthContext';
 
 interface MotivationStats {
   total_visits: number;
@@ -79,9 +77,6 @@ function getDailyGreeting(): string {
   return GREETINGS[dayOfYear % GREETINGS.length];
 }
 
-const fetcher = (url: string) =>
-  fetch(getApiUrl(url), { headers: getAuthHeaders() }).then(r => r.json());
-
 interface MotivationBannerProps {
   restaurantId: string | undefined;
   userName?: string;
@@ -89,9 +84,8 @@ interface MotivationBannerProps {
 
 export function MotivationBanner({ restaurantId, userName }: MotivationBannerProps) {
   const { data } = useSWR<MotivationStats>(
-    restaurantId ? `api/dashboard/motivation-stats?restaurant_id=${restaurantId}` : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 300000 }, // cache 5 min
+    restaurantId ? `/api/dashboard/motivation-stats?restaurant_id=${restaurantId}` : null,
+    { dedupingInterval: 300000 }, // cache 5 min, uses global fetcher + localStorage persistence
   );
 
   const greeting = getDailyGreeting();

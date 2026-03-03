@@ -1,4 +1,5 @@
-// Chat Stream Hook - Handle streaming chat responses with session persistence
+// Chat Stream Hook - Handle streaming chat responses with localStorage persistence
+// v3.2 - localStorage + cross-day auto-clear (fixes PWA reopen re-generation)
 // v3.1 - Streaming timeout + reader error recovery (fixes "正在思考" stuck forever)
 // v3.0 - Added hideUserMessage option, role-based STORAGE_KEY, removed static welcome message
 
@@ -37,15 +38,25 @@ function getStorageKey(roleCode?: string): string {
   return `lingtin_chat_${roleCode || 'default'}`;
 }
 
-// Load messages from sessionStorage
+// Get today's date string in YYYY-MM-DD (China time)
+function getTodayDate(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+}
+
+// Load messages from localStorage (cross-day auto-clear)
 function getStoredMessages(storageKey: string): Message[] {
   if (typeof window === 'undefined') return [];
   try {
-    const stored = sessionStorage.getItem(storageKey);
+    const stored = localStorage.getItem(storageKey);
     if (stored) {
-      const messages = JSON.parse(stored) as Message[];
+      const parsed = JSON.parse(stored) as { date: string; messages: Message[] };
+      // Cross-day: discard stale messages so briefing regenerates
+      if (parsed.date !== getTodayDate()) {
+        localStorage.removeItem(storageKey);
+        return [];
+      }
       // Clear any streaming state from previous session
-      return messages.map(msg => ({ ...msg, isStreaming: false }));
+      return parsed.messages.map(msg => ({ ...msg, isStreaming: false }));
     }
     return [];
   } catch {
@@ -53,13 +64,56 @@ function getStoredMessages(storageKey: string): Message[] {
   }
 }
 
-// Save messages to sessionStorage
+// Max messages to persist (prevents unbounded growth)
+const MAX_PERSISTED_MESSAGES = 100;
+
+// Save messages to localStorage with today's date
 function saveMessages(messages: Message[], storageKey: string) {
   if (typeof window === 'undefined') return;
+  // Keep only the latest messages to limit storage usage
+  const trimmed = messages.length > MAX_PERSISTED_MESSAGES
+    ? messages.slice(-MAX_PERSISTED_MESSAGES)
+    : messages;
+  const payload = JSON.stringify({ date: getTodayDate(), messages: trimmed });
   try {
-    sessionStorage.setItem(storageKey, JSON.stringify(messages));
-  } catch {
-    // Ignore storage errors
+    localStorage.setItem(storageKey, payload);
+  } catch (e) {
+    // QuotaExceededError: clear stale lingtin keys and retry once
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      clearStaleStorage();
+      try {
+        localStorage.setItem(storageKey, payload);
+      } catch {
+        // Still full — give up silently, data will regenerate on next visit
+      }
+    }
+  }
+}
+
+// Remove expired lingtin_* keys to free space when quota is exceeded
+function clearStaleStorage() {
+  const today = getTodayDate();
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith('lingtin_chat_') && key !== 'lingtin-swr-cache') continue;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      // Chat keys have { date, messages }; SWR cache date tracked separately
+      if (parsed.date && parsed.date !== today) {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // Corrupt entry — safe to remove
+      if (key) localStorage.removeItem(key);
+    }
+  }
+  // Also clear SWR cache if its date is stale
+  const swrDate = localStorage.getItem('lingtin-swr-cache-date');
+  if (swrDate && swrDate !== today) {
+    localStorage.removeItem('lingtin-swr-cache');
+    localStorage.removeItem('lingtin-swr-cache-date');
   }
 }
 

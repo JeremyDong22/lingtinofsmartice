@@ -1,4 +1,5 @@
 // SWR Provider - Global data fetching configuration with localStorage persistence
+// v1.4 - Cache: disable revalidateOnFocus, 30s periodic sync, 2MB limit, cross-day expiry
 // v1.3 - Added: Auto-logout on 401 (expired token) for all API calls
 
 'use client';
@@ -9,9 +10,68 @@ import { getApiUrl } from '@/lib/api';
 
 // Cache key for localStorage
 const CACHE_KEY = 'lingtin-swr-cache';
+const CACHE_DATE_KEY = 'lingtin-swr-cache-date';
+const MAX_CACHE_BYTES = 2 * 1024 * 1024; // 2MB
 
 // SWR Cache type
 type SWRCache = Cache<State<unknown, unknown>>;
+
+// API path whitelist for cache persistence
+function isCacheableKey(key: string): boolean {
+  return key.includes('/api/dashboard/') || key.includes('/api/audio/') ||
+    key.includes('/api/action-items') || key.includes('/api/meeting/') ||
+    key.includes('/api/daily-summary') || key.includes('/api/feedback/') ||
+    key.includes('/api/question-templates');
+}
+
+// Get today's date string in YYYY-MM-DD (China time)
+function getTodayDate(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+}
+
+// Persist cache to localStorage (shared by beforeunload + periodic sync)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function persistCache(map: Map<string, any>) {
+  const entries = Array.from(map.entries()).filter(([key]) => isCacheableKey(key));
+  let json = JSON.stringify(entries);
+  // Enforce 2MB size limit — drop oldest entries until it fits
+  if (json.length > MAX_CACHE_BYTES) {
+    const trimmed = entries.slice(-Math.floor(entries.length / 2));
+    json = JSON.stringify(trimmed);
+  }
+  try {
+    localStorage.setItem(CACHE_KEY, json);
+    localStorage.setItem(CACHE_DATE_KEY, getTodayDate());
+  } catch (e) {
+    // QuotaExceededError: clear stale chat keys and retry once
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      clearStaleChatKeys();
+      try {
+        localStorage.setItem(CACHE_KEY, json);
+        localStorage.setItem(CACHE_DATE_KEY, getTodayDate());
+      } catch {
+        // Still full — give up, cache will rebuild from API on next load
+      }
+    }
+  }
+}
+
+// Remove expired lingtin_chat_* keys to free space
+function clearStaleChatKeys() {
+  const today = getTodayDate();
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith('lingtin_chat_')) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || '');
+      if (parsed.date && parsed.date !== today) {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      if (key) localStorage.removeItem(key);
+    }
+  }
+}
 
 // Create localStorage-based cache provider for SWR persistence
 function createLocalStorageProvider(): SWRCache {
@@ -19,34 +79,31 @@ function createLocalStorageProvider(): SWRCache {
   let cachedData: [string, any][] = [];
 
   if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem(CACHE_KEY);
-      if (stored) {
-        cachedData = JSON.parse(stored);
+    // Cross-day: discard stale cache
+    const cachedDate = localStorage.getItem(CACHE_DATE_KEY);
+    if (cachedDate && cachedDate !== getTodayDate()) {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(CACHE_DATE_KEY);
+    } else {
+      try {
+        const stored = localStorage.getItem(CACHE_KEY);
+        if (stored) {
+          cachedData = JSON.parse(stored);
+        }
+      } catch {
+        // Ignore parse errors, start fresh
       }
-    } catch {
-      // Ignore parse errors, start fresh
     }
   }
 
   const map = new Map(cachedData);
 
-  // Save to localStorage before page unload
   if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', () => {
-      try {
-        const entries = Array.from(map.entries());
-        // Only cache dashboard-related data, limit size
-        const filteredEntries = entries.filter(([key]) =>
-          key.includes('/api/dashboard/') || key.includes('/api/audio/') ||
-          key.includes('/api/action-items') || key.includes('/api/meeting/') ||
-          key.includes('/api/daily-summary') || key.includes('/api/feedback/')
-        ).slice(0, 50);
-        localStorage.setItem(CACHE_KEY, JSON.stringify(filteredEntries));
-      } catch {
-        // Ignore storage errors
-      }
-    });
+    // Save on page unload (works for normal tab close)
+    window.addEventListener('beforeunload', () => persistCache(map));
+
+    // Periodic sync every 30s (covers PWA being killed without beforeunload)
+    setInterval(() => persistCache(map), 30_000);
   }
 
   return map as SWRCache;
@@ -120,10 +177,10 @@ export function SWRProvider({ children }: SWRProviderProps) {
         provider: () => provider,
         fetcher,
         // Stale-while-revalidate: show cached data immediately, fetch in background
-        revalidateOnFocus: true,
+        revalidateOnFocus: false,
         revalidateOnReconnect: true,
-        // Deduplicate requests within 2 seconds
-        dedupingInterval: 2000,
+        // Deduplicate requests within 1 minute (prevents burst requests on navigation)
+        dedupingInterval: 60000,
         // Keep previous data while loading new data (smooth transitions)
         keepPreviousData: true,
         // Retry on error

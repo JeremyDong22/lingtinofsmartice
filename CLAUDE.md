@@ -87,9 +87,9 @@ supabase start        # 启动本地 Supabase (localhost:54321)
 | 优先级 | 债务 | 描述 | 状态 |
 |--------|------|------|------|
 | 🔴 高 | DashScope Paraformer-v2 未开通 | 当前 `DASHSCOPE_API_KEY` 存在但 Paraformer 服务未激活，每次都 fallback 到讯飞 | 待解决：让朋友在 DashScope 控制台开通 Paraformer-v2 服务 |
-| 🔴 高 | 讯飞 11203 license 失败 | 方言大模型 license 校验失败，空音频时 STT 完全不可用 | 待解决：去讯飞控制台检查方言大模型开通/计费状态 |
+| ✅ | 讯飞 11201/11203 license 失败 | 方言大模型额度耗尽时 STT 不可用 | ✅ 已修复（8d4e65b）：自动 fallback 到中文识别大模型 |
 | 🟡 中 | STT 无健康检测 | 服务启动时不验证 STT 凭证是否有效，失败只在运行时暴露 | 待优化 |
-| 🟡 中 | 讯飞只有单一 fallback | DashScope 挂了只有讯飞一条路，无第二备用 | 待优化：可考虑加阿里云 NLS 或其他 STT 作为第三备用 |
+| 🟡 中 | ~~讯飞只有单一 fallback~~ | 讯飞现有双 fallback（方言→中文识别），DashScope 仍为首选 | ✅ 已改善（8d4e65b） |
 
 ### AI 分析层
 
@@ -196,7 +196,7 @@ May discard:
 ```
 1. 预置: mt_dish_sales → lingtin_dishname_view (菜品字典)
 2. 采集: 店长录音 + 桌号 → Supabase Storage → lingtin_visit_records
-3. 处理: DashScope STT(讯飞回退) → 清洗 → 自动打标 → visit_records + dish_mentions
+3. 处理: DashScope STT(讯飞回退) → 清洗 → 自动打标 → 画像提取(customer_source + visit_frequency) → visit_records
 4. 展示: 看板(visit_records + table_sessions) / 问答(Text-to-SQL)
 5. 行动: AI 负面反馈 → 改善建议(action_items) → 店长处理
 ```
@@ -206,6 +206,7 @@ May discard:
 核心表：`lingtin_visit_records`、`lingtin_dish_mentions`（废弃，数据已由 feedbacks JSONB 替代）、`lingtin_table_sessions`、`lingtin_action_items`、`lingtin_meeting_records`、`lingtin_question_templates`、`lingtin_product_feedback`
 只读引用：`master_restaurant`、`master_employee`、`master_region`、`mt_dish_sales`
 视图：`lingtin_dishname_view`
+- **visit_records 新增字段（v2.1.0）** — `customer_source VARCHAR(50)`（来源渠道，AI 提取）、`visit_frequency VARCHAR(20)`（到店频次：first/repeat/regular/unknown）
 
 ```
 master_region (1)     ──< master_restaurant (N)
@@ -239,11 +240,8 @@ master_employee (1)   ──< visit_records (N)
 
 | 任务 | 分支 | 状态 | 关键笔记 |
 |------|------|------|----------|
-| v2.0.4 厨师长会议页折叠+总览修复 | fix/chef-meetings-accordion | ✅ 已合并 | PR #41。待办按日折叠手风琴 + isKitchenRelevant 过滤增强 + briefing 对象安全渲染 |
-| v2.0.3 H-3 宣纸素墨配色 | feat/h3-color-scheme | ✅ 已合并 | PR #40 |
-| v2.0.2 版本更新指南 | — | ✅ 已合并 | PR #39 |
-| v2.0.1 总览崩溃+洞察重设计 | — | ✅ 已合并 | PR #36 |
-| v2.0.0 管理闭环升级 | — | ✅ 已合并 | PR #34 |
+| v2.1.0 客户画像提取 | — | ✅ 已合并 | PR #46。新增 customer_source + visit_frequency 字段，画像聚合 API，管理端画像 Tab |
 | 后台任务：重跑缺 feedbacks 的记录 | — | ⏸️ 暂停 | 剩余 **1247 条**（2026-02-28 查）。用 `only_missing_feedbacks: true` + cutoff `2026-03-01` 分批重跑。**检查方法**：`SELECT COUNT(*) FROM lingtin_visit_records WHERE status='processed' AND (feedbacks IS NULL OR feedbacks::text='[]' OR feedbacks::text='null') AND raw_transcript IS NOT NULL AND LENGTH(raw_transcript) > 10` |
+| 后台任务：重跑缺画像的记录 | — | 待评估 | `only_missing_profile: true` 可过滤已有 customer_source/visit_frequency 的记录，避免重跑全量 |
 | 本地 .env service key 无效 | — | 待修复 | `apps/api/.env` 中 `SUPABASE_SERVICE_KEY` 无效。线上 Zeabur 有正确 key 所以生产正常 |
 | 本地测试局限 | — | 已知问题 | `pnpm dev` 前端连线上 API，本地后端因 service key 无效运行在 MOCK MODE |
