@@ -132,6 +132,15 @@ export class AudioController {
     }
   }
 
+  // GET /api/audio/stt-health - Diagnose STT service connectivity
+  @Get('stt-health')
+  async sttHealth() {
+    this.logger.log(`▶ GET /audio/stt-health`);
+    const dashscope = await this.dashScopeStt.healthCheck();
+    const xunfei = { configured: !!(process.env.XUNFEI_APP_ID && process.env.XUNFEI_API_KEY) };
+    return { dashscope, xunfei };
+  }
+
   // GET /api/audio/status/:visit_id
   @Get('status/:visitId')
   async getStatus(@Param('visitId') visitId: string) {

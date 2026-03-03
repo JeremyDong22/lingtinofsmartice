@@ -54,6 +54,63 @@ export class DashScopeSttService {
   }
 
   /**
+   * Quick connectivity check: submit a minimal request to DashScope
+   * Returns diagnostic info about API reachability
+   */
+  async healthCheck(): Promise<{
+    configured: boolean;
+    apiKeyPrefix: string;
+    vocabularyId: string;
+    reachable: boolean;
+    statusCode?: number;
+    error?: string;
+    responsePreview?: string;
+  }> {
+    const apiKey = process.env.DASHSCOPE_API_KEY || '';
+    const vocabularyId = process.env.DASHSCOPE_VOCABULARY_ID || '';
+
+    if (!apiKey) {
+      return { configured: false, apiKeyPrefix: '', vocabularyId, reachable: false, error: 'No API key' };
+    }
+
+    try {
+      const response = await fetch(DASHSCOPE_SUBMIT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'X-DashScope-Async': 'enable',
+        },
+        body: JSON.stringify({
+          model: 'paraformer-v2',
+          input: { file_urls: ['https://example.com/test.wav'] },
+          parameters: { language_hints: ['zh'] },
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      const text = await response.text();
+      return {
+        configured: true,
+        apiKeyPrefix: `${apiKey.slice(0, 8)}...`,
+        vocabularyId,
+        reachable: true,
+        statusCode: response.status,
+        responsePreview: text.slice(0, 300),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        configured: true,
+        apiKeyPrefix: `${apiKey.slice(0, 8)}...`,
+        vocabularyId,
+        reachable: false,
+        error: msg,
+      };
+    }
+  }
+
+  /**
    * Transcribe audio using DashScope Paraformer-v2
    * @param audioUrl Public URL of the audio file (Supabase Storage)
    * @param speakerCount Expected number of speakers (2 for table visit, 4 for meeting)
