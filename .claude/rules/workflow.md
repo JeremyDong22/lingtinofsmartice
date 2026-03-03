@@ -28,9 +28,15 @@ curl -s -X POST "https://api.supabase.com/v1/projects/wdpeoyugsxqnpwwtkqsl/datab
 
 ## 发布流程
 
-代码改动 + 构建通过 → **提示用户 `pnpm dev` 本地测试** → 用户确认无误 → commit + push → PR → review → merge → **`zeabur service redeploy --id 697a6376f2339c9e766cb99d -y -i=false`**（Cloudflare 前端自动部署）
+代码改动 → **`/simplify` 自动审查修复**（typo 级小修除外）→ 构建通过 → **提示用户 `pnpm dev` 本地测试** → 用户确认无误 → commit + push → PR → review → merge → **`zeabur service redeploy --id 697a6376f2339c9e766cb99d -y -i=false`**（Cloudflare 前端自动部署）
 
 **提交前必须等用户确认**，用户说"OK/没问题/可以提交"后才执行。
+
+### `/simplify` 使用规范
+
+- **触发时机**：功能开发或 bug 修复完成后、build 之前
+- **跳过条件**：单行 typo 修复、纯文档变更、配置文件调整
+- **可选聚焦**：`/simplify focus on code reuse`、`/simplify focus on efficiency`
 
 ## Git 协作
 

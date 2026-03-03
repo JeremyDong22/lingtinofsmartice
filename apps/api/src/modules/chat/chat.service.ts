@@ -434,71 +434,78 @@ this.logger.log(`Messages in context: ${messages.length}`);
         this.logger.log(`[Briefing] Streamed response length: ${content.length}`);
       } else {
         // === Regular chat: agentic loop with tool calls ===
-        let iteration = 0;
-        const maxIterations = 5;
-        content = '';
+        // Heartbeat keeps connection alive during multi-tool queries (3 rounds × 15s = 45s)
+        const chatHeartbeat = this.startHeartbeat(res);
 
-        while (iteration < maxIterations) {
-          iteration++;
-          this.logger.log(`[Iteration ${iteration}] Calling Claude API...`);
+        try {
+          let iteration = 0;
+          const maxIterations = 5;
+          content = '';
 
-          const thinkingMessage = iteration === 1 ? '正在思考...' : '正在整理答案...';
-          res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingMessage })}\n\n`);
+          while (iteration < maxIterations) {
+            iteration++;
+            this.logger.log(`[Iteration ${iteration}] Calling Claude API...`);
 
-          const response = await this.callClaudeAPI(systemPrompt, messages);
+            const thinkingMessage = iteration === 1 ? '正在思考...' : '正在整理答案...';
+            res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingMessage })}\n\n`);
 
-          if (!response.choices || response.choices.length === 0) {
-            throw new Error('Empty response from API');
-          }
+            const response = await this.callClaudeAPI(systemPrompt, messages);
 
-          const assistantMessage = response.choices[0].message;
-          this.logger.log(`[Iteration ${iteration}] Has tool_calls: ${!!assistantMessage.tool_calls}`);
-
-          // Check if there are tool calls to process
-          if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-            this.logger.log(`[Iteration ${iteration}] Processing ${assistantMessage.tool_calls.length} tool calls`);
-
-            messages.push({
-              role: 'assistant',
-              content: assistantMessage.content || '',
-              tool_calls: assistantMessage.tool_calls,
-            });
-
-            for (const toolCall of assistantMessage.tool_calls) {
-              let thinkingStatus = '正在查询数据...';
-              try {
-                const args = JSON.parse(toolCall.function.arguments);
-                if (args.purpose) {
-                  thinkingStatus = `正在${args.purpose.slice(0, 20)}...`;
-                }
-              } catch {
-                // Use default thinking status
-              }
-
-              res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingStatus })}\n\n`);
-
-              const result = await this.executeToolCall(toolCall, restaurantId, managedRestaurantIds);
-
-              messages.push({
-                role: 'tool',
-                tool_call_id: toolCall.id,
-                content: JSON.stringify(result),
-              });
-
-              res.write(`data: ${JSON.stringify({
-                type: 'tool_use',
-                tool: toolCall.function.name,
-                status: 'completed'
-              })}\n\n`);
+            if (!response.choices || response.choices.length === 0) {
+              throw new Error('Empty response from API');
             }
 
-            continue;
-          }
+            const assistantMessage = response.choices[0].message;
+            this.logger.log(`[Iteration ${iteration}] Has tool_calls: ${!!assistantMessage.tool_calls}`);
 
-          // No tool calls - final response
-          content = assistantMessage.content || '';
-          this.logger.log(`[Iteration ${iteration}] Final response length: ${content.length}`);
-          break;
+            // Check if there are tool calls to process
+            if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+              this.logger.log(`[Iteration ${iteration}] Processing ${assistantMessage.tool_calls.length} tool calls`);
+
+              messages.push({
+                role: 'assistant',
+                content: assistantMessage.content || '',
+                tool_calls: assistantMessage.tool_calls,
+              });
+
+              for (const toolCall of assistantMessage.tool_calls) {
+                let thinkingStatus = '正在查询数据...';
+                try {
+                  const args = JSON.parse(toolCall.function.arguments);
+                  if (args.purpose) {
+                    thinkingStatus = `正在${args.purpose.slice(0, 20)}...`;
+                  }
+                } catch {
+                  // Use default thinking status
+                }
+
+                res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingStatus })}\n\n`);
+
+                const result = await this.executeToolCall(toolCall, restaurantId, managedRestaurantIds);
+
+                messages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify(result),
+                });
+
+                res.write(`data: ${JSON.stringify({
+                  type: 'tool_use',
+                  tool: toolCall.function.name,
+                  status: 'completed'
+                })}\n\n`);
+              }
+
+              continue;
+            }
+
+            // No tool calls - final response
+            content = assistantMessage.content || '';
+            this.logger.log(`[Iteration ${iteration}] Final response length: ${content.length}`);
+            break;
+          }
+        } finally {
+          clearInterval(chatHeartbeat);
         }
       }
 
@@ -629,9 +636,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
     const timeout = setTimeout(() => controller.abort(), 60_000);
 
     // Heartbeat as fallback — real text chunks will arrive every ~100ms
-    const heartbeat = setInterval(() => {
-      try { res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`); } catch {}
-    }, 10_000);
+    const heartbeat = this.startHeartbeat(res);
 
     let accumulated = '';
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -697,6 +702,13 @@ this.logger.log(`Messages in context: ${messages.length}`);
       clearTimeout(timeout);
       clearInterval(heartbeat);
     }
+  }
+
+  /** Send a periodic heartbeat to keep the SSE connection alive across proxies. */
+  private startHeartbeat(res: Response, intervalMs = 10_000): ReturnType<typeof setInterval> {
+    return setInterval(() => {
+      try { res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`); } catch {}
+    }, intervalMs);
   }
 
   /**
