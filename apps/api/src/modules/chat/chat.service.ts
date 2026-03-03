@@ -445,7 +445,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
           const thinkingMessage = iteration === 1 ? '正在思考...' : '正在整理答案...';
           res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingMessage })}\n\n`);
 
-          const response = await this.callClaudeAPI(systemPrompt, messages, false);
+          const response = await this.callClaudeAPI(systemPrompt, messages);
 
           if (!response.choices || response.choices.length === 0) {
             throw new Error('Empty response from API');
@@ -503,17 +503,16 @@ this.logger.log(`Messages in context: ${messages.length}`);
       }
 
       // Guard: detect gibberish (model hallucination) — if <15% Chinese chars, replace with friendly message
+      // For briefing (already streamed), only log — cannot un-send streamed text.
+      // temperature: 0 makes gibberish extremely unlikely for briefing mode.
       if (content.length > 50) {
         const chineseChars = (content.match(/[\u4e00-\u9fff]/g) || []).length;
         const ratio = chineseChars / content.length;
         if (ratio < 0.15) {
           this.logger.warn(`[Guard] Gibberish detected: ${content.length} chars, ${(ratio * 100).toFixed(1)}% Chinese. First 100: ${content.slice(0, 100)}`);
-          const errorContent = '抱歉，AI 生成内容出现异常，请点击「清空对话」重新生成。';
-          if (isBriefing) {
-            // Briefing already streamed text — send error event so frontend replaces content
-            res.write(`data: ${JSON.stringify({ type: 'error', content: errorContent })}\n\n`);
+          if (!isBriefing) {
+            content = '抱歉，AI 生成内容出现异常，请点击「清空对话」重新生成。';
           }
-          content = errorContent;
         }
       }
 
@@ -550,7 +549,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
   /**
    * Call AI API via OpenRouter endpoint
    */
-  private async callClaudeAPI(systemPrompt: string, messages: ChatMessage[], isBriefing = false) {
+  private async callClaudeAPI(systemPrompt: string, messages: ChatMessage[]) {
     const apiKey = process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
@@ -559,28 +558,19 @@ this.logger.log(`Messages in context: ${messages.length}`);
 
     const requestBody: Record<string, any> = {
       model: 'minimax/minimax-m2.5',
-      max_tokens: isBriefing ? 3072 : 2048,
+      max_tokens: 2048,
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages,
       ],
+      tools: TOOLS,
+      tool_choice: 'auto',
     };
-
-    if (isBriefing) {
-      // Briefing: no tools (data is pre-fetched), temperature 0 for consistency
-      requestBody.temperature = 0;
-    } else {
-      // Regular chat: tools + auto selection
-      requestBody.tools = TOOLS;
-      requestBody.tool_choice = 'auto';
-    }
 
     this.logger.log(`Calling OpenRouter with ${messages.length} messages`);
 
-    // Timeout covers the entire request lifecycle: fetch + JSON parsing
-    const timeoutMs = isBriefing ? 90_000 : 60_000;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), 60_000);
 
     try {
       const response = await fetch(OPENROUTER_API_URL, {
@@ -644,6 +634,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
     }, 10_000);
 
     let accumulated = '';
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
     try {
       const response = await fetch(OPENROUTER_API_URL, {
@@ -661,7 +652,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
         throw new Error(`API error: ${response.status} - ${errorText}`);
       }
 
-      const reader = response.body?.getReader();
+      reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
       const decoder = new TextDecoder();
@@ -702,6 +693,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
       }
       throw err;
     } finally {
+      await reader?.cancel().catch(() => {});
       clearTimeout(timeout);
       clearInterval(heartbeat);
     }
