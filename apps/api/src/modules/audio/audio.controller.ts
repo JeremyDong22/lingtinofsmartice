@@ -23,6 +23,7 @@ import { AiProcessingService } from './ai-processing.service';
 import { DashScopeSttService } from './dashscope-stt.service';
 import { XunfeiSttService } from './xunfei-stt.service';
 import { SupabaseService } from '../../common/supabase/supabase.service';
+import { Public } from '../auth/public.decorator';
 
 // Multer config: 10MB max file size, memory storage
 const multerOptions = {
@@ -132,7 +133,8 @@ export class AudioController {
     }
   }
 
-  // GET /api/audio/stt-health - Diagnose STT service connectivity
+  // GET /api/audio/stt-health - Diagnose STT service connectivity (no auth)
+  @Public()
   @Get('stt-health')
   async sttHealth() {
     this.logger.log(`▶ GET /audio/stt-health`);
