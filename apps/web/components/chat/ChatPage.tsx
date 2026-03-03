@@ -3,7 +3,7 @@
 
 'use client';
 
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useChatStream } from '@/hooks/useChatStream';
 import { useDailyBriefing } from '@/hooks/useDailyBriefing';
@@ -63,10 +63,31 @@ function ChatContent({ config }: ChatPageProps) {
   // All messages are visible (briefing triggers use hideUserMessage, so they're never added)
   const visibleMessages = messages;
 
-  // Auto-scroll to bottom when new messages arrive
+  // Track whether any message is currently streaming
+  const isStreaming = messages.some(m => m.isStreaming);
+
+  // Throttled scroll: during streaming use rAF + 150ms throttle with instant scroll,
+  // after streaming finishes use smooth scroll once
+  const lastScrollRef = useRef(0);
+  const rafRef = useRef<number>(0);
+
+  const scrollToBottom = useCallback((smooth: boolean) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (isStreaming) {
+      const now = Date.now();
+      if (now - lastScrollRef.current < 150) return;
+      lastScrollRef.current = now;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => scrollToBottom(false));
+    } else {
+      // Stream just ended or new user message — smooth scroll once
+      scrollToBottom(true);
+    }
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [messages, isStreaming, scrollToBottom]);
 
   // Handle pre-filled question from URL query parameter
   useEffect(() => {

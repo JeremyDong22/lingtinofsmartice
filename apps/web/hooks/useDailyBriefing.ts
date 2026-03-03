@@ -1,10 +1,14 @@
 // Daily Briefing Hook - Auto-trigger daily AI briefing on first visit
+// v1.4 - Cooldown: 5-min sessionStorage guard prevents rapid retries on backend failure
 // v1.3 - Also re-trigger if cached messages are all errors/empty (fixes PWA stuck)
 // v1.2 - Return reset() so clearMessages can re-trigger briefing
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Message, SendMessageOptions } from './useChatStream';
+
+const COOLDOWN_KEY = 'lingtin_briefing_cooldown';
+const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
 interface UseDailyBriefingOptions {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
@@ -36,13 +40,22 @@ export function useDailyBriefing({
       if (hasValidAssistant) return;
     }
 
+    // Cooldown: don't retry within 5 minutes of a previous attempt (survives page refresh)
+    const lastAttempt = sessionStorage.getItem(COOLDOWN_KEY);
+    if (lastAttempt && Date.now() - Number(lastAttempt) < COOLDOWN_MS) {
+      return;
+    }
+
     hasSent.current = true;
+    sessionStorage.setItem(COOLDOWN_KEY, String(Date.now()));
     sendMessage('__DAILY_BRIEFING__', { hideUserMessage: true });
   }, [isInitialized, isLoading, user, messageCount, messages, sendMessage]);
 
   // Reset so next render with messageCount=0 will re-trigger briefing
+  // Also clears cooldown so user-initiated "清空对话" immediately retries
   const reset = useCallback(() => {
     hasSent.current = false;
+    sessionStorage.removeItem(COOLDOWN_KEY);
   }, []);
 
   return { reset };

@@ -93,24 +93,31 @@ function saveMessages(messages: Message[], storageKey: string) {
 }
 
 // Remove expired lingtin_* keys to free space when quota is exceeded
+// Two-pass: collect keys first, then delete (avoids index skipping during iteration)
 function clearStaleStorage() {
   const today = getTodayDate();
-  for (let i = localStorage.length - 1; i >= 0; i--) {
+  const keysToRemove: string[] = [];
+
+  for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key?.startsWith('lingtin_chat_') && key !== 'lingtin-swr-cache') continue;
     try {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       const parsed = JSON.parse(raw);
-      // Chat keys have { date, messages }; SWR cache date tracked separately
       if (parsed.date && parsed.date !== today) {
-        localStorage.removeItem(key);
+        keysToRemove.push(key);
       }
     } catch {
       // Corrupt entry — safe to remove
-      if (key) localStorage.removeItem(key);
+      if (key) keysToRemove.push(key);
     }
   }
+
+  for (const key of keysToRemove) {
+    localStorage.removeItem(key);
+  }
+
   // Also clear SWR cache if its date is stale
   const swrDate = localStorage.getItem('lingtin-swr-cache-date');
   if (swrDate && swrDate !== today) {
@@ -125,6 +132,8 @@ export function useChatStream(): UseChatStreamReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Track loading state in ref for visibility handler (avoids stale closure)
+  const isLoadingRef = useRef(false);
   // Use ref to always get latest messages in callbacks (fixes stale closure bug)
   const messagesRef = useRef<Message[]>(messages);
 
@@ -136,10 +145,24 @@ export function useChatStream(): UseChatStreamReturn {
   const employeeId = user?.id;
   const storageKey = getStorageKey(roleCode);
 
-  // Keep messagesRef in sync with messages state
+  // Keep refs in sync with state
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+  // Abort on component unmount or PWA going to background
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && isLoadingRef.current) {
+        abortControllerRef.current?.abort();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Component unmount: abort any in-flight request
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // Load messages from sessionStorage on mount
   useEffect(() => {
@@ -190,6 +213,7 @@ export function useChatStream(): UseChatStreamReturn {
     }
 
     setIsLoading(true);
+    isLoadingRef.current = true;
     setError(null);
 
     // Add empty assistant message for streaming
@@ -355,6 +379,7 @@ export function useChatStream(): UseChatStreamReturn {
       ));
     } finally {
       setIsLoading(false);
+      isLoadingRef.current = false;
       abortControllerRef.current = null;
     }
   }, [isLoading, restaurantId, roleCode, userName, employeeId]);
@@ -368,6 +393,7 @@ export function useChatStream(): UseChatStreamReturn {
     setMessages([]);
     setError(null);
     setIsLoading(false);
+    isLoadingRef.current = false;
   }, []);
 
   // Stop ongoing request without clearing messages
@@ -383,6 +409,7 @@ export function useChatStream(): UseChatStreamReturn {
         : msg
     ));
     setIsLoading(false);
+    isLoadingRef.current = false;
   }, []);
 
   // Retry a failed message - removes the error message and its user question, then resends
