@@ -22,7 +22,7 @@
 
 | 优先级 | 债务 | 状态 |
 |--------|------|------|
-| 🔴 高 | qwen-turbo 对话 agentic 能力极差：SQL 泄露给用户、表名拼错（少下划线）、tool_call 结果原样输出 | 待替换：需换 agentic 能力强的模型（如 Claude/GPT-4o） |
+| 🔴 高 | 对话 agentic 能力极差：SQL 泄露给用户、表名拼错（少下划线）、tool_call 结果原样输出 | 待替换：换 agentic 能力强的模型。候选：Qwen3.5-Plus（指令遵循最强）> DeepSeek V3.2 > GLM-5（均在 OpenRouter 可用，支持 function calling） |
 | 🟡 中 | tool_call 输出未过滤，debug JSON 直接展示给用户 | 待修复：前端/后端需过滤 tool_call 原始内容 |
 
 ## 数据模型

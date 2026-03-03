@@ -103,9 +103,10 @@ master_employee (1)   ──< visit_records (N)
 | 环境 | 平台 | 域名 |
 |------|------|------|
 | 前端 | Cloudflare Pages | https://lt.smartice.ai |
-| 后端 | Zeabur | https://lingtinapi.preview.aliyun-zeabur.cn |
+| 后端 | Zeabur（阿里云，计划迁移新加坡） | https://lingtinapi.preview.aliyun-zeabur.cn |
 
 > 部署配置详见 @docs/DEPLOYMENT.md，工作流详见 `.claude/rules/workflow.md`
+> 服务器迁移计划：后端将从阿里云迁移到新加坡区域
 
 > 产品使用手册详见 @docs/user-guides/README.md
 

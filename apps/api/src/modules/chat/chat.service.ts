@@ -412,25 +412,36 @@ this.logger.log(`Messages in context: ${messages.length}`);
           const maxIterations = 5;
           content = '';
 
+          const chatStart = Date.now();
+
           while (iteration < maxIterations) {
             iteration++;
-            this.logger.log(`[Iteration ${iteration}] Calling Claude API...`);
+            const turnStart = Date.now();
+            this.logger.log(`[Chat Turn ${iteration}/${maxIterations}] Calling AI...`);
 
             const thinkingMessage = iteration === 1 ? '正在思考...' : '正在整理答案...';
             res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingMessage })}\n\n`);
 
+            const apiStart = Date.now();
             const response = await this.callClaudeAPI(systemPrompt, messages);
+            const apiMs = Date.now() - apiStart;
 
             if (!response.choices || response.choices.length === 0) {
               throw new Error('Empty response from API');
             }
 
             const assistantMessage = response.choices[0].message;
-            this.logger.log(`[Iteration ${iteration}] Has tool_calls: ${!!assistantMessage.tool_calls}`);
+            const usage = response.usage;
+            const tokenInfo = usage ? `prompt=${usage.prompt_tokens} comp=${usage.completion_tokens}` : 'no usage';
+            this.logger.log(`[Chat Turn ${iteration}] AI responded in ${(apiMs / 1000).toFixed(1)}s | ${tokenInfo}`);
 
             // Check if there are tool calls to process
             if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-              this.logger.log(`[Iteration ${iteration}] Processing ${assistantMessage.tool_calls.length} tool calls`);
+              this.logger.log(`[Chat Turn ${iteration}] ${assistantMessage.tool_calls.length} tool call(s):`);
+
+              for (const tc of assistantMessage.tool_calls) {
+                this.logger.log(`  → ${tc.function.name}(${tc.function.arguments.slice(0, 200)})`);
+              }
 
               messages.push({
                 role: 'assistant',
@@ -451,12 +462,16 @@ this.logger.log(`Messages in context: ${messages.length}`);
 
                 res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingStatus })}\n\n`);
 
+                const toolStart = Date.now();
                 const result = await this.executeToolCall(toolCall, restaurantId, managedRestaurantIds);
+                const toolMs = Date.now() - toolStart;
+                const resultStr = JSON.stringify(result);
+                this.logger.log(`  ← ${toolCall.function.name} ${toolMs}ms | ${resultStr.length} chars`);
 
                 messages.push({
                   role: 'tool',
                   tool_call_id: toolCall.id,
-                  content: JSON.stringify(result),
+                  content: resultStr,
                 });
 
                 res.write(`data: ${JSON.stringify({
@@ -466,12 +481,15 @@ this.logger.log(`Messages in context: ${messages.length}`);
                 })}\n\n`);
               }
 
+              const turnMs = Date.now() - turnStart;
+              this.logger.log(`[Chat Turn ${iteration}] turn total: ${(turnMs / 1000).toFixed(1)}s`);
               continue;
             }
 
             // No tool calls - final response
             content = assistantMessage.content || '';
-            this.logger.log(`[Iteration ${iteration}] Final response length: ${content.length}`);
+            const totalMs = Date.now() - chatStart;
+            this.logger.log(`[Chat Done] ${iteration} turn(s) | total ${(totalMs / 1000).toFixed(1)}s | response ${content.length} chars`);
             break;
           }
         } finally {
@@ -538,7 +556,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
     }
 
     const requestBody: Record<string, any> = {
-      model: 'deepseek/deepseek-chat-v3-0324',
+      model: 'moonshotai/kimi-k2.5',
       max_tokens: 2048,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -548,7 +566,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
       tool_choice: 'auto',
     };
 
-    this.logger.log(`Calling OpenRouter with ${messages.length} messages`);
+    this.logger.log(`[OpenRouter] model=${requestBody.model} msgs=${messages.length} max_tokens=${requestBody.max_tokens}`);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60_000);

@@ -1,10 +1,10 @@
-// Chat Stream Hook - Handle streaming chat responses with localStorage persistence
+// Chat Stream Hook - Handle streaming chat with in-memory state persistence
+// v4.0 - Module-level store: chat state survives SPA navigation (unmount/remount)
+//        Fetch continues in background when user navigates away, results preserved on return
 // v3.3 - Version-gated cache: clear stale messages on app update (fixes PWA stuck)
 // v3.2 - localStorage + cross-day auto-clear (fixes PWA reopen re-generation)
-// v3.1 - Streaming timeout + reader error recovery (fixes "正在思考" stuck forever)
-// v3.0 - Added hideUserMessage option, role-based STORAGE_KEY, removed static welcome message
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { getAuthHeaders, useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
@@ -27,7 +27,7 @@ export interface SendMessageOptions {
 interface UseChatStreamReturn {
   messages: Message[];
   isLoading: boolean;
-  isInitialized: boolean;  // True when messages have been loaded from storage
+  isInitialized: boolean;
   error: string | null;
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
   retryMessage: (messageId: string) => Promise<void>;
@@ -35,29 +35,26 @@ interface UseChatStreamReturn {
   clearMessages: () => void;
 }
 
-// Build role-based storage key
+// === localStorage helpers ===
+
 function getStorageKey(roleCode?: string): string {
   return `lingtin_chat_${roleCode || 'default'}`;
 }
 
-// Get today's date string in YYYY-MM-DD (China time)
 function getTodayDate(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
 }
 
-// Load messages from localStorage (cross-day + version auto-clear)
 function getStoredMessages(storageKey: string): Message[] {
   if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       const parsed = JSON.parse(stored) as { date: string; version?: string; messages: Message[] };
-      // Cross-day or version change: discard stale messages so briefing regenerates
       if (parsed.date !== getTodayDate() || parsed.version !== APP_VERSION) {
         localStorage.removeItem(storageKey);
         return [];
       }
-      // Clear any streaming state from previous session
       return parsed.messages.map(msg => ({ ...msg, isStreaming: false }));
     }
     return [];
@@ -66,38 +63,29 @@ function getStoredMessages(storageKey: string): Message[] {
   }
 }
 
-// Max messages to persist (prevents unbounded growth)
 const MAX_PERSISTED_MESSAGES = 100;
 
-// Save messages to localStorage with today's date and app version
 function saveMessages(messages: Message[], storageKey: string) {
   if (typeof window === 'undefined') return;
-  // Keep only the latest messages to limit storage usage
   const trimmed = messages.length > MAX_PERSISTED_MESSAGES
     ? messages.slice(-MAX_PERSISTED_MESSAGES)
     : messages;
-  const payload = JSON.stringify({ date: getTodayDate(), version: APP_VERSION, messages: trimmed });
+  // Clean streaming flags before persisting
+  const cleaned = trimmed.map(m => ({ ...m, isStreaming: false, thinkingStatus: undefined }));
+  const payload = JSON.stringify({ date: getTodayDate(), version: APP_VERSION, messages: cleaned });
   try {
     localStorage.setItem(storageKey, payload);
   } catch (e) {
-    // QuotaExceededError: clear stale lingtin keys and retry once
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
       clearStaleStorage();
-      try {
-        localStorage.setItem(storageKey, payload);
-      } catch {
-        // Still full — give up silently, data will regenerate on next visit
-      }
+      try { localStorage.setItem(storageKey, payload); } catch { /* give up */ }
     }
   }
 }
 
-// Remove expired lingtin_* keys to free space when quota is exceeded
-// Two-pass: collect keys first, then delete (avoids index skipping during iteration)
 function clearStaleStorage() {
   const today = getTodayDate();
   const keysToRemove: string[] = [];
-
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key?.startsWith('lingtin_chat_') && key !== 'lingtin-swr-cache') continue;
@@ -105,20 +93,12 @@ function clearStaleStorage() {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       const parsed = JSON.parse(raw);
-      if (parsed.date && parsed.date !== today) {
-        keysToRemove.push(key);
-      }
+      if (parsed.date && parsed.date !== today) keysToRemove.push(key);
     } catch {
-      // Corrupt entry — safe to remove
       if (key) keysToRemove.push(key);
     }
   }
-
-  for (const key of keysToRemove) {
-    localStorage.removeItem(key);
-  }
-
-  // Also clear SWR cache if its date is stale
+  for (const key of keysToRemove) localStorage.removeItem(key);
   const swrDate = localStorage.getItem('lingtin-swr-cache-date');
   if (swrDate && swrDate !== today) {
     localStorage.removeItem('lingtin-swr-cache');
@@ -126,18 +106,67 @@ function clearStaleStorage() {
   }
 }
 
-export function useChatStream(): UseChatStreamReturn {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  // Track loading state in ref for visibility handler (avoids stale closure)
-  const isLoadingRef = useRef(false);
-  // Use ref to always get latest messages in callbacks (fixes stale closure bug)
-  const messagesRef = useRef<Message[]>(messages);
+// === Module-level chat store ===
+// State persists across component mount/unmount (SPA page navigation).
+// Lost only on full page refresh (falls back to localStorage).
 
-  // Get user's restaurant ID from auth context
+interface ChatStore {
+  messages: Message[];
+  isLoading: boolean;
+  error: string | null;
+  abortController: AbortController | null;
+  date: string; // auto-reset on new day
+}
+
+const stores = new Map<string, ChatStore>();
+
+// React setState setters — registered when component mounted, null when unmounted
+type ReactSetters = {
+  setMessages: (msgs: Message[]) => void;
+  setLoading: (v: boolean) => void;
+  setError: (v: string | null) => void;
+};
+const mountedSetters = new Map<string, ReactSetters | null>();
+
+// Get or create store for a storage key; auto-reset on new day
+function getStore(key: string): ChatStore {
+  const today = getTodayDate();
+  const existing = stores.get(key);
+  if (existing && existing.date === today) return existing;
+  // New day or first access — initialize from localStorage
+  const store: ChatStore = {
+    messages: getStoredMessages(key),
+    isLoading: false,
+    error: null,
+    abortController: null,
+    date: today,
+  };
+  stores.set(key, store);
+  return store;
+}
+
+// Update messages in module store + push to React if mounted
+function patchMessages(key: string, updater: (prev: Message[]) => Message[]) {
+  const s = getStore(key);
+  s.messages = updater(s.messages);
+  mountedSetters.get(key)?.setMessages(s.messages);
+}
+
+function patchLoading(key: string, v: boolean) {
+  const s = getStore(key);
+  s.isLoading = v;
+  mountedSetters.get(key)?.setLoading(v);
+}
+
+function patchError(key: string, v: string | null) {
+  const s = getStore(key);
+  s.error = v;
+  mountedSetters.get(key)?.setError(v);
+}
+
+// === Hook ===
+
+export function useChatStream(): UseChatStreamReturn {
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
   const roleCode = user?.roleCode;
@@ -145,314 +174,218 @@ export function useChatStream(): UseChatStreamReturn {
   const employeeId = user?.id;
   const storageKey = getStorageKey(roleCode);
 
-  // Keep refs in sync with state
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-  // Abort on component unmount or PWA going to background
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && isLoadingRef.current) {
-        abortControllerRef.current?.abort();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      // Component unmount: abort any in-flight request
-      abortControllerRef.current?.abort();
-    };
-  }, []);
+  // Initialize React state from module store (which reads localStorage on first access)
+  const store = getStore(storageKey);
+  const [messages, setMessagesLocal] = useState<Message[]>(store.messages);
+  const [isLoading, setIsLoadingLocal] = useState(store.isLoading);
+  const [error, setErrorLocal] = useState<string | null>(store.error);
 
-  // Load messages from sessionStorage on mount
+  // Register React setters on mount; sync latest store state (may have changed while unmounted)
   useEffect(() => {
-    const stored = getStoredMessages(storageKey);
-    setMessages(stored);
-    setIsInitialized(true);
+    mountedSetters.set(storageKey, {
+      setMessages: setMessagesLocal,
+      setLoading: setIsLoadingLocal,
+      setError: setErrorLocal,
+    });
+    const s = getStore(storageKey);
+    setMessagesLocal(s.messages);
+    setIsLoadingLocal(s.isLoading);
+    setErrorLocal(s.error);
+    return () => {
+      mountedSetters.set(storageKey, null);
+      // DON'T abort — let ongoing fetch continue updating the store
+    };
   }, [storageKey]);
 
-  // Save messages to localStorage when they change
-  // Skip saves while streaming — JSON.stringify + setItem blocks main thread per chunk.
-  // Persistence happens once when streaming ends (isStreaming flips to false).
+  // Persist to localStorage when messages settle (not streaming)
   useEffect(() => {
-    if (!isInitialized) return;
     const hasStreaming = messages.some(m => m.isStreaming);
     if (hasStreaming) return;
     saveMessages(messages, storageKey);
-  }, [messages, isInitialized, storageKey]);
+  }, [messages, storageKey]);
 
   const sendMessage = useCallback(async (content: string, options?: SendMessageOptions) => {
-    if (!content.trim() || isLoading) {
-      return;
-    }
-
+    if (!content.trim() || getStore(storageKey).isLoading) return;
     const { hideUserMessage = false } = options || {};
 
     // Cancel any ongoing request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    const s = getStore(storageKey);
+    if (s.abortController) s.abortController.abort();
 
-    // Build conversation history BEFORE adding new messages (to avoid async state issues)
-    // Include all previous messages plus the current user message
-    const previousMessages = messagesRef.current.filter(
-      msg => !msg.isStreaming && msg.content.trim()
-    );
-    const historyMessages = [
-      ...previousMessages.slice(-9).map(msg => ({ role: msg.role, content: msg.content })),
-      { role: 'user' as const, content }  // Include current message
+    // Build history from store (avoids stale React state closure)
+    const current = getStore(storageKey).messages;
+    const prev = current.filter(m => !m.isStreaming && m.content.trim());
+    const history = [
+      ...prev.slice(-9).map(m => ({ role: m.role, content: m.content })),
+      { role: 'user' as const, content },
     ];
 
-    const userMessageId = `user-${Date.now()}`;
-    const assistantMessageId = `assistant-${Date.now()}`;
+    const userMsgId = `user-${Date.now()}`;
+    const asstMsgId = `assistant-${Date.now()}`;
 
-    // Add user message (optionally hidden)
     if (!hideUserMessage) {
-      setMessages(prev => [...prev, {
-        id: userMessageId,
-        role: 'user',
-        content,
-      }]);
+      patchMessages(storageKey, p => [...p, { id: userMsgId, role: 'user' as const, content }]);
     }
-
-    setIsLoading(true);
-    isLoadingRef.current = true;
-    setError(null);
-
-    // Add empty assistant message for streaming
-    setMessages(prev => [...prev, {
-      id: assistantMessageId,
-      role: 'assistant',
-      content: '',
-      isStreaming: true,
+    patchLoading(storageKey, true);
+    patchError(storageKey, null);
+    patchMessages(storageKey, p => [...p, {
+      id: asstMsgId, role: 'assistant' as const, content: '', isStreaming: true,
     }]);
 
     let fullContent = '';
-    // rAF batching: accumulate text chunks and flush once per animation frame
-    // instead of triggering a React re-render for every single SSE token
     let flushRaf = 0;
-    const flushContent = () => {
+    const flush = () => {
       flushRaf = 0;
-      setMessages(prev => prev.map(msg =>
-        msg.id === assistantMessageId
-          ? { ...msg, content: fullContent, thinkingStatus: undefined }
-          : msg
+      patchMessages(storageKey, p => p.map(m =>
+        m.id === asstMsgId ? { ...m, content: fullContent, thinkingStatus: undefined } : m
       ));
     };
 
     try {
-      abortControllerRef.current = new AbortController();
+      const ctrl = new AbortController();
+      getStore(storageKey).abortController = ctrl;
 
       const response = await fetch(getApiUrl('api/chat/message'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           message: content,
           restaurant_id: restaurantId,
-          history: historyMessages,
+          history,
           role_code: roleCode,
           user_name: userName,
           employee_id: employeeId,
           managed_restaurant_ids: user?.managedRestaurantIds || null,
         }),
-        signal: abortControllerRef.current.signal,
+        signal: ctrl.signal,
       });
 
-      if (!response.ok) {
-        throw new Error('请求失败，请稍后重试');
-      }
+      if (!response.ok) throw new Error('请求失败，请稍后重试');
 
       const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('无法读取响应');
-      }
+      if (!reader) throw new Error('无法读取响应');
 
       const decoder = new TextDecoder();
-
-      // Streaming timeout: if no data for 60s, abort
-      const STREAM_TIMEOUT_MS = 60_000;
-      let streamTimer = setTimeout(() => {
-        abortControllerRef.current?.abort();
-      }, STREAM_TIMEOUT_MS);
-
-      const resetStreamTimer = () => {
-        clearTimeout(streamTimer);
-        streamTimer = setTimeout(() => {
-          abortControllerRef.current?.abort();
-        }, STREAM_TIMEOUT_MS);
+      const TIMEOUT_MS = 60_000;
+      let timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+      const resetTimer = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
       };
 
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          resetTimer();
 
-          resetStreamTimer();
+          for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+            if (data === '[DONE]') {
+              if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0; }
+              patchMessages(storageKey, p => p.map(m =>
+                m.id === asstMsgId
+                  ? { ...m, content: fullContent, isStreaming: false, thinkingStatus: undefined }
+                  : m
+              ));
+              continue;
+            }
 
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6).trim();
+            let parsed: { type: string; content?: string; tool?: string };
+            try { parsed = JSON.parse(data); } catch { continue; }
 
-              if (data === '[DONE]') {
-                // Cancel pending rAF and do a final synchronous flush + end streaming
-                if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0; }
-                setMessages(prev => prev.map(msg =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, content: fullContent, isStreaming: false, thinkingStatus: undefined }
-                    : msg
-                ));
-                continue;
-              }
+            if (parsed.type === 'heartbeat') continue;
 
-              let parsed: { type: string; content?: string; tool?: string };
-              try {
-                parsed = JSON.parse(data);
-              } catch {
-                // Skip invalid JSON lines
-                continue;
-              }
-
-              if (parsed.type === 'heartbeat') {
-                // Heartbeat keeps the stream alive; resetStreamTimer already called above
-                continue;
-              }
-
-              if (parsed.type === 'thinking') {
-                setMessages(prev => prev.map(msg =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, thinkingStatus: parsed.content }
-                    : msg
-                ));
-              } else if (parsed.type === 'tool_use') {
-                const toolName = parsed.tool === 'query_database' ? '查询数据库' : parsed.tool;
-                setMessages(prev => prev.map(msg =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, thinkingStatus: `正在${toolName}...` }
-                    : msg
-                ));
-              } else if (parsed.type === 'text') {
-                fullContent += parsed.content;
-                // Schedule a batched flush — multiple tokens within one frame get merged
-                if (!flushRaf) {
-                  flushRaf = requestAnimationFrame(flushContent);
-                }
-              } else if (parsed.type === 'error') {
-                throw new Error(parsed.content);
-              }
+            if (parsed.type === 'thinking') {
+              patchMessages(storageKey, p => p.map(m =>
+                m.id === asstMsgId ? { ...m, thinkingStatus: parsed.content } : m
+              ));
+            } else if (parsed.type === 'tool_use') {
+              const name = parsed.tool === 'query_database' ? '查询数据库' : parsed.tool;
+              patchMessages(storageKey, p => p.map(m =>
+                m.id === asstMsgId ? { ...m, thinkingStatus: `正在${name}...` } : m
+              ));
+            } else if (parsed.type === 'text') {
+              fullContent += parsed.content;
+              if (!flushRaf) flushRaf = requestAnimationFrame(flush);
+            } else if (parsed.type === 'error') {
+              throw new Error(parsed.content);
             }
           }
         }
       } finally {
-        clearTimeout(streamTimer);
+        clearTimeout(timer);
         if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0; }
       }
+
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        // Distinguish user-initiated stop (abortControllerRef already null) from timeout
-        if (abortControllerRef.current === null) {
-          // User pressed stop — handled by stopRequest()
-          return;
-        }
-        // Timeout — show friendly message with retry
+        // User pressed stop (abortController set to null by stopRequest)
+        if (getStore(storageKey).abortController === null) return;
+        // Timeout
         const timeoutMsg = '当前访问人数较多，请稍后重试';
-        setError(timeoutMsg);
-        setMessages(prev => prev.map(msg =>
-          msg.id === assistantMessageId
-            ? {
-                ...msg,
-                content: `抱歉，${timeoutMsg}`,
-                isStreaming: false,
-                isError: true,
-                thinkingStatus: undefined,
-                originalQuestion: content,
-              }
-            : msg
+        patchError(storageKey, timeoutMsg);
+        patchMessages(storageKey, p => p.map(m =>
+          m.id === asstMsgId
+            ? { ...m, content: `抱歉，${timeoutMsg}`, isStreaming: false, isError: true, thinkingStatus: undefined, originalQuestion: content }
+            : m
         ));
         return;
       }
 
-      const errorMessage = err instanceof Error ? err.message : '发生未知错误';
-      setError(errorMessage);
-
-      // Update assistant message with error and store original question for retry
-      setMessages(prev => prev.map(msg =>
-        msg.id === assistantMessageId
-          ? {
-              ...msg,
-              content: `抱歉，${errorMessage}`,
-              isStreaming: false,
-              isError: true,
-              thinkingStatus: undefined,
-              originalQuestion: content,
-            }
-          : msg
+      const errMsg = err instanceof Error ? err.message : '发生未知错误';
+      patchError(storageKey, errMsg);
+      patchMessages(storageKey, p => p.map(m =>
+        m.id === asstMsgId
+          ? { ...m, content: `抱歉，${errMsg}`, isStreaming: false, isError: true, thinkingStatus: undefined, originalQuestion: content }
+          : m
       ));
     } finally {
-      setIsLoading(false);
-      isLoadingRef.current = false;
-      abortControllerRef.current = null;
+      patchLoading(storageKey, false);
+      getStore(storageKey).abortController = null;
+      // Persist to localStorage (works even after component unmount)
+      saveMessages(getStore(storageKey).messages, storageKey);
     }
-  }, [isLoading, restaurantId, roleCode, userName, employeeId]);
+  }, [storageKey, restaurantId, roleCode, userName, employeeId, user?.managedRestaurantIds]);
 
   const clearMessages = useCallback(() => {
-    // Cancel any ongoing request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    const s = getStore(storageKey);
+    if (s.abortController) { s.abortController.abort(); s.abortController = null; }
+    patchMessages(storageKey, () => []);
+    patchError(storageKey, null);
+    patchLoading(storageKey, false);
+  }, [storageKey]);
 
-    setMessages([]);
-    setError(null);
-    setIsLoading(false);
-    isLoadingRef.current = false;
-  }, []);
-
-  // Stop ongoing request without clearing messages
   const stopRequest = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    // Mark any streaming message as stopped and clear thinking status
-    setMessages(prev => prev.map(msg =>
-      msg.isStreaming
-        ? { ...msg, isStreaming: false, thinkingStatus: undefined, isStopped: true, content: msg.content || '停止了思考。' }
-        : msg
+    const s = getStore(storageKey);
+    if (s.abortController) { s.abortController.abort(); s.abortController = null; }
+    patchMessages(storageKey, p => p.map(m =>
+      m.isStreaming
+        ? { ...m, isStreaming: false, thinkingStatus: undefined, isStopped: true, content: m.content || '停止了思考。' }
+        : m
     ));
-    setIsLoading(false);
-    isLoadingRef.current = false;
-  }, []);
+    patchLoading(storageKey, false);
+  }, [storageKey]);
 
-  // Retry a failed message - removes the error message and its user question, then resends
   const retryMessage = useCallback(async (messageId: string) => {
-    const errorMsg = messagesRef.current.find(m => m.id === messageId);
-    if (!errorMsg?.originalQuestion || isLoading) return;
-
+    const current = getStore(storageKey);
+    const errorMsg = current.messages.find(m => m.id === messageId);
+    if (!errorMsg?.originalQuestion || current.isLoading) return;
     const question = errorMsg.originalQuestion;
-
-    // Remove the failed assistant message and its preceding user message
-    setMessages(prev => {
-      const errorIndex = prev.findIndex(m => m.id === messageId);
-      if (errorIndex === -1) return prev;
-      // Remove both the user message (errorIndex - 1) and the error message (errorIndex)
-      return prev.filter((_, i) => i !== errorIndex && i !== errorIndex - 1);
+    patchMessages(storageKey, p => {
+      const idx = p.findIndex(m => m.id === messageId);
+      if (idx === -1) return p;
+      return p.filter((_, i) => i !== idx && i !== idx - 1);
     });
-
-    // Wait for state update, then resend
-    setTimeout(() => {
-      sendMessage(question);
-    }, 50);
-  }, [isLoading, sendMessage]);
+    setTimeout(() => sendMessage(question), 50);
+  }, [storageKey, sendMessage]);
 
   return {
     messages,
     isLoading,
-    isInitialized,
+    isInitialized: true,
     error,
     sendMessage,
     retryMessage,

@@ -1,5 +1,5 @@
 // Chef Layout - Layout with bottom navigation for head_chef role
-// Redirects non-head_chef users to their home page
+// v1.1 - Added usePrefetchData to warm SWR cache on app entry
 
 'use client';
 
@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChefBottomNav } from '@/components/layout/ChefBottomNav';
 import { WhatsNewModal } from '@/components/layout/WhatsNewModal';
+import { usePrefetchData } from '@/hooks/usePrefetchData';
 
 export default function ChefLayout({
   children,
@@ -29,6 +30,8 @@ export default function ChefLayout({
       }
     }
   }, [user, isLoading, router]);
+
+  usePrefetchData('chef');
 
   // Don't render chef pages for wrong role
   if (isLoading || !user || (user.roleCode !== 'head_chef' && user.roleCode !== 'chef')) {
