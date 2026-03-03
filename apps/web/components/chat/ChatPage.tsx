@@ -1,5 +1,5 @@
 // ChatPage - Unified chat page component for all roles
-// v1.0 - Shared by manager, admin, and chef with role-specific configuration
+// v1.1 - Added actionLinks: hardcoded quick-action buttons rendered below briefing message
 
 'use client';
 
@@ -17,6 +17,7 @@ export interface ChatPageConfig {
   placeholder: string;
   fallbackQuickQuestions: string[];
   chatBasePath: string; // For URL cleanup, e.g. '/chat', '/admin/chat'
+  actionLinks?: { label: string; path: string }[]; // Hardcoded quick-action buttons shown below briefing
 }
 
 interface ChatPageProps {
@@ -141,7 +142,11 @@ function ChatContent({ config }: ChatPageProps) {
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-        {visibleMessages.map((msg) => (
+        {visibleMessages.map((msg, msgIndex) => {
+          // First assistant message is the briefing — show action links below it
+          const isBriefing = msg.role === 'assistant' && msgIndex === visibleMessages.findIndex(m => m.role === 'assistant');
+
+          return (
           <div
             key={msg.id}
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -171,10 +176,26 @@ function ChatContent({ config }: ChatPageProps) {
               ) : msg.isStopped ? (
                 <div className="text-gray-500 text-sm">{msg.content}</div>
               ) : msg.content ? (
-                <MarkdownRenderer
-                  content={msg.content}
-                  onQuickQuestion={handleQuickQuestion}
-                />
+                <>
+                  <MarkdownRenderer
+                    content={msg.content}
+                    onQuickQuestion={handleQuickQuestion}
+                  />
+                  {/* Action links inside briefing bubble */}
+                  {isBriefing && !msg.isStreaming && config.actionLinks && config.actionLinks.length > 0 && (
+                    <div className="flex gap-2 flex-wrap mt-3 pt-3 border-t border-gray-100">
+                      {config.actionLinks.map((link) => (
+                        <button
+                          key={link.path}
+                          onClick={() => router.push(link.path)}
+                          className="lingtin-action-btn px-4 py-2 bg-primary-50 text-primary-700 border border-primary-200 rounded-xl text-sm font-medium hover:bg-primary-100 transition-colors"
+                        >
+                          {link.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : msg.isStreaming ? (
                 <ThinkingIndicator status="思考中" />
               ) : null}
@@ -183,7 +204,8 @@ function ChatContent({ config }: ChatPageProps) {
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         <div ref={messagesEndRef} />
       </div>

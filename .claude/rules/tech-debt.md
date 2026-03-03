@@ -6,8 +6,8 @@
 
 | 优先级 | 债务 | 状态 |
 |--------|------|------|
-| 🔴 高 | DashScope Paraformer-v2 未开通（每次 fallback 到讯飞） | 待解决：DashScope 控制台开通服务 |
-| 🟡 中 | STT 无健康检测（启动时不验证凭证） | 待优化 |
+| ✅ | DashScope Paraformer-v2 未开通（每次 fallback 到讯飞） | 已解决：DashScope 已集成为主 STT，讯飞为 fallback |
+| ✅ | STT 无健康检测（启动时不验证凭证） | 已解决（b05b39e）：新增 `/api/audio/stt-health` 诊断端点 |
 | ✅ | 讯飞 11201/11203 license 失败 | 已修复（8d4e65b）：双 fallback |
 
 ## AI 分析层

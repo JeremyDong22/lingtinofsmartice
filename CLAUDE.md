@@ -133,4 +133,3 @@ Discard: old exploration outputs, historical context, large git diffs (use `--st
 |------|------|----------|
 | 重跑缺 feedbacks 的记录 | ⏸️ 暂停 | 剩余 1247 条。`only_missing_feedbacks: true` + cutoff `2026-03-01`。检查：`SELECT COUNT(*) FROM lingtin_visit_records WHERE status='processed' AND (feedbacks IS NULL OR feedbacks::text='[]' OR feedbacks::text='null') AND raw_transcript IS NOT NULL AND LENGTH(raw_transcript) > 10` |
 | 重跑缺画像的记录 | 待评估 | `only_missing_profile: true` |
-| 本地 .env service key 无效 | 待修复 | 线上 Zeabur 正常，本地 MOCK MODE |

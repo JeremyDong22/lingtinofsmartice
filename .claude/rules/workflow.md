@@ -2,8 +2,9 @@
 
 ## 本地开发
 
-- `supabase start` + `pnpm dev` → 本地测试
-- 前端连线上 API，本地后端因 service key 无效运行在 MOCK MODE
+- `pnpm dev` → 同时启动前后端本地测试
+- 本地后端使用 anon key 连接 Supabase（受 RLS 约束，非 mock mode）
+- 前端 `.env.local` 中 `NEXT_PUBLIC_API_URL` 控制连接哪个后端（本地 `localhost:3001` 或线上）
 
 ## 数据库变更（自动执行）
 

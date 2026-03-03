@@ -1,5 +1,5 @@
 // Admin Chat Page - AI assistant for boss/administrator role
-// v2.0 - Simplified to ChatPage wrapper with daily briefing
+// v2.1 - Added actionLinks for briefing quick-actions
 
 'use client';
 
@@ -18,6 +18,10 @@ export default function AdminChatPage() {
           '哪些菜品需要重点关注',
           '顾客满意度趋势怎么样',
           '店长执行情况分析',
+        ],
+        actionLinks: [
+          { label: '查看总览', path: '/admin/briefing' },
+          { label: '深入分析', path: '/admin/insights' },
         ],
       }}
     />

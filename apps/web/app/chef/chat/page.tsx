@@ -1,5 +1,5 @@
 // Chef Chat Page - AI assistant for head_chef role
-// v1.0 - ChatPage wrapper with chef-specific configuration
+// v1.1 - Added actionLinks for briefing quick-actions
 
 'use client';
 
@@ -18,6 +18,10 @@ export default function ChefChatPage() {
           '有哪些菜品连续好评',
           '今天备餐需要注意什么',
           '厨房待办有哪些',
+        ],
+        actionLinks: [
+          { label: '查看厨房待办', path: '/chef/dashboard' },
+          { label: '菜品反馈', path: '/chef/dishes' },
         ],
       }}
     />
