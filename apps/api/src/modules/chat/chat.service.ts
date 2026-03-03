@@ -83,7 +83,7 @@ const MANAGER_SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析�
 
 数据字段说明：
 - totalVisits: 昨日桌访总数
-- negVisits: 昨日差评桌访（table_id, feedbacks, ai_summary）
+- negVisits: 昨日差评桌访（table_id, ai_summary, sentiment_score）
 - posDishes: 昨日好评反馈（feedback_text）
 - pendingActions: 未处理行动建议数量
 
@@ -412,7 +412,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
       let content: string;
 
       if (isBriefing) {
-        // === Briefing mode: pre-fetch data, single API call, no tools ===
+        // === Briefing mode: pre-fetch data, real streaming, no tools ===
         res.write(`data: ${JSON.stringify({ type: 'thinking', content: '正在查询经营数据...' })}\n\n`);
 
         const briefingData = await this.prefetchBriefingData(
@@ -429,24 +429,9 @@ this.logger.log(`Messages in context: ${messages.length}`);
 
         res.write(`data: ${JSON.stringify({ type: 'thinking', content: '正在生成今日汇报...' })}\n\n`);
 
-        // Send heartbeat every 10s to prevent frontend/proxy timeout during long AI call
-        const heartbeat = setInterval(() => {
-          try { res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`); } catch {}
-        }, 10_000);
-
-        let response: any;
-        try {
-          response = await this.callClaudeAPI(systemPrompt, messages, true);
-        } finally {
-          clearInterval(heartbeat);
-        }
-
-        if (!response.choices || response.choices.length === 0) {
-          throw new Error('Empty response from API');
-        }
-
-        content = response.choices[0].message.content || '';
-        this.logger.log(`[Briefing] Response length: ${content.length}`);
+        // Stream directly from OpenRouter → client (real SSE streaming)
+        content = await this.streamBriefingResponse(systemPrompt, messages, res);
+        this.logger.log(`[Briefing] Streamed response length: ${content.length}`);
       } else {
         // === Regular chat: agentic loop with tool calls ===
         let iteration = 0;
@@ -523,15 +508,22 @@ this.logger.log(`Messages in context: ${messages.length}`);
         const ratio = chineseChars / content.length;
         if (ratio < 0.15) {
           this.logger.warn(`[Guard] Gibberish detected: ${content.length} chars, ${(ratio * 100).toFixed(1)}% Chinese. First 100: ${content.slice(0, 100)}`);
-          content = '抱歉，AI 生成内容出现异常，请点击「清空对话」重新生成。';
+          const errorContent = '抱歉，AI 生成内容出现异常，请点击「清空对话」重新生成。';
+          if (isBriefing) {
+            // Briefing already streamed text — send error event so frontend replaces content
+            res.write(`data: ${JSON.stringify({ type: 'error', content: errorContent })}\n\n`);
+          }
+          content = errorContent;
         }
       }
 
-      // Stream the content in chunks for better UX
-      const chunkSize = 20;
-      for (let i = 0; i < content.length; i += chunkSize) {
-        const chunk = content.slice(i, i + chunkSize);
-        res.write(`data: ${JSON.stringify({ type: 'text', content: chunk })}\n\n`);
+      if (!isBriefing) {
+        // Regular chat: send content in chunks (briefing already streamed directly)
+        const chunkSize = 20;
+        for (let i = 0; i < content.length; i += chunkSize) {
+          const chunk = content.slice(i, i + chunkSize);
+          res.write(`data: ${JSON.stringify({ type: 'text', content: chunk })}\n\n`);
+        }
       }
 
       // Save chat history to database (non-blocking)
@@ -617,6 +609,101 @@ this.logger.log(`Messages in context: ${messages.length}`);
       throw err;
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * Stream a briefing response from OpenRouter with real SSE.
+   * Forwards each text delta to the client immediately and returns the accumulated content.
+   */
+  private async streamBriefingResponse(
+    systemPrompt: string,
+    messages: ChatMessage[],
+    res: Response,
+  ): Promise<string> {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
+
+    const requestBody = {
+      model: 'minimax/minimax-m2.5',
+      max_tokens: 1536,
+      temperature: 0,
+      stream: true,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages,
+      ],
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+
+    // Heartbeat as fallback — real text chunks will arrive every ~100ms
+    const heartbeat = setInterval(() => {
+      try { res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`); } catch {}
+    }, 10_000);
+
+    let accumulated = '';
+
+    try {
+      const response = await fetch(OPENROUTER_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} - ${errorText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        // Keep the last potentially incomplete line in buffer
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const payload = trimmed.slice(6);
+          if (payload === '[DONE]') continue;
+
+          try {
+            const chunk = JSON.parse(payload);
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) {
+              accumulated += delta;
+              res.write(`data: ${JSON.stringify({ type: 'text', content: delta })}\n\n`);
+            }
+          } catch {
+            // Skip malformed SSE lines
+          }
+        }
+      }
+
+      return accumulated;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('AI 响应超时，请稍后重试');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+      clearInterval(heartbeat);
     }
   }
 
@@ -817,7 +904,7 @@ this.logger.log(`Executing tool: ${name}`);
           WHERE visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1 ${scopeFor()}
         `),
         this.runRawQuery(`
-          SELECT table_id, feedbacks, ai_summary
+          SELECT table_id, ai_summary, sentiment_score
           FROM lingtin_visit_records
           WHERE visit_date = (CURRENT_DATE AT TIME ZONE 'Asia/Shanghai')::date - 1 AND sentiment_score < 40 ${scopeFor()}
           LIMIT 5

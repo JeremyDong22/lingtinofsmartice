@@ -71,7 +71,7 @@ supabase start        # 启动本地 Supabase (localhost:54321)
 - **产品指南更新触发规则** — 当用户说"更新产品指南使用说明"时，对比 `docs/PRODUCT-GUIDE.md` 头部版本号与 `CHANGELOG.md` 最新版本号，从上次更新的版本开始，将所有后续迭代的功能变更同步到 PRODUCT-GUIDE.md + `docs/user-guides/` 对应角色文件 + README.md 版本号
 - **DashScope API 注意** — 提交用 `/api/v1/services/audio/asr/transcription`，轮询用 `/api/v1/tasks/{id}`，两个路径不同；`transcription_url` 是预签名 OSS URL，不需要 Authorization header
 - **STT 回退模式** — DashScope 优先，失败或未配置自动回退讯飞；`extractTranscript` 失败必须抛异常（不能返回空串），否则回退不触发；讯飞收到非零 code 时若已有部分结果则 resolve 而非 reject（防止 11203 等错误丢弃已转写内容）
-- **AI 分析模型** — OpenRouter → MiniMax M2.5（`minimax/minimax-m2.5`），无 fallback
+- **AI 分析模型** — OpenRouter → MiniMax M2.5（`minimax/minimax-m2.5`），无 fallback。汇报模式用 `stream: true` 真流式，普通聊天仍为非流式 + agentic tool loop
 - **AI JSON 解析** — OpenRouter 返回的 JSON 必须用 try-catch 包裹 `JSON.parse`，catch 中记录原始内容前 200 字用于调试
 - **处理流水线** — STT(DashScope→讯飞) → 本地清洗(硬编码规则，去语气词) → AI 分析(DeepSeek) → 存库；三步独立，任一步失败不影响已完成步骤的 log，audio_url 始终保留可重跑
 - **面向店长的内容** — 讲功能价值时站在店长角度（省时间、不遗漏、被认可），不要暗示"做给老板看"或"被老板监控"。强调"你的用心会被看见"，而非"老板能看到你的数据"
