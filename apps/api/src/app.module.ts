@@ -1,5 +1,5 @@
 // Root Application Module
-// v1.4 - Added RegionModule for store grouping by geographic region
+// v1.5 - Added HotwordModule for DashScope vocabulary management
 
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
@@ -14,6 +14,7 @@ import { MeetingModule } from './modules/meeting/meeting.module';
 import { DailySummaryModule } from './modules/daily-summary/daily-summary.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { RegionModule } from './modules/region/region.module';
+import { HotwordModule } from './modules/hotword/hotword.module';
 import { AuthModule, JwtAuthGuard } from './modules/auth';
 import { SupabaseModule } from './common/supabase/supabase.module';
 
@@ -32,6 +33,7 @@ import { SupabaseModule } from './common/supabase/supabase.module';
     DailySummaryModule,
     FeedbackModule,
     RegionModule,
+    HotwordModule,
   ],
   providers: [
     // Apply JWT guard globally - all routes require auth by default

@@ -1,5 +1,5 @@
 // User Menu Component - Display user avatar with dropdown menu
-// v1.3 - Added 使用指南 entry with red dot for unread updates
+// v1.4 - Added 热词管理 entry (admin only) linking to /admin/settings
 
 'use client';
 
@@ -120,6 +120,20 @@ export function UserMenu() {
             >
               <span className="text-gray-400">📊</span>
               产品洞察
+            </button>
+          )}
+
+          {/* Hotword Management (admin only) */}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                router.push('/admin/settings');
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <span className="text-gray-400">⚙️</span>
+              热词管理
             </button>
           )}
 
