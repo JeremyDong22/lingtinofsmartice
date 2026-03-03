@@ -208,6 +208,22 @@ body {
   transform: scale(0.97);
 }
 
+/* Streaming cursor — thin blinking bar like Claude/ChatGPT */
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background-color: currentColor;
+  opacity: 0.7;
+  animation: cursor-blink 0.8s steps(2, start) infinite;
+}
+
+@keyframes cursor-blink {
+  to { opacity: 0; }
+}
+
 /* Update banner slide animation */
 @keyframes slide-down {
   from {

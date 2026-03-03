@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, memo } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface MarkdownRendererProps {
@@ -112,7 +112,7 @@ function parseMarkdown(text: string): { html: string; quickQuestions: string[] }
   return { html, quickQuestions };
 }
 
-export function MarkdownRenderer({ content, className = '', onQuickQuestion }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, className = '', onQuickQuestion }: MarkdownRendererProps) {
   const router = useRouter();
   const { html, quickQuestions } = useMemo(() => parseMarkdown(content), [content]);
 
@@ -155,4 +155,4 @@ export function MarkdownRenderer({ content, className = '', onQuickQuestion }: M
       )}
     </div>
   );
-}
+}, (prev, next) => prev.content === next.content && prev.className === next.className);

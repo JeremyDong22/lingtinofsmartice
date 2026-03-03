@@ -1,11 +1,12 @@
 // ChatPage - Unified chat page component for all roles
-// v1.1 - Added actionLinks: hardcoded quick-action buttons rendered below briefing message
+// v1.2 - React.memo message bubbles + smooth streaming + actionLinks below briefing
 
 'use client';
 
-import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, memo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useChatStream } from '@/hooks/useChatStream';
+import type { Message } from '@/hooks/useChatStream';
 import { useDailyBriefing } from '@/hooks/useDailyBriefing';
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ThinkingIndicator } from '@/components/chat/ThinkingIndicator';
@@ -23,6 +24,101 @@ export interface ChatPageConfig {
 interface ChatPageProps {
   config: ChatPageConfig;
 }
+
+// --- Memoized message bubble: only re-renders when its own content/state changes ---
+interface MessageBubbleProps {
+  msg: Message;
+  onQuickQuestion: (q: string) => void;
+  onRetry: (id: string) => void;
+  retryDisabled: boolean;
+  isBriefing?: boolean;
+  actionLinks?: { label: string; path: string }[];
+  onNavigate?: (path: string) => void;
+}
+
+const MessageBubble = memo(function MessageBubble({
+  msg,
+  onQuickQuestion,
+  onRetry,
+  retryDisabled,
+  isBriefing,
+  actionLinks,
+  onNavigate,
+}: MessageBubbleProps) {
+  return (
+    <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+          msg.role === 'user'
+            ? 'bg-primary-600 text-white'
+            : 'bg-white shadow-sm text-gray-900'
+        }`}
+      >
+        {msg.role === 'user' ? (
+          <div className="whitespace-pre-wrap">{msg.content}</div>
+        ) : msg.isError ? (
+          <div className="space-y-2">
+            <div className="text-red-600">{msg.content}</div>
+            <button
+              onClick={() => onRetry(msg.id)}
+              disabled={retryDisabled}
+              className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
+            >
+              重试
+            </button>
+          </div>
+        ) : msg.thinkingStatus ? (
+          <ThinkingIndicator status={msg.thinkingStatus} />
+        ) : msg.isStopped ? (
+          <div className="text-gray-500 text-sm">{msg.content}</div>
+        ) : msg.isStreaming && msg.content ? (
+          /* Streaming: render plain text (no markdown parsing / no innerHTML rebuild).
+             React only diffs the text node — extremely cheap at 60fps.
+             Markdown formatting "pops in" when streaming ends. */
+          <div className="whitespace-pre-wrap leading-relaxed">
+            {msg.content}
+            <span className="streaming-cursor" />
+          </div>
+        ) : msg.content ? (
+          <>
+            <MarkdownRenderer
+              content={msg.content}
+              onQuickQuestion={onQuickQuestion}
+            />
+            {/* Action links inside briefing bubble */}
+            {isBriefing && !msg.isStreaming && actionLinks && actionLinks.length > 0 && onNavigate && (
+              <div className="flex gap-2 flex-wrap mt-3 pt-3 border-t border-gray-100">
+                {actionLinks.map((link) => (
+                  <button
+                    key={link.path}
+                    onClick={() => onNavigate(link.path)}
+                    className="lingtin-action-btn px-4 py-2 bg-primary-50 text-primary-700 border border-primary-200 rounded-xl text-sm font-medium hover:bg-primary-100 transition-colors"
+                  >
+                    {link.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : msg.isStreaming ? (
+          <ThinkingIndicator status="思考中" />
+        ) : null}
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  // Fast path: same object reference means nothing changed
+  if (prev.msg === next.msg && prev.retryDisabled === next.retryDisabled
+      && prev.isBriefing === next.isBriefing) return true;
+  // Shallow check on fields that affect rendering
+  return prev.msg.content === next.msg.content
+    && prev.msg.isStreaming === next.msg.isStreaming
+    && prev.msg.isError === next.msg.isError
+    && prev.msg.isStopped === next.msg.isStopped
+    && prev.msg.thinkingStatus === next.msg.thinkingStatus
+    && prev.retryDisabled === next.retryDisabled
+    && prev.isBriefing === next.isBriefing;
+});
 
 function ChatLoadingFallback({ title }: { title: string }) {
   return (
@@ -60,9 +156,6 @@ function ChatContent({ config }: ChatPageProps) {
     messageCount: messages.length,
     messages,
   });
-
-  // All messages are visible (briefing triggers use hideUserMessage, so they're never added)
-  const visibleMessages = messages;
 
   // Track whether any message is currently streaming
   const isStreaming = messages.some(m => m.isStreaming);
@@ -117,11 +210,12 @@ function ChatContent({ config }: ChatPageProps) {
     await sendMessage(message);
   };
 
-  const handleQuickQuestion = async (question: string) => {
+  // Stable callback refs for memoized children
+  const handleQuickQuestion = useCallback(async (question: string) => {
     if (isLoading) return;
     setInput('');
     await sendMessage(question);
-  };
+  }, [isLoading, sendMessage]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
@@ -140,78 +234,26 @@ function ChatContent({ config }: ChatPageProps) {
         </div>
       </header>
 
-      {/* Messages area */}
+      {/* Messages area — content-visibility skips rendering off-screen bubbles */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-        {visibleMessages.map((msg, msgIndex) => {
-          // First assistant message is the briefing — show action links below it
-          const isBriefing = msg.role === 'assistant' && msgIndex === visibleMessages.findIndex(m => m.role === 'assistant');
-
-          return (
-          <div
+        {messages.map((msg, msgIndex) => (
+          <MessageBubble
             key={msg.id}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                msg.role === 'user'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white shadow-sm text-gray-900'
-              }`}
-            >
-              {msg.role === 'user' ? (
-                <div className="whitespace-pre-wrap">{msg.content}</div>
-              ) : msg.isError ? (
-                <div className="space-y-2">
-                  <div className="text-red-600">{msg.content}</div>
-                  <button
-                    onClick={() => retryMessage(msg.id)}
-                    disabled={isLoading}
-                    className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
-                  >
-                    重试
-                  </button>
-                </div>
-              ) : msg.thinkingStatus ? (
-                <ThinkingIndicator status={msg.thinkingStatus} />
-              ) : msg.isStopped ? (
-                <div className="text-gray-500 text-sm">{msg.content}</div>
-              ) : msg.content ? (
-                <>
-                  <MarkdownRenderer
-                    content={msg.content}
-                    onQuickQuestion={handleQuickQuestion}
-                  />
-                  {/* Action links inside briefing bubble */}
-                  {isBriefing && !msg.isStreaming && config.actionLinks && config.actionLinks.length > 0 && (
-                    <div className="flex gap-2 flex-wrap mt-3 pt-3 border-t border-gray-100">
-                      {config.actionLinks.map((link) => (
-                        <button
-                          key={link.path}
-                          onClick={() => router.push(link.path)}
-                          className="lingtin-action-btn px-4 py-2 bg-primary-50 text-primary-700 border border-primary-200 rounded-xl text-sm font-medium hover:bg-primary-100 transition-colors"
-                        >
-                          {link.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : msg.isStreaming ? (
-                <ThinkingIndicator status="思考中" />
-              ) : null}
-              {msg.isStreaming && msg.content && (
-                <span className="inline-block w-2 h-4 bg-primary-500 ml-1 animate-pulse" />
-              )}
-            </div>
-          </div>
-          );
-        })}
+            msg={msg}
+            onQuickQuestion={handleQuickQuestion}
+            onRetry={retryMessage}
+            retryDisabled={isLoading}
+            isBriefing={msg.role === 'assistant' && msgIndex === messages.findIndex(m => m.role === 'assistant')}
+            actionLinks={config.actionLinks}
+            onNavigate={router.push}
+          />
+        ))}
 
         <div ref={messagesEndRef} />
       </div>
 
       {/* Quick Questions - show when no messages */}
-      {visibleMessages.length === 0 && !isLoading ? (
+      {messages.length === 0 && !isLoading ? (
         <div className="px-4 py-6 flex-shrink-0">
           <p className="text-center text-sm text-gray-400 mb-3">可以问我</p>
           <div className="space-y-2 max-w-sm mx-auto">
@@ -227,7 +269,7 @@ function ChatContent({ config }: ChatPageProps) {
             ))}
           </div>
         </div>
-      ) : visibleMessages.length > 0 ? (
+      ) : messages.length > 0 ? (
         <div className="px-4 py-2 flex gap-2 overflow-x-auto flex-shrink-0 scrollbar-hide">
           {config.fallbackQuickQuestions.map((q) => (
             <button

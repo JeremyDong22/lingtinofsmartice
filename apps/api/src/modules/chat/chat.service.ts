@@ -494,11 +494,15 @@ this.logger.log(`Messages in context: ${messages.length}`);
       }
 
       if (!isBriefing) {
-        // Regular chat: send content in chunks (briefing already streamed directly)
-        const chunkSize = 20;
+        // Regular chat: simulate streaming with paced chunks (briefing already streamed)
+        // 6-char chunks at 20ms intervals ≈ 300 chars/sec, feels like natural LLM output
+        const chunkSize = 6;
         for (let i = 0; i < content.length; i += chunkSize) {
           const chunk = content.slice(i, i + chunkSize);
           res.write(`data: ${JSON.stringify({ type: 'text', content: chunk })}\n\n`);
+          if (i + chunkSize < content.length) {
+            await new Promise(r => setTimeout(r, 20));
+          }
         }
       }
 

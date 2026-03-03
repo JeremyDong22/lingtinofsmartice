@@ -171,11 +171,14 @@ export function useChatStream(): UseChatStreamReturn {
     setIsInitialized(true);
   }, [storageKey]);
 
-  // Save messages to sessionStorage when they change
+  // Save messages to localStorage when they change
+  // Skip saves while streaming — JSON.stringify + setItem blocks main thread per chunk.
+  // Persistence happens once when streaming ends (isStreaming flips to false).
   useEffect(() => {
-    if (isInitialized) {
-      saveMessages(messages, storageKey);
-    }
+    if (!isInitialized) return;
+    const hasStreaming = messages.some(m => m.isStreaming);
+    if (hasStreaming) return;
+    saveMessages(messages, storageKey);
   }, [messages, isInitialized, storageKey]);
 
   const sendMessage = useCallback(async (content: string, options?: SendMessageOptions) => {
@@ -225,6 +228,17 @@ export function useChatStream(): UseChatStreamReturn {
     }]);
 
     let fullContent = '';
+    // rAF batching: accumulate text chunks and flush once per animation frame
+    // instead of triggering a React re-render for every single SSE token
+    let flushRaf = 0;
+    const flushContent = () => {
+      flushRaf = 0;
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantMessageId
+          ? { ...msg, content: fullContent, thinkingStatus: undefined }
+          : msg
+      ));
+    };
 
     try {
       abortControllerRef.current = new AbortController();
@@ -286,9 +300,11 @@ export function useChatStream(): UseChatStreamReturn {
               const data = line.slice(6).trim();
 
               if (data === '[DONE]') {
+                // Cancel pending rAF and do a final synchronous flush + end streaming
+                if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0; }
                 setMessages(prev => prev.map(msg =>
                   msg.id === assistantMessageId
-                    ? { ...msg, isStreaming: false }
+                    ? { ...msg, content: fullContent, isStreaming: false, thinkingStatus: undefined }
                     : msg
                 ));
                 continue;
@@ -322,11 +338,10 @@ export function useChatStream(): UseChatStreamReturn {
                 ));
               } else if (parsed.type === 'text') {
                 fullContent += parsed.content;
-                setMessages(prev => prev.map(msg =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, content: fullContent, thinkingStatus: undefined }
-                    : msg
-                ));
+                // Schedule a batched flush — multiple tokens within one frame get merged
+                if (!flushRaf) {
+                  flushRaf = requestAnimationFrame(flushContent);
+                }
               } else if (parsed.type === 'error') {
                 throw new Error(parsed.content);
               }
@@ -335,6 +350,7 @@ export function useChatStream(): UseChatStreamReturn {
         }
       } finally {
         clearTimeout(streamTimer);
+        if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0; }
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
