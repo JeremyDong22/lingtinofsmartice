@@ -7,7 +7,7 @@
 
 ## 产品使用指南同步更新
 
-每次功能迭代后，同步更新：
+**仅用户可见功能**迭代后同步更新（内部管理工具、纯后端变更跳过）：
 
 - `docs/user-guides/` 对应角色指南（按角色分文件：`store-manager.md`、`management.md`、`staff.md`、`chef.md`）
 - `docs/PRODUCT-GUIDE.md`（综合使用指南 + 版本更新记录）
