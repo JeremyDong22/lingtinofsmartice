@@ -13,6 +13,7 @@ import { ActionItemsCard } from '@/components/dashboard/ActionItemsCard';
 import { getChinaToday, singleDay, dateRangeParams, isMultiDay, shiftDate } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, storePresets } from '@/components/shared/DatePicker';
+import { Timer, Meh, Home, SmilePlus, UtensilsCrossed, CheckCircle } from 'lucide-react';
 
 // Types for API responses
 interface CoveragePeriod {
@@ -88,13 +89,14 @@ interface HighlightsResponse {
 }
 
 // Detect feedback category icon from text
-function detectCategoryIcon(text: string): string {
+function DetectCategoryIcon({ text }: { text: string }) {
   const lower = text.toLowerCase();
-  if (/慢|等了|催|久|速度|出菜/.test(lower)) return '⏱️';
-  if (/态度|不耐烦|冷淡|不理|脸色/.test(lower)) return '😐';
-  if (/环境|吵|脏|热|冷|味道大|苍蝇/.test(lower)) return '🏠';
-  if (/服务/.test(lower)) return '😊';
-  return '🍳';
+  const cls = "w-4 h-4 inline-block align-text-bottom mr-0.5";
+  if (/慢|等了|催|久|速度|出菜/.test(lower)) return <Timer className={cls} />;
+  if (/态度|不耐烦|冷淡|不理|脸色/.test(lower)) return <Meh className={cls} />;
+  if (/环境|吵|脏|热|冷|味道大|苍蝇/.test(lower)) return <Home className={cls} />;
+  if (/服务/.test(lower)) return <SmilePlus className={cls} />;
+  return <UtensilsCrossed className={cls} />;
 }
 
 // Classify speech questions as good or needs-improvement
@@ -350,9 +352,9 @@ export default function DashboardPage() {
           {sentiment ? (
             <div className="flex items-center justify-around py-4">
               {[
-                { label: '满意😊', pct: sentiment.positive_percent, prevPct: yesterdaySentiment?.positive_percent, color: 'text-green-600', trendUp: 'text-green-500', trendDown: 'text-red-500' },
-                { label: '一般😐', pct: sentiment.neutral_percent, prevPct: yesterdaySentiment?.neutral_percent, color: 'text-gray-600', trendUp: 'text-gray-500', trendDown: 'text-gray-500' },
-                { label: '不满意😟', pct: sentiment.negative_percent, prevPct: yesterdaySentiment?.negative_percent, color: 'text-red-500', trendUp: 'text-red-500', trendDown: 'text-green-500' },
+                { label: '满意', pct: sentiment.positive_percent, prevPct: yesterdaySentiment?.positive_percent, color: 'text-green-600', trendUp: 'text-green-500', trendDown: 'text-red-500' },
+                { label: '一般', pct: sentiment.neutral_percent, prevPct: yesterdaySentiment?.neutral_percent, color: 'text-gray-600', trendUp: 'text-gray-500', trendDown: 'text-gray-500' },
+                { label: '不满意', pct: sentiment.negative_percent, prevPct: yesterdaySentiment?.negative_percent, color: 'text-red-500', trendUp: 'text-red-500', trendDown: 'text-green-500' },
               ].map((item, i) => {
                 const diff = !multiDay && item.prevPct != null ? item.pct - item.prevPct : null;
                 return (
@@ -393,7 +395,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-2">
                     {sentiment.negative_feedbacks.map((fb, i) => {
-                      const icon = detectCategoryIcon(fb.text);
+                      const icon = <DetectCategoryIcon text={fb.text} />;
                       return (
                         <button
                           key={i}
@@ -428,7 +430,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {sentiment.positive_feedbacks.map((fb, i) => {
-                      const icon = detectCategoryIcon(fb.text);
+                      const icon = <DetectCategoryIcon text={fb.text} />;
                       return (
                         <button
                           key={i}
@@ -449,7 +451,7 @@ export default function DashboardPage() {
               {/* No negative feedbacks but has positive */}
               {(!sentiment.negative_feedbacks || sentiment.negative_feedbacks.length === 0) && (
                 <div className="flex items-center gap-2 text-green-600 mb-3 bg-green-50 rounded-lg p-3">
-                  <span>✅</span>
+                  <CheckCircle className="w-4 h-4" />
                   <span className="text-sm font-medium">今日无需特别关注的问题</span>
                 </div>
               )}

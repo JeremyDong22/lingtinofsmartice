@@ -1,5 +1,5 @@
 // User Menu Component - Display user avatar with dropdown menu
-// v1.4 - Added 热词管理 entry (admin only) linking to /admin/settings
+// v1.5 - Replaced emoji icons with lucide-react SVG icons
 
 'use client';
 
@@ -7,6 +7,10 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { APP_VERSION } from './UpdatePrompt';
+import {
+  ClipboardList, Map, BarChart3, Settings,
+  MessageSquare, FileText, BookOpen,
+} from 'lucide-react';
 
 const GUIDE_SEEN_KEY = 'lingtin_guide_seen_version';
 
@@ -90,7 +94,7 @@ export function UserMenu() {
               }}
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
-              <span className="text-gray-400">📋</span>
+              <ClipboardList className="w-4 h-4 text-gray-400" />
               问卷管理
             </button>
           )}
@@ -104,7 +108,7 @@ export function UserMenu() {
               }}
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
-              <span className="text-gray-400">🗺️</span>
+              <Map className="w-4 h-4 text-gray-400" />
               区域管理
             </button>
           )}
@@ -118,7 +122,7 @@ export function UserMenu() {
               }}
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
-              <span className="text-gray-400">📊</span>
+              <BarChart3 className="w-4 h-4 text-gray-400" />
               产品洞察
             </button>
           )}
@@ -132,7 +136,7 @@ export function UserMenu() {
               }}
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
-              <span className="text-gray-400">⚙️</span>
+              <Settings className="w-4 h-4 text-gray-400" />
               热词管理
             </button>
           )}
@@ -145,7 +149,7 @@ export function UserMenu() {
             }}
             className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
-            <span className="text-gray-400">💬</span>
+            <MessageSquare className="w-4 h-4 text-gray-400" />
             提交反馈
           </button>
 
@@ -157,7 +161,7 @@ export function UserMenu() {
             }}
             className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
-            <span className="text-gray-400">📝</span>
+            <FileText className="w-4 h-4 text-gray-400" />
             我的反馈
           </button>
 
@@ -169,7 +173,7 @@ export function UserMenu() {
             }}
             className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
-            <span className="text-gray-400">📖</span>
+            <BookOpen className="w-4 h-4 text-gray-400" />
             <span className="flex-1">使用指南</span>
             {hasUnread && (
               <span className="w-2 h-2 bg-red-500 rounded-full" />

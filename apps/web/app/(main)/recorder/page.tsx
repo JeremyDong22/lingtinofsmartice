@@ -23,6 +23,7 @@ import { MeetingDetail } from '@/components/recorder/MeetingDetail';
 import { MotivationBanner } from '@/components/recorder/MotivationBanner';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
+import { BarChart3 } from 'lucide-react';
 import {
   processRecordingInBackground,
   processMeetingInBackground,
@@ -515,7 +516,7 @@ export default function RecorderPage() {
               {meetingType === 'weekly' && (
                 <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
                   <div className="flex items-start gap-3">
-                    <span className="text-lg">📊</span>
+                    <BarChart3 className="w-5 h-5 text-gray-500" />
                     <div>
                       <p className="text-sm font-medium text-gray-800">周例会录音</p>
                       <p className="text-xs text-gray-500 mt-1">将综合本周桌访数据生成周度分析，包括菜品趋势、服务改善点和下周重点</p>

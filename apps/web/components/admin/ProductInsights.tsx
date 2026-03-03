@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { BarChart3 } from 'lucide-react';
 
 // --- Types ---
 interface TopicItem {
@@ -173,7 +174,7 @@ export function ProductInsights() {
       {/* Empty state */}
       {!isLoading && topics.length === 0 && (
         <div className="bg-white rounded-2xl p-8 text-center">
-          <div className="text-4xl mb-3">📊</div>
+          <div className="flex justify-center mb-3"><BarChart3 className="w-10 h-10 text-gray-300" /></div>
           <h3 className="text-base font-medium text-gray-700 mb-1">暂无产品洞察</h3>
           <p className="text-sm text-gray-400">
             员工使用 AI 智库或完成桌访后，洞察将显示在这里

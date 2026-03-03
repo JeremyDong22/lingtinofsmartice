@@ -4,10 +4,14 @@
 
 'use client';
 
-import { useState, useRef, useCallback, Fragment } from 'react';
+import { useState, useRef, useCallback, Fragment, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  Timer, Thermometer, Palette, Leaf, Meh, Home, UtensilsCrossed,
+  CheckCircle, Pause, Play,
+} from 'lucide-react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { getChinaToday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
@@ -63,20 +67,21 @@ interface SentimentSummaryResponse {
 }
 
 // Detect kitchen-related feedback category
-function detectKitchenCategory(text: string): { icon: string; label: string; isKitchen: boolean } {
+const iconCls = "w-4 h-4 inline-block align-text-bottom";
+function detectKitchenCategory(text: string): { icon: ReactNode; label: string; isKitchen: boolean } {
   const lower = text.toLowerCase();
-  if (/慢|等了|催|久|速度|出菜/.test(lower)) return { icon: '⏱️', label: '出菜速度', isKitchen: true };
-  if (/凉|温度|冷|不够热|端上来/.test(lower)) return { icon: '🌡️', label: '菜品温度', isKitchen: true };
-  if (/摆盘|卖相|样子/.test(lower)) return { icon: '🎨', label: '卖相', isKitchen: true };
-  if (/新鲜|不新鲜|蔫|变质/.test(lower)) return { icon: '🥬', label: '食材新鲜度', isKitchen: true };
-  if (/态度|不耐烦|冷淡/.test(lower)) return { icon: '😐', label: '服务态度', isKitchen: false };
-  if (/环境|吵|脏/.test(lower)) return { icon: '🏠', label: '环境', isKitchen: false };
-  return { icon: '🍳', label: '菜品口味', isKitchen: true };
+  if (/慢|等了|催|久|速度|出菜/.test(lower)) return { icon: <Timer className={iconCls} />, label: '出菜速度', isKitchen: true };
+  if (/凉|温度|冷|不够热|端上来/.test(lower)) return { icon: <Thermometer className={iconCls} />, label: '菜品温度', isKitchen: true };
+  if (/摆盘|卖相|样子/.test(lower)) return { icon: <Palette className={iconCls} />, label: '卖相', isKitchen: true };
+  if (/新鲜|不新鲜|蔫|变质/.test(lower)) return { icon: <Leaf className={iconCls} />, label: '食材新鲜度', isKitchen: true };
+  if (/态度|不耐烦|冷淡/.test(lower)) return { icon: <Meh className={iconCls} />, label: '服务态度', isKitchen: false };
+  if (/环境|吵|脏/.test(lower)) return { icon: <Home className={iconCls} />, label: '环境', isKitchen: false };
+  return { icon: <UtensilsCrossed className={iconCls} />, label: '菜品口味', isKitchen: true };
 }
 
 // Kitchen problem item (non-dish dimension)
 interface KitchenProblem {
-  icon: string;
+  icon: ReactNode;
   label: string;
   count: number;
   feedbacks: SentimentFeedbackItem[];
@@ -202,10 +207,10 @@ export default function ChefDishesPage() {
 
   // Extract kitchen-related non-dish problems from sentiment data
   const kitchenProblems: KitchenProblem[] = [];
-  const kitchenHighlights: { icon: string; label: string; count: number }[] = [];
+  const kitchenHighlights: { icon: ReactNode; label: string; count: number }[] = [];
 
   if (sentimentData) {
-    const catMap = new Map<string, { icon: string; label: string; items: SentimentFeedbackItem[] }>();
+    const catMap = new Map<string, { icon: ReactNode; label: string; items: SentimentFeedbackItem[] }>();
     for (const fb of sentimentData.negative_feedbacks || []) {
       const cat = detectKitchenCategory(fb.text);
       if (!cat.isKitchen) continue;
@@ -332,7 +337,7 @@ export default function ChefDishesPage() {
                                         playingVisitId === ctx.visitId ? 'bg-primary-100 text-primary-700' : 'bg-primary-50 text-primary-600'
                                       }`}
                                     >
-                                      {playingVisitId === ctx.visitId ? '⏸ 暂停' : '▶ 原声'}
+                                      {playingVisitId === ctx.visitId ? <><Pause className="w-3 h-3" /> 暂停</> : <><Play className="w-3 h-3" /> 原声</>}
                                     </button>
                                   )}
                                 </div>
@@ -354,7 +359,7 @@ export default function ChefDishesPage() {
                                     : 'text-green-700 bg-green-50 hover:bg-green-100'
                                 }`}
                               >
-                                {markedImproved.has(kp.label) ? '✅ 已标记' : '✅ 已改善'}
+                                {markedImproved.has(kp.label) ? <span className="flex items-center gap-1 justify-center"><CheckCircle className="w-3.5 h-3.5" /> 已标记</span> : <span className="flex items-center gap-1 justify-center"><CheckCircle className="w-3.5 h-3.5" /> 已改善</span>}
                               </button>
                               <button
                                 onClick={() => router.push('/chef/dashboard')}
@@ -493,7 +498,7 @@ export default function ChefDishesPage() {
                                     : 'text-green-700 bg-green-50 hover:bg-green-100'
                                 }`}
                               >
-                                {markedImproved.has(dish.dish_name) ? '✅ 已标记' : '✅ 已改善'}
+                                {markedImproved.has(dish.dish_name) ? <span className="flex items-center gap-1 justify-center"><CheckCircle className="w-3.5 h-3.5" /> 已标记</span> : <span className="flex items-center gap-1 justify-center"><CheckCircle className="w-3.5 h-3.5" /> 已改善</span>}
                               </button>
                               <button
                                 onClick={() => router.push('/chef/dashboard')}

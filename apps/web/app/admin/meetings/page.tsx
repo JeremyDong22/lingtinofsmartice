@@ -4,6 +4,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
@@ -351,7 +352,7 @@ export default function AdminMeetingsPage() {
           (!hasData && !isLoading)
         ) && (
           <div className="bg-white rounded-2xl p-8 text-center">
-            <div className="text-4xl mb-3">📋</div>
+            <div className="flex justify-center mb-3"><ClipboardList className="w-10 h-10 text-gray-300" /></div>
             <h3 className="text-base font-medium text-gray-700 mb-1">当日暂无会议</h3>
             <p className="text-sm text-gray-400">
               各门店开会后，会议纪要将自动同步到这里

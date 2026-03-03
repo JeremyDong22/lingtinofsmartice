@@ -4,6 +4,7 @@
 'use client';
 
 import { useRef, useState, useCallback, Fragment } from 'react';
+import { Check, X, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
@@ -293,7 +294,7 @@ export default function AdminBriefingPage() {
               const isExpanded = expandedStores.has(rest.id);
               const sentiment = getSatisfactionDisplay(rest.avg_sentiment);
               const hasReviewed = rest.review_completion != null && rest.review_completion > 0;
-              const reviewIcon = hasReviewed ? '✓' : '✗';
+              const ReviewIcon = hasReviewed ? Check : X;
 
               return (
                 <div key={rest.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -317,7 +318,7 @@ export default function AdminBriefingPage() {
                         <span>·</span>
                         <span className={sentiment.color}>{rest.avg_sentiment != null ? `${Math.round(rest.avg_sentiment)}分` : '--'}</span>
                         <span>·</span>
-                        <span className={hasReviewed ? 'text-green-600' : 'text-red-500'}>复盘{reviewIcon}</span>
+                        <span className={`flex items-center gap-0.5 ${hasReviewed ? 'text-green-600' : 'text-red-500'}`}>复盘<ReviewIcon className="w-3 h-3" /></span>
                         {restProblems.length > 0 && (
                           <>
                             <span>·</span>
@@ -425,7 +426,7 @@ export default function AdminBriefingPage() {
         {/* Empty state - all healthy */}
         {!isLoading && sortedRestaurants.length === 0 && restaurantCount > 0 && (
           <div className="bg-white rounded-xl p-6 text-center">
-            <div className="text-4xl mb-3">✅</div>
+            <div className="flex justify-center mb-3"><CheckCircle className="w-10 h-10 text-green-400" /></div>
             <h3 className="text-lg font-semibold text-gray-900 mb-1">一切正常</h3>
             <p className="text-sm text-gray-500">
               {restaurantCount} 家门店均运营良好

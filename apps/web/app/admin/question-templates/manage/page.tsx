@@ -9,6 +9,7 @@ import useSWR, { mutate } from 'swr';
 import { useAuth, getAuthHeaders } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
 import { UserMenu } from '@/components/layout/UserMenu';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 interface QuestionItem {
   id: string;
@@ -335,16 +336,16 @@ export default function QuestionTemplatesManagePage() {
                       <button
                         onClick={() => moveQuestion(idx, -1)}
                         disabled={idx === 0}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-xs"
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
                       >
-                        ▲
+                        <ChevronUp className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => moveQuestion(idx, 1)}
                         disabled={idx === formQuestions.length - 1}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-xs"
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
                       >
-                        ▼
+                        <ChevronDown className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     <button

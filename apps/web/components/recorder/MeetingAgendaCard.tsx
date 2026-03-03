@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { ClipboardList } from 'lucide-react';
 
 interface AgendaItem {
   category: string;
@@ -80,7 +81,7 @@ export function MeetingAgendaCard({ restaurantId }: MeetingAgendaCardProps) {
         className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-primary-50 to-white"
       >
         <div className="flex items-center gap-2">
-          <span className="text-base">📋</span>
+          <ClipboardList className="w-4 h-4 text-primary-600" />
           <span className="text-sm font-semibold text-gray-800">
             今日议题
           </span>

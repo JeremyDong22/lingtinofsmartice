@@ -1,10 +1,11 @@
 // Meeting Type Selector - Choose meeting type (pre_meal/daily_review/weekly)
-// v2.0 - Themed colors per type, smart time-based default, removed redundant "已选" row
+// v2.1 - Replaced emoji icons with lucide-react SVG icons
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { MeetingType } from '@/hooks/useMeetingStore';
+import { UtensilsCrossed, ClipboardList, CalendarDays } from 'lucide-react';
 
 interface MeetingTypeSelectorProps {
   value: MeetingType | '';
@@ -15,29 +16,28 @@ interface MeetingTypeSelectorProps {
 const MEETING_TYPES: Array<{
   type: MeetingType;
   label: string;
-  icon: string;
+  icon: ReactNode;
   hint: string;
-  // Tailwind classes: [unselected bg, selected bg, selected border, selected text]
   colors: { bg: string; bgActive: string; border: string; text: string };
 }> = [
   {
     type: 'pre_meal',
     label: '餐前会',
-    icon: '🍳',
+    icon: <UtensilsCrossed className="w-6 h-6" />,
     hint: '开餐前注意事项',
     colors: { bg: 'bg-orange-50', bgActive: 'bg-orange-100', border: 'border-orange-400', text: 'text-orange-700' },
   },
   {
     type: 'daily_review',
     label: '每日复盘',
-    icon: '📋',
+    icon: <ClipboardList className="w-6 h-6" />,
     hint: '回顾今日表现',
     colors: { bg: 'bg-primary-50', bgActive: 'bg-primary-100', border: 'border-primary-400', text: 'text-primary-700' },
   },
   {
     type: 'weekly',
     label: '周例会',
-    icon: '📅',
+    icon: <CalendarDays className="w-6 h-6" />,
     hint: '本周综合分析',
     colors: { bg: 'bg-green-50', bgActive: 'bg-green-100', border: 'border-green-400', text: 'text-green-700' },
   },
@@ -82,7 +82,7 @@ export function MeetingTypeSelector({ value, onChange, disabled = false }: Meeti
                   : `${colors.bg} border-transparent hover:border-gray-200`
               } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <span className="text-2xl">{icon}</span>
+              <span className={isSelected ? colors.text : 'text-gray-500'}>{icon}</span>
               <span className={`text-sm font-medium ${isSelected ? colors.text : 'text-gray-700'}`}>
                 {label}
               </span>

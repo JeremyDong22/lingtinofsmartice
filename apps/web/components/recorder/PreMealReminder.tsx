@@ -4,6 +4,7 @@
 
 import { useState, useMemo } from 'react';
 import useSWR from 'swr';
+import { CheckCircle, Bell } from 'lucide-react';
 
 interface ActionItem {
   id: string;
@@ -60,7 +61,7 @@ export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
   if (items.length === 0) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-3">
-        <span className="text-xl flex-shrink-0">✅</span>
+        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
         <div>
           <p className="text-sm font-medium text-green-800">昨日待办全部跟进完毕</p>
           <p className="text-xs text-green-600 mt-0.5">今天开门红！开始录制餐前会吧</p>
@@ -77,7 +78,7 @@ export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
         className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-amber-50 to-white"
       >
         <div className="flex items-center gap-2">
-          <span className="text-base">🔔</span>
+          <Bell className="w-4 h-4 text-amber-600" />
           <span className="text-sm font-semibold text-gray-800">
             昨日复盘待办
           </span>

@@ -1,10 +1,11 @@
 // Recording History Component - Display list of recordings with status
-// v1.6 - Added status summary bar + failed items pinned to top
+// v1.7 - Replaced emoji icons with lucide-react SVG icons
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
+import { SmilePlus, Meh, Frown, CheckCircle, Loader, XCircle } from 'lucide-react';
 
 interface RecordingHistoryProps {
   recordings: Recording[];
@@ -58,13 +59,13 @@ function StatusBadge({ status }: { status: RecordingStatus }) {
   );
 }
 
-// Satisfaction emoji based on score (0-100)
-function SatisfactionEmoji({ score }: { score?: number }) {
+// Satisfaction icon based on score (0-100)
+function SatisfactionIcon({ score }: { score?: number }) {
   if (score == null) return null;
 
-  if (score >= 70) return <span className="text-lg">😊</span>;
-  if (score >= 50) return <span className="text-lg">😐</span>;
-  return <span className="text-lg">😟</span>;
+  if (score >= 70) return <SmilePlus className="w-5 h-5 text-green-500" />;
+  if (score >= 50) return <Meh className="w-5 h-5 text-gray-400" />;
+  return <Frown className="w-5 h-5 text-red-500" />;
 }
 
 // Mini waveform visualization (static)
@@ -269,10 +270,10 @@ export function RecordingHistory({
         {/* Status summary bar */}
         <div className="flex items-center gap-3 mt-1.5 text-xs">
           {completedCount > 0 && (
-            <span className="text-green-600">✅ {completedCount}条完成</span>
+            <span className="text-green-600 flex items-center gap-0.5"><CheckCircle className="w-3.5 h-3.5" /> {completedCount}条完成</span>
           )}
           {processingCount > 0 && (
-            <span className="text-yellow-600">⏳ {processingCount}条处理中</span>
+            <span className="text-yellow-600 flex items-center gap-0.5"><Loader className="w-3.5 h-3.5 animate-spin" /> {processingCount}条处理中</span>
           )}
           {failedCount > 0 && (
             <button
@@ -283,7 +284,7 @@ export function RecordingHistory({
               }}
               className="text-red-600 hover:text-red-700"
             >
-              ❌ {failedCount}条失败（点击重试）
+              <span className="flex items-center gap-0.5"><XCircle className="w-3.5 h-3.5" /> {failedCount}条失败（点击重试）</span>
             </button>
           )}
         </div>
@@ -336,7 +337,7 @@ export function RecordingHistory({
                   isPlaying={playingId === recording.id}
                   onToggle={() => handlePlayToggle(recording)}
                 />
-                <SatisfactionEmoji score={recording.sentimentScore} />
+                <SatisfactionIcon score={recording.sentimentScore} />
                 <StatusBadge status={recording.status} />
                 {/* Expand indicator */}
                 {recording.correctedTranscript && (

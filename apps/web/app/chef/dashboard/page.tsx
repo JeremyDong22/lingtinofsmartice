@@ -8,6 +8,7 @@ import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { getApiUrl } from '@/lib/api';
+import { CheckCircle, Check } from 'lucide-react';
 import { getAuthHeaders } from '@/contexts/AuthContext';
 import { getDateForSelection } from '@/lib/date-utils';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
@@ -169,7 +170,7 @@ export default function ChefDashboardPage() {
             </h2>
             {otherTodayActions.length === 0 && priorityItems.length === 0 && otherYesterdayUnresolved.length === 0 ? (
               <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
-                <div className="text-green-500 text-lg mb-1">✅</div>
+                <div className="flex justify-center mb-1"><CheckCircle className="w-5 h-5 text-green-500" /></div>
                 <p className="text-sm text-gray-500">太棒了，暂时没有需要处理的问题！</p>
               </div>
             ) : otherTodayActions.length === 0 ? null : (
@@ -414,7 +415,7 @@ function ActionCard({
                 : 'bg-green-50 text-green-600 hover:bg-green-100'
             }`}
           >
-            {showInput && !dismissMode ? '处理完成，谢谢！' : '搞定了 ✓'}
+            {showInput && !dismissMode ? '处理完成，谢谢！' : <span className="flex items-center gap-1">搞定了 <Check className="w-3.5 h-3.5" /></span>}
           </button>
           <button
             onClick={handleDismiss}

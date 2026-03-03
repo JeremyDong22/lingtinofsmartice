@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { BarChart3 } from 'lucide-react';
 
 interface FrequencyData {
   first: number;
@@ -79,7 +80,7 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
   if (coverage < 30 && withData === 0) {
     return (
       <div className="bg-white rounded-xl p-6 text-center">
-        <div className="text-4xl mb-3">📊</div>
+        <div className="flex justify-center mb-3"><BarChart3 className="w-10 h-10 text-gray-300" /></div>
         <h3 className="text-base font-semibold text-gray-900 mb-1">数据积累中</h3>
         <p className="text-sm text-gray-500">
           新录音将自动提取客户画像信息（来源渠道、到店频次）

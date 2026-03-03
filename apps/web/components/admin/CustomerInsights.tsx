@@ -5,6 +5,7 @@
 
 import { useRef, useState, useCallback, Fragment } from 'react';
 import useSWR from 'swr';
+import { Lightbulb } from 'lucide-react';
 
 // --- Types ---
 interface SuggestionEvidence {
@@ -419,7 +420,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
       {/* Empty state */}
       {!isLoading && mergedStores.length === 0 && (
         <div className="bg-white rounded-xl p-8 text-center">
-          <div className="text-4xl mb-3">💡</div>
+          <div className="flex justify-center mb-3"><Lightbulb className="w-10 h-10 text-gray-300" /></div>
           <h3 className="text-base font-medium text-gray-700 mb-1">暂无顾客洞察</h3>
           <p className="text-sm text-gray-400">
             店长完成桌访录音后，顾客建议和反馈将显示在这里

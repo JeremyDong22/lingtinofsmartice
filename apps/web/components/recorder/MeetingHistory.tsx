@@ -1,9 +1,14 @@
 // Meeting History - Display list of meeting recordings with status and summaries
+// v1.1 - Replaced emoji icons with lucide-react SVG icons
 
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { MeetingRecord, MeetingStatus, MeetingType } from '@/hooks/useMeetingStore';
+import {
+  UtensilsCrossed, ClipboardList, CalendarDays,
+  ChefHat, Building2, UserRound,
+} from 'lucide-react';
 
 interface MeetingHistoryProps {
   meetings: MeetingRecord[];
@@ -13,13 +18,13 @@ interface MeetingHistoryProps {
   title?: string;
 }
 
-const MEETING_TYPE_LABELS: Record<MeetingType, { label: string; icon: string }> = {
-  pre_meal: { label: '餐前会', icon: '🍳' },
-  daily_review: { label: '每日复盘', icon: '📋' },
-  weekly: { label: '周例会', icon: '📅' },
-  kitchen_meeting: { label: '厨房会议', icon: '🔪' },
-  cross_store_review: { label: '经营会', icon: '🏢' },
-  one_on_one: { label: '店长沟通', icon: '👤' },
+const MEETING_TYPE_LABELS: Record<MeetingType, { label: string; icon: ReactNode }> = {
+  pre_meal: { label: '餐前会', icon: <UtensilsCrossed className="w-5 h-5 text-primary-600" /> },
+  daily_review: { label: '每日复盘', icon: <ClipboardList className="w-5 h-5 text-primary-600" /> },
+  weekly: { label: '周例会', icon: <CalendarDays className="w-5 h-5 text-primary-600" /> },
+  kitchen_meeting: { label: '厨房会议', icon: <ChefHat className="w-5 h-5 text-primary-600" /> },
+  cross_store_review: { label: '经营会', icon: <Building2 className="w-5 h-5 text-primary-600" /> },
+  one_on_one: { label: '店长沟通', icon: <UserRound className="w-5 h-5 text-primary-600" /> },
 };
 
 function formatTime(timestamp: number): string {
@@ -112,7 +117,7 @@ export function MeetingHistory({
                 }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center text-lg">
+                  <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center">
                     {typeInfo.icon}
                   </div>
                   <div>
