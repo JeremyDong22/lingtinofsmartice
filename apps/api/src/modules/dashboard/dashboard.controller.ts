@@ -58,28 +58,17 @@ export class DashboardController {
   ) {
     const managedIds = DashboardService.parseManagedIds(managedIdsStr);
     const range = resolveRange(date, startDate, endDate);
-    const coverageStats = await this.dashboardService.getCoverageStats(
-      restaurantId,
-      range.start,
-      range.end,
-      managedIds,
-    );
-
-    // Add review completion data for single-restaurant mode
+    // Parallel: coverage + review completion (for single-restaurant mode)
     if (restaurantId !== 'all') {
-      try {
-        const reviewStats = await this.dashboardService.getReviewCompletionStats(
-          restaurantId,
-          range.start,
-          range.end,
-        );
-        return { ...coverageStats, review_completion: reviewStats };
-      } catch {
-        return { ...coverageStats, review_completion: null };
-      }
+      const [coverageStats, reviewStats] = await Promise.all([
+        this.dashboardService.getCoverageStats(restaurantId, range.start, range.end, managedIds),
+        this.dashboardService.getReviewCompletionStats(restaurantId, range.start, range.end)
+          .catch(() => null),
+      ]);
+      return { ...coverageStats, review_completion: reviewStats };
     }
 
-    return coverageStats;
+    return this.dashboardService.getCoverageStats(restaurantId, range.start, range.end, managedIds);
   }
 
   // GET /api/dashboard/dish-ranking

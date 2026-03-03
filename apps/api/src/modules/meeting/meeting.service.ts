@@ -129,21 +129,29 @@ export class MeetingService {
       meetingsByStore.set(m.restaurant_id, list);
     }
 
-    // 4. For stores without meetings, find their last meeting date
+    // 4. For stores without meetings, find their last meeting date — single batch query
     const storesWithoutMeetings = (restaurants || []).filter(r => !meetingsByStore.has(r.id));
     const lastMeetingDates = new Map<string, string | null>();
 
     if (storesWithoutMeetings.length > 0) {
-      for (const store of storesWithoutMeetings) {
-        const { data: lastMeeting } = await client
-          .from('lingtin_meeting_records')
-          .select('meeting_date')
-          .eq('restaurant_id', store.id)
-          .order('meeting_date', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const storeIds = storesWithoutMeetings.map(s => s.id);
+      const { data: lastMeetings } = await client
+        .from('lingtin_meeting_records')
+        .select('restaurant_id, meeting_date')
+        .in('restaurant_id', storeIds)
+        .order('meeting_date', { ascending: false });
 
-        lastMeetingDates.set(store.id, lastMeeting?.meeting_date || null);
+      // Deduplicate: keep only the latest meeting_date per restaurant
+      for (const m of (lastMeetings || [])) {
+        if (!lastMeetingDates.has(m.restaurant_id)) {
+          lastMeetingDates.set(m.restaurant_id, m.meeting_date);
+        }
+      }
+      // Fill null for stores with zero meetings ever
+      for (const store of storesWithoutMeetings) {
+        if (!lastMeetingDates.has(store.id)) {
+          lastMeetingDates.set(store.id, null);
+        }
       }
     }
 

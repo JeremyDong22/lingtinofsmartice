@@ -108,25 +108,27 @@ export class StaffService {
     since.setDate(since.getDate() - days);
     const sinceStr = since.toISOString();
 
-    // 1. Fetch all user messages from chat_history (cross-store)
-    const { data: chatRows } = await client
-      .from('chat_history')
-      .select('id, content, employee_name, restaurant_id, created_at')
-      .eq('role', 'user')
-      .gte('created_at', sinceStr)
-      .order('created_at', { ascending: false })
-      .limit(500);
+    // 1+2. Fetch chat_history and visit_records in parallel
+    const [chatRes, visitRes] = await Promise.all([
+      client
+        .from('chat_history')
+        .select('id, content, employee_name, restaurant_id, created_at')
+        .eq('role', 'user')
+        .gte('created_at', sinceStr)
+        .order('created_at', { ascending: false })
+        .limit(500),
+      client
+        .from('lingtin_visit_records')
+        .select('id, manager_questions, employee_id, restaurant_id, created_at')
+        .eq('status', 'completed')
+        .gte('created_at', sinceStr)
+        .order('created_at', { ascending: false })
+        .limit(500),
+    ]);
+    const chatRows = chatRes.data;
+    const visitRows = visitRes.data;
 
-    // 2. Fetch visit records with manager_questions (cross-store)
-    const { data: visitRows } = await client
-      .from('lingtin_visit_records')
-      .select('id, manager_questions, employee_id, restaurant_id, created_at')
-      .eq('status', 'completed')
-      .gte('created_at', sinceStr)
-      .order('created_at', { ascending: false })
-      .limit(500);
-
-    // 3. Collect all restaurant IDs for name lookup
+    // 3. Collect all restaurant IDs and employee IDs for name lookup
     const restaurantIds = new Set<string>();
     const employeeIds = new Set<string>();
     (chatRows || []).forEach(r => r.restaurant_id && restaurantIds.add(r.restaurant_id));
@@ -135,35 +137,31 @@ export class StaffService {
       r.employee_id && employeeIds.add(r.employee_id);
     });
 
-    // Fetch restaurant names
-    let restaurantMap: Record<string, string> = {};
-    if (restaurantIds.size > 0) {
-      const { data: rests } = await client
-        .from('master_restaurant')
-        .select('id, restaurant_name')
-        .in('id', [...restaurantIds]);
-      if (rests) {
-        restaurantMap = rests.reduce((acc, r) => {
+    // Fetch restaurant names + employee info in parallel
+    const [restaurantMap, employeeMap] = await Promise.all([
+      (async () => {
+        if (restaurantIds.size === 0) return {} as Record<string, string>;
+        const { data: rests } = await client
+          .from('master_restaurant')
+          .select('id, restaurant_name')
+          .in('id', [...restaurantIds]);
+        return (rests || []).reduce((acc, r) => {
           acc[r.id] = r.restaurant_name;
           return acc;
         }, {} as Record<string, string>);
-      }
-    }
-
-    // Fetch employee info (name + role)
-    let employeeMap: Record<string, { name: string; role: string }> = {};
-    if (employeeIds.size > 0) {
-      const { data: emps } = await client
-        .from('master_employee')
-        .select('id, employee_name, role_code')
-        .in('id', [...employeeIds]);
-      if (emps) {
-        employeeMap = emps.reduce((acc, e) => {
+      })(),
+      (async () => {
+        if (employeeIds.size === 0) return {} as Record<string, { name: string; role: string }>;
+        const { data: emps } = await client
+          .from('master_employee')
+          .select('id, employee_name, role_code')
+          .in('id', [...employeeIds]);
+        return (emps || []).reduce((acc, e) => {
           acc[e.id] = { name: e.employee_name, role: e.role_code || 'manager' };
           return acc;
         }, {} as Record<string, { name: string; role: string }>);
-      }
-    }
+      })(),
+    ]);
 
     // 4. Build question items from both sources
     interface QuestionItem {
