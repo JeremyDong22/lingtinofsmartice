@@ -1,5 +1,5 @@
 // Feedback Controller - API endpoints for employee product feedback
-// Supports: submit text/voice, process (STT + AI classify), query, status update, reply
+// v1.1 - STT model provenance: stt_model column tracks which engine processed each recording
 
 import {
   Controller,
@@ -21,6 +21,7 @@ import { FeedbackService } from './feedback.service';
 import { FeedbackAiService } from './feedback-ai.service';
 import { XunfeiSttService } from '../audio/xunfei-stt.service';
 import { DashScopeSttService } from '../audio/dashscope-stt.service';
+import { SttModel } from '../../common/types/stt';
 
 const multerOptions = {
   storage: memoryStorage(),
@@ -160,19 +161,26 @@ export class FeedbackController {
     try {
       // STT: DashScope first, fallback to 讯飞
       let transcript: string;
+      let sttModel: SttModel | undefined;
       if (this.dashScopeStt.isConfigured()) {
         try {
-          transcript = await this.dashScopeStt.transcribe(audioUrl, 1, 120000);
+          const sttResult = await this.dashScopeStt.transcribe(audioUrl, 1, 120000);
+          transcript = sttResult.transcript;
+          sttModel = sttResult.sttModel;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           this.logger.warn(`DashScope STT failed, falling back to 讯飞: ${msg}`);
-          transcript = await this.xunfeiStt.transcribe(audioUrl, 120000);
+          const sttResult = await this.xunfeiStt.transcribe(audioUrl, 120000);
+          transcript = sttResult.transcript;
+          sttModel = sttResult.sttModel;
         }
       } else {
-        transcript = await this.xunfeiStt.transcribe(audioUrl, 120000);
+        const sttResult = await this.xunfeiStt.transcribe(audioUrl, 120000);
+        transcript = sttResult.transcript;
+        sttModel = sttResult.sttModel;
       }
 
-      this.logger.log(`  STT完成: ${transcript.length}字`);
+      this.logger.log(`  STT完成(${sttModel}): ${transcript.length}字`);
 
       if (!transcript || transcript.trim().length === 0) {
         await this.feedbackService.updateSttStatus(id, 'completed');
@@ -189,7 +197,7 @@ export class FeedbackController {
         this.logger.warn(`AI classification failed (non-fatal): ${msg}`);
       }
 
-      const data = await this.feedbackService.processFeedback(id, transcript, classification);
+      const data = await this.feedbackService.processFeedback(id, transcript, classification, sttModel);
       this.logger.log(`◀ Process complete: ${data.id}`);
       return { data, message: '处理完成' };
     } catch (err) {

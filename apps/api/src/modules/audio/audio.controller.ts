@@ -1,5 +1,5 @@
 // Audio Controller - API endpoints for recording
-// v3.8 - Added: POST /quick-transcribe for voice-to-text (chef response notes)
+// v3.9 - STT services now return SttResult; quick-transcribe extracts .transcript
 
 import {
   Controller,
@@ -223,18 +223,20 @@ export class AudioController {
       const { data: urlData } = client.storage.from('lingtin').getPublicUrl(tempPath);
       const audioUrl = urlData.publicUrl;
 
-      // Run STT: DashScope → 讯飞 fallback
+      // Run STT: DashScope → 讯飞 fallback (no DB write, only need transcript text)
       let transcript = '';
       if (this.dashScopeStt.isConfigured()) {
         try {
-          transcript = await this.dashScopeStt.transcribe(audioUrl, 1, 30000);
+          const sttResult = await this.dashScopeStt.transcribe(audioUrl, 1, 30000);
+          transcript = sttResult.transcript;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           this.logger.warn(`DashScope quick-transcribe failed, trying 讯飞: ${msg}`);
         }
       }
       if (!transcript) {
-        transcript = await this.xunfeiStt.transcribe(audioUrl, 30000);
+        const sttResult = await this.xunfeiStt.transcribe(audioUrl, 30000);
+        transcript = sttResult.transcript;
       }
 
       this.logger.log(`◀ Quick-transcribe done: ${transcript.length} chars`);

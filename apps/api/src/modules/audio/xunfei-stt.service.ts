@@ -1,9 +1,10 @@
 // 讯飞 Speech-to-Text Service - 方言识别大模型 (SLM) + 中文识别大模型 fallback
-// v2.4 - 方言大模型 license 失败(11201/11203)时自动 fallback 到中文识别大模型
+// v2.5 - Returns SttResult with model identifier for provenance tracking
 // API文档(方言): https://www.xfyun.cn/doc/spark/spark_slm_iat.html
 // API文档(中文): https://www.xfyun.cn/doc/asr/voicedictation/API.html
 
 import { Injectable, Logger } from '@nestjs/common';
+import { SttResult } from '../../common/types/stt';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -59,7 +60,7 @@ interface SlmResultText {
 export class XunfeiSttService {
   private readonly logger = new Logger(XunfeiSttService.name);
 
-  async transcribe(audioUrl: string, timeoutMs: number = STT_TIMEOUT_MS): Promise<string> {
+  async transcribe(audioUrl: string, timeoutMs: number = STT_TIMEOUT_MS): Promise<SttResult> {
     const appId = process.env.XUNFEI_APP_ID;
     const apiKey = process.env.XUNFEI_API_KEY;
     const apiSecret = process.env.XUNFEI_API_SECRET;
@@ -85,14 +86,16 @@ export class XunfeiSttService {
     // Step 3: 优先用方言大模型，license 失败时 fallback 到中文识别大模型
     try {
       const wsUrl = this.buildAuthUrl(apiKey, apiSecret, XUNFEI_HOST, XUNFEI_PATH, XUNFEI_WSS_URL);
-      return await this.sendAudioAndGetTranscript(wsUrl, appId, pcmBuffer, timeoutMs);
+      const transcript = await this.sendAudioAndGetTranscript(wsUrl, appId, pcmBuffer, timeoutMs);
+      return { transcript, sttModel: 'xunfei_dialect_slm' as const };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const code = this.extractErrorCode(msg);
       if (LICENSE_ERROR_CODES.has(code)) {
         this.logger.warn(`方言大模型 license 失败(${code})，fallback 到中文识别大模型`);
         const wsUrl = this.buildAuthUrl(apiKey, apiSecret, CHINESE_HOST, CHINESE_PATH, CHINESE_WSS_URL);
-        return await this.sendAudioChineseModel(wsUrl, appId, pcmBuffer, timeoutMs);
+        const transcript = await this.sendAudioChineseModel(wsUrl, appId, pcmBuffer, timeoutMs);
+        return { transcript, sttModel: 'xunfei_chinese_iat' as const };
       }
       throw err;
     }

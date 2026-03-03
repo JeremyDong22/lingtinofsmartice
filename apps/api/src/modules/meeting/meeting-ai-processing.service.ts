@@ -1,11 +1,12 @@
 // Meeting AI Processing Service - STT + AI minutes generation
-// v2.1 - Auto-extract action items to lingtin_action_items after processing
+// v2.2 - STT model provenance: stt_model column tracks which engine processed each recording
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { XunfeiSttService } from '../audio/xunfei-stt.service';
 import { DashScopeSttService } from '../audio/dashscope-stt.service';
 import { getChinaDateString } from '../../common/utils/date';
+import { SttModel } from '../../common/types/stt';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -55,18 +56,25 @@ export class MeetingAiProcessingService {
 
       // Step 1: STT — DashScope first (speaker_count=4 for meetings), fallback to 讯飞
       let rawTranscript: string;
+      let sttModel: SttModel | undefined;
       if (this.dashScopeStt.isConfigured()) {
         try {
-          rawTranscript = await this.dashScopeStt.transcribe(audioUrl, 4, 600000);
+          const sttResult = await this.dashScopeStt.transcribe(audioUrl, 4, 600000);
+          rawTranscript = sttResult.transcript;
+          sttModel = sttResult.sttModel;
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           this.logger.warn(`DashScope STT failed, falling back to 讯飞: ${msg}`);
-          rawTranscript = await this.xunfeiStt.transcribe(audioUrl, MEETING_STT_TIMEOUT_MS);
+          const sttResult = await this.xunfeiStt.transcribe(audioUrl, MEETING_STT_TIMEOUT_MS);
+          rawTranscript = sttResult.transcript;
+          sttModel = sttResult.sttModel;
         }
       } else {
-        rawTranscript = await this.xunfeiStt.transcribe(audioUrl, MEETING_STT_TIMEOUT_MS);
+        const sttResult = await this.xunfeiStt.transcribe(audioUrl, MEETING_STT_TIMEOUT_MS);
+        rawTranscript = sttResult.transcript;
+        sttModel = sttResult.sttModel;
       }
-      this.logger.log(`STT完成: ${rawTranscript.length}字`);
+      this.logger.log(`STT完成(${sttModel}): ${rawTranscript.length}字`);
 
       if (!rawTranscript || rawTranscript.trim().length === 0) {
         this.logger.warn(`空音频或无法识别，跳过AI处理`);
@@ -76,7 +84,7 @@ export class MeetingAiProcessingService {
           actionItems: [],
           keyDecisions: [],
         };
-        await this.saveResults(recordingId, rawTranscript, emptyResult);
+        await this.saveResults(recordingId, rawTranscript, emptyResult, sttModel);
         return emptyResult;
       }
 
@@ -89,7 +97,7 @@ export class MeetingAiProcessingService {
       this.logger.log(`AI完成: ${aiResult.actionItems.length} action items`);
 
       // Step 3: Save results
-      await this.saveResults(recordingId, rawTranscript, aiResult);
+      await this.saveResults(recordingId, rawTranscript, aiResult, sttModel);
 
       // Step 4: Write action items to lingtin_action_items (for review/pre_meal meetings)
       if (aiResult.actionItems.length > 0) {
@@ -295,6 +303,7 @@ export class MeetingAiProcessingService {
     recordingId: string,
     rawTranscript: string,
     result: MeetingProcessingResult,
+    sttModel?: SttModel,
   ): Promise<void> {
     const client = this.supabase.getClient();
 
@@ -306,6 +315,7 @@ export class MeetingAiProcessingService {
         ai_summary: result.aiSummary,
         action_items: result.actionItems,
         key_decisions: result.keyDecisions,
+        stt_model: sttModel || null,
         status: 'processed',
         processed_at: new Date().toISOString(),
       })

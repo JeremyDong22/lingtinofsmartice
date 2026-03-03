@@ -1,8 +1,10 @@
 // Feedback Service - DB operations for employee product feedback
+// v1.1 - STT model provenance: stt_model column tracks which engine processed each recording
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { randomUUID } from 'crypto';
+import { SttModel } from '../../common/types/stt';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
@@ -143,6 +145,7 @@ export class FeedbackService {
     feedbackId: string,
     transcript: string,
     classification: { category: string; ai_summary: string; priority: string; tags: string[] },
+    sttModel?: SttModel,
   ) {
     const client = this.supabase.getClient();
 
@@ -156,6 +159,7 @@ export class FeedbackService {
         ai_summary: classification.ai_summary,
         priority: classification.priority,
         tags: classification.tags,
+        stt_model: sttModel || null,
       })
       .eq('id', feedbackId)
       .select()

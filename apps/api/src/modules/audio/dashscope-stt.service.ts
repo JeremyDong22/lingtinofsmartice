@@ -1,7 +1,10 @@
 // DashScope Paraformer-v2 STT Service
+// v2.0 - Added hotword vocabulary support (DASHSCOPE_VOCABULARY_ID)
+//        Enhanced error logging: quota exhaustion, auth failures, task errors
 // Uses Alibaba DashScope batch transcription API with speaker diarization
 
 import { Injectable, Logger } from '@nestjs/common';
+import { SttResult } from '../../common/types/stt';
 
 // Submit endpoint for transcription tasks
 const DASHSCOPE_SUBMIT_URL =
@@ -27,10 +30,15 @@ interface TranscriptionResult {
 
 interface TaskResponse {
   request_id: string;
+  code?: string;
+  message?: string;
   output: {
     task_id: string;
     task_status: string;
     results?: TranscriptionResult[];
+    // Task failure details
+    code?: string;
+    message?: string;
   };
 }
 
@@ -56,43 +64,55 @@ export class DashScopeSttService {
     audioUrl: string,
     speakerCount = 2,
     timeoutMs = POLL_DEFAULT_TIMEOUT_MS,
-  ): Promise<string> {
+  ): Promise<SttResult> {
     const apiKey = process.env.DASHSCOPE_API_KEY;
     if (!apiKey) {
       throw new Error('DASHSCOPE_NOT_CONFIGURED: DashScope API Key 未配置');
     }
 
-    this.logger.log(`Using DashScope Paraformer-v2 for STT (speakers: ${speakerCount})`);
+    const vocabularyId = process.env.DASHSCOPE_VOCABULARY_ID || '';
+    this.logger.log(
+      `DashScope Paraformer-v2 STT start | speakers=${speakerCount} | hotwords=${vocabularyId ? 'ON' : 'OFF'}`,
+    );
 
     // Step 1: Submit transcription task
-    const taskId = await this.submitTask(apiKey, audioUrl, speakerCount);
+    const taskId = await this.submitTask(apiKey, audioUrl, speakerCount, vocabularyId);
     this.logger.log(`Task submitted: ${taskId}`);
 
     // Step 2: Poll for result
     const result = await this.pollResult(apiKey, taskId, timeoutMs);
-    this.logger.log(`Task ${taskId} completed`);
+    this.logger.log(`Task ${taskId} completed, transcript length=${result.length}`);
 
-    return result;
+    return { transcript: result, sttModel: 'dashscope_paraformer_v2' as const };
   }
 
   /**
    * Submit a transcription task to DashScope
+   * Includes vocabulary_id for hotword boosting when configured
    */
   private async submitTask(
     apiKey: string,
     audioUrl: string,
     speakerCount: number,
+    vocabularyId: string,
   ): Promise<string> {
+    const parameters: Record<string, unknown> = {
+      language_hints: ['zh'],
+      diarization_enabled: true,
+      speaker_count: speakerCount,
+    };
+
+    // Attach hotword vocabulary if configured
+    if (vocabularyId) {
+      parameters.vocabulary_id = vocabularyId;
+    }
+
     const body = {
       model: 'paraformer-v2',
       input: {
         file_urls: [audioUrl],
       },
-      parameters: {
-        language_hints: ['zh'],
-        diarization_enabled: true,
-        speaker_count: speakerCount,
-      },
+      parameters,
     };
 
     const response = await fetch(DASHSCOPE_SUBMIT_URL, {
@@ -107,14 +127,30 @@ export class DashScopeSttService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error(`DashScope submit error: ${response.status} - ${errorText}`);
-      throw new Error(`DASHSCOPE_SUBMIT_ERROR: ${response.status} - ${errorText}`);
+      // Detect specific error scenarios for actionable logging
+      if (response.status === 401 || response.status === 403) {
+        this.logger.error(
+          `DashScope AUTH FAILED (${response.status}): API Key 无效或已过期. ${errorText.slice(0, 200)}`,
+        );
+      } else if (response.status === 429) {
+        this.logger.error(
+          `DashScope RATE LIMIT (429): 请求过于频繁或用量已耗尽. ${errorText.slice(0, 200)}`,
+        );
+      } else if (response.status === 400 && errorText.includes('Quota')) {
+        this.logger.error(
+          `DashScope QUOTA EXHAUSTED: 用量已用完，需要充值. ${errorText.slice(0, 200)}`,
+        );
+      } else {
+        this.logger.error(`DashScope submit error: ${response.status} - ${errorText.slice(0, 300)}`);
+      }
+      throw new Error(`DASHSCOPE_SUBMIT_ERROR: ${response.status} - ${errorText.slice(0, 200)}`);
     }
 
     const data: TaskResponse = await response.json();
     const taskId = data.output?.task_id;
 
     if (!taskId) {
+      this.logger.error(`DashScope no task_id in response: ${JSON.stringify(data).slice(0, 300)}`);
       throw new Error('DASHSCOPE_NO_TASK_ID: 提交任务未返回 task_id');
     }
 
@@ -143,10 +179,10 @@ export class DashScopeSttService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.logger.warn(`DashScope poll error: ${response.status} - ${errorText}`);
+        this.logger.warn(`DashScope poll error: ${response.status} - ${errorText.slice(0, 200)}`);
         // Non-transient errors (4xx except 429): fail immediately
         if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-          throw new Error(`DASHSCOPE_POLL_ERROR: ${response.status} - ${errorText}`);
+          throw new Error(`DASHSCOPE_POLL_ERROR: ${response.status} - ${errorText.slice(0, 200)}`);
         }
         // Transient errors (5xx, 429): continue polling with backoff
         delay = Math.min(delay * 2, POLL_MAX_DELAY_MS);
@@ -161,14 +197,24 @@ export class DashScopeSttService {
       }
 
       if (status === 'FAILED') {
-        this.logger.error(`DashScope task ${taskId} failed`);
-        throw new Error('DASHSCOPE_TASK_FAILED: 转写任务失败');
+        // Log detailed failure reason from task output
+        const failCode = data.output?.code || data.code || 'UNKNOWN';
+        const failMsg = data.output?.message || data.message || '未知错误';
+        this.logger.error(
+          `DashScope task FAILED | task=${taskId} | code=${failCode} | msg=${failMsg}`,
+        );
+        // Detect quota/billing errors in task failure
+        if (failCode.includes('Quota') || failMsg.includes('quota') || failMsg.includes('Insufficient')) {
+          this.logger.error('DashScope QUOTA EXHAUSTED: 用量已用完，后续请求将 fallback 到讯飞');
+        }
+        throw new Error(`DASHSCOPE_TASK_FAILED: [${failCode}] ${failMsg}`);
       }
 
       // PENDING or RUNNING — keep polling with exponential backoff
       delay = Math.min(delay * 2, POLL_MAX_DELAY_MS);
     }
 
+    this.logger.error(`DashScope task TIMEOUT | task=${taskId} | elapsed=${Math.round((Date.now() - startTime) / 1000)}s`);
     throw new Error(`DASHSCOPE_TIMEOUT: 转写任务超时 (${Math.round(timeoutMs / 1000)}s)`);
   }
 

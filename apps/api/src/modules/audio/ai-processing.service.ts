@@ -1,10 +1,11 @@
 // AI Processing Service - Handles STT and AI tagging pipeline
-// v7.0 - Satisfaction scoring: per-item score 0-100, system-calculated overall satisfaction
+// v7.1 - STT model provenance: stt_model column tracks which engine processed each recording
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { XunfeiSttService } from './xunfei-stt.service';
 import { DashScopeSttService } from './dashscope-stt.service';
+import { SttModel, SttResult } from '../../common/types/stt';
 
 // OpenRouter API Configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -74,9 +75,9 @@ export class AiProcessingService {
       const startTime = Date.now();
       this.logger.log(`Pipeline: ${tableId} 开始处理`);
 
-      // Step 1: Speech-to-Text (讯飞)
-      const rawTranscript = await this.transcribeAudio(audioUrl);
-      this.logger.log(`STT完成: ${rawTranscript.length}字`);
+      // Step 1: Speech-to-Text (DashScope → 讯飞 fallback)
+      const { transcript: rawTranscript, sttModel } = await this.transcribeAudio(audioUrl);
+      this.logger.log(`STT完成(${sttModel}): ${rawTranscript.length}字`);
 
       // Step 2: Handle empty transcript - skip AI processing
       if (!rawTranscript || rawTranscript.trim().length === 0) {
@@ -93,6 +94,7 @@ export class AiProcessingService {
         };
         await this.saveResults(recordingId, {
           rawTranscript: '',
+          sttModel,
           ...emptyResult,
         });
         return {
@@ -118,7 +120,7 @@ export class AiProcessingService {
           customerSource: null as string | null,
           visitFrequency: null as string | null,
         };
-        await this.saveResults(recordingId, { rawTranscript, ...fillerResult });
+        await this.saveResults(recordingId, { rawTranscript, sttModel, ...fillerResult });
         return { transcript: rawTranscript, ...fillerResult };
       }
 
@@ -131,6 +133,7 @@ export class AiProcessingService {
       // Step 4: Save results to database
       await this.saveResults(recordingId, {
         rawTranscript,
+        sttModel,
         ...aiResult,
       });
 
@@ -372,12 +375,11 @@ export class AiProcessingService {
   /**
    * Transcribe audio: DashScope Paraformer-v2 first, fallback to 讯飞
    */
-  private async transcribeAudio(audioUrl: string): Promise<string> {
+  private async transcribeAudio(audioUrl: string): Promise<SttResult> {
     // Try DashScope first if configured
     if (this.dashScopeStt.isConfigured()) {
       try {
-        const transcript = await this.dashScopeStt.transcribe(audioUrl, 2);
-        return transcript;
+        return await this.dashScopeStt.transcribe(audioUrl, 2);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         this.logger.warn(`DashScope STT failed, falling back to 讯飞: ${msg}`);
@@ -757,6 +759,7 @@ export class AiProcessingService {
     recordingId: string,
     result: {
       rawTranscript: string;
+      sttModel?: SttModel;
       correctedTranscript: string;
       aiSummary: string;
       sentimentScore: number;
@@ -794,6 +797,7 @@ export class AiProcessingService {
         customer_answers: result.customerAnswers,
         customer_source: result.customerSource,
         visit_frequency: result.visitFrequency,
+        stt_model: result.sttModel || null,
         status: 'processed',
         processed_at: new Date().toISOString(),
       })
