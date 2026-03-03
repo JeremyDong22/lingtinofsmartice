@@ -354,9 +354,12 @@ export default function RegionManagePage() {
                 </div>
               ) : (
               /* Card header */
-              <button
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => toggleExpand(r.id)}
-                className="w-full px-4 py-3 flex items-center justify-between text-left"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleExpand(r.id); }}
+                className="w-full px-4 py-3 flex items-center justify-between text-left cursor-pointer"
               >
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-medium text-gray-900">{r.region_name}</h3>
@@ -391,7 +394,7 @@ export default function RegionManagePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
-              </button>
+              </div>
               )}
 
               {/* Expanded content */}
