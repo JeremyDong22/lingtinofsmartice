@@ -566,7 +566,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
     }
 
     const requestBody: Record<string, any> = {
-      model: 'deepseek/deepseek-chat-v3-0324',
+      model: 'minimax/minimax-m2.5',
       max_tokens: isBriefing ? 3072 : 2048,
       messages: [
         { role: 'system', content: systemPrompt },
