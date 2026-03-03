@@ -276,6 +276,11 @@ export function useChatStream(): UseChatStreamReturn {
                 continue;
               }
 
+              if (parsed.type === 'heartbeat') {
+                // Heartbeat keeps the stream alive; resetStreamTimer already called above
+                continue;
+              }
+
               if (parsed.type === 'thinking') {
                 setMessages(prev => prev.map(msg =>
                   msg.id === assistantMessageId
@@ -322,6 +327,7 @@ export function useChatStream(): UseChatStreamReturn {
                 content: `抱歉，${timeoutMsg}`,
                 isStreaming: false,
                 isError: true,
+                thinkingStatus: undefined,
                 originalQuestion: content,
               }
             : msg
@@ -340,6 +346,7 @@ export function useChatStream(): UseChatStreamReturn {
               content: `抱歉，${errorMessage}`,
               isStreaming: false,
               isError: true,
+              thinkingStatus: undefined,
               originalQuestion: content,
             }
           : msg

@@ -429,7 +429,17 @@ this.logger.log(`Messages in context: ${messages.length}`);
 
         res.write(`data: ${JSON.stringify({ type: 'thinking', content: '正在生成今日汇报...' })}\n\n`);
 
-        const response = await this.callClaudeAPI(systemPrompt, messages, true);
+        // Send heartbeat every 10s to prevent frontend/proxy timeout during long AI call
+        const heartbeat = setInterval(() => {
+          try { res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`); } catch {}
+        }, 10_000);
+
+        let response: any;
+        try {
+          response = await this.callClaudeAPI(systemPrompt, messages, true);
+        } finally {
+          clearInterval(heartbeat);
+        }
 
         if (!response.choices || response.choices.length === 0) {
           throw new Error('Empty response from API');
