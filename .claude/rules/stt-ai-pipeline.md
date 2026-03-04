@@ -1,3 +1,10 @@
+---
+paths:
+  - "apps/api/src/modules/audio/**"
+  - "apps/api/src/modules/chat/**"
+  - "apps/api/src/modules/daily-summary/**"
+  - "apps/api/src/modules/meeting/**"
+---
 # STT & AI 模型配置
 
 ## STT 处理流水线
