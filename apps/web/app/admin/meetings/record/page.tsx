@@ -211,9 +211,9 @@ export default function AdminMeetingRecordPage() {
   }, [deleteMeeting, showToast]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen pb-8">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => router.push('/admin/meetings')}
           className="flex items-center gap-1 text-gray-600 hover:text-gray-900"
@@ -294,7 +294,7 @@ export default function AdminMeetingRecordPage() {
       <div className="px-4 pt-4 space-y-4">
         {/* Smart Agenda Card - based on briefing problems */}
         {problems.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="glass-card rounded-2xl overflow-hidden">
             <div
               className="px-4 py-3 flex items-center justify-between cursor-pointer"
               onClick={() => setAgendaCollapsed(!agendaCollapsed)}
@@ -334,7 +334,7 @@ export default function AdminMeetingRecordPage() {
         )}
 
         {/* Waveform + Recording Controls */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col items-center gap-4">
+        <div className="glass-card rounded-2xl p-6 flex flex-col items-center gap-4">
           {/* Duration display */}
           {isRecording && (
             <div className="text-2xl font-mono text-gray-900 tabular-nums">

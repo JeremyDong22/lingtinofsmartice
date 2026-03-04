@@ -53,7 +53,7 @@ function ComparisonCard({
   const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
 
   return (
-    <div className="bg-white rounded-xl p-3 text-center">
+    <div className="glass-card rounded-xl p-3 text-center">
       <div className="text-xs text-gray-500 mb-1">{label}</div>
       <div className="text-lg font-bold text-gray-900">
         {mine}{unit}

@@ -43,9 +43,9 @@ function InsightsContent() {
   const showDatePicker = activeTab !== 'feedback';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">
           {activeTab === 'product' ? '产品洞察' : '洞察'}
         </h1>
@@ -117,7 +117,7 @@ function InsightsContent() {
 export default function InsightsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-gray-500">加载中...</div>
       </div>
     }>

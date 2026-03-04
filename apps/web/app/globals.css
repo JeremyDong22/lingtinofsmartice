@@ -1,4 +1,4 @@
-/* Global Styles - v1.3 - Added update banner slide animation */
+/* Global Styles - v2.0 - Pure Float Glass visual upgrade */
 
 @tailwind base;
 @tailwind components;
@@ -6,13 +6,72 @@
 
 :root {
   --foreground-rgb: 23, 22, 14;
-  --background-rgb: 246, 244, 238;
+  --background-rgb: 244, 245, 247;
 }
 
+/* html provides the fallback solid color so there's no white flash on load */
+html {
+  background-color: rgb(var(--background-rgb));
+}
+
+/* body itself is transparent — body::before provides the actual gradient */
 body {
   color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  min-height: 100vh;
+}
+
+/* Fixed gradient — GPU-composited, visible through transparent page containers */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: rgb(var(--background-rgb));
+  background-image:
+    radial-gradient(circle at 15% 0%, #F8F9FA 0%, transparent 60%),
+    radial-gradient(circle at 85% 100%, #E8EAF0 0%, transparent 50%);
+}
+
+/* ─── Pure Float Glass ─── */
+
+.glass-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.06) 100%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+  box-shadow:
+    0 16px 32px -12px rgba(15,23,42,0.06),
+    0 4px 12px -4px rgba(15,23,42,0.03),
+    inset 0 1px 0px rgba(255,255,255,0.6),
+    inset 0 -1px 0px rgba(255,255,255,0.1);
+}
+
+.glass-card::before,
+.glass-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.2) 25%, rgba(255,255,255,0.0) 50%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.glass-nav {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.12) 100%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+  box-shadow:
+    0 24px 48px -12px rgba(15,23,42,0.08),
+    0 8px 16px -6px rgba(15,23,42,0.04),
+    inset 0 1px 0px rgba(255,255,255,0.8),
+    inset 0 -1px 0px rgba(255,255,255,0.15);
 }
 
 /* Safe area for devices with notch */

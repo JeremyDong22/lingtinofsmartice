@@ -14,7 +14,7 @@ const config: Config = {
       colors: {
         // H-3 宣纸素墨配色 — 暖灰底 + 靛蓝主色
         gray: {
-          50: '#F6F4EE',
+          50: '#F4F5F7',
           100: '#EEECE4',
           200: '#E4E1D8',
           300: '#DAD6CA',

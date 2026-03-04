@@ -224,9 +224,9 @@ export default function RegionManagePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -267,7 +267,7 @@ export default function RegionManagePage() {
 
         {/* Create form (top, only for new) */}
         {isNew && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border-2 border-primary-200">
+          <div className="glass-card rounded-2xl p-4 border-2 border-primary-200">
             <h3 className="text-sm font-medium text-gray-900 mb-3">新建区域</h3>
             <div className="flex gap-2">
               <input
@@ -298,7 +298,7 @@ export default function RegionManagePage() {
 
         {/* Empty state */}
         {!isLoading && regions.length === 0 && !isNew && (
-          <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
+          <div className="glass-card rounded-2xl p-8 text-center">
             <div className="text-gray-400 mb-2">
               <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -324,7 +324,7 @@ export default function RegionManagePage() {
           const isEditingThis = editingId === r.id;
 
           return (
-            <div key={r.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div key={r.id} className="glass-card rounded-2xl overflow-hidden">
               {/* Inline edit form (replaces card header) */}
               {isEditingThis ? (
                 <div className="px-4 py-3 border-b-2 border-primary-200">

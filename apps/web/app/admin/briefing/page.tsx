@@ -170,9 +170,9 @@ export default function AdminBriefingPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold text-gray-900">总览</h1>
           {isScoped && (
@@ -213,7 +213,7 @@ export default function AdminBriefingPage() {
         {/* Compact metrics grid (2×2) */}
         {!isLoading && (
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white rounded-xl p-3 text-center">
+            <div className="glass-card rounded-xl p-3 text-center">
               <div className="text-xs text-gray-500 mb-0.5">满意度</div>
               <div className={`text-xl font-bold ${getSatisfactionDisplay(avgSentiment ?? null).color}`}>
                 {avgSentiment != null ? `${Math.round(avgSentiment)}分` : '--'}
@@ -222,7 +222,7 @@ export default function AdminBriefingPage() {
                 {summary?.total_visits ?? 0}次桌访
               </div>
             </div>
-            <div className="bg-white rounded-xl p-3 text-center">
+            <div className="glass-card rounded-xl p-3 text-center">
               <div className="text-xs text-gray-500 mb-0.5">覆盖率</div>
               <div className={`text-xl font-bold ${
                 (data?.avg_coverage ?? 0) >= 60 ? 'text-green-600' :
@@ -236,7 +236,7 @@ export default function AdminBriefingPage() {
                 {restaurantCount} 家门店
               </div>
             </div>
-            <div className="bg-white rounded-xl p-3 text-center">
+            <div className="glass-card rounded-xl p-3 text-center">
               <div className="text-xs text-gray-500 mb-0.5">复盘完成</div>
               <div className={`text-xl font-bold ${
                 avgReviewCompletion >= 80 ? 'text-green-600' :
@@ -248,7 +248,7 @@ export default function AdminBriefingPage() {
               </div>
               <div className="text-xs text-gray-400">&nbsp;</div>
             </div>
-            <div className="bg-white rounded-xl p-3 text-center">
+            <div className="glass-card rounded-xl p-3 text-center">
               <div className="text-xs text-gray-500 mb-0.5">老客占比</div>
               {(() => {
                 const ratio = profileData?.summary?.repeat_ratio;
@@ -297,7 +297,7 @@ export default function AdminBriefingPage() {
               const ReviewIcon = hasReviewed ? Check : X;
 
               return (
-                <div key={rest.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                <div key={rest.id} className="glass-card rounded-2xl overflow-hidden">
                   {/* Store summary row — tappable */}
                   <div
                     className="px-4 py-3 flex items-center gap-3 cursor-pointer active:bg-gray-50 transition-colors"
@@ -425,7 +425,7 @@ export default function AdminBriefingPage() {
 
         {/* Empty state - all healthy */}
         {!isLoading && sortedRestaurants.length === 0 && restaurantCount > 0 && (
-          <div className="bg-white rounded-xl p-6 text-center">
+          <div className="glass-card rounded-xl p-6 text-center">
             <div className="flex justify-center mb-3"><CheckCircle className="w-10 h-10 text-green-400" /></div>
             <h3 className="text-lg font-semibold text-gray-900 mb-1">一切正常</h3>
             <p className="text-sm text-gray-500">

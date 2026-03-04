@@ -61,9 +61,9 @@ export default function FeedbackHistoryPage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -98,7 +98,7 @@ export default function FeedbackHistoryPage() {
         {feedbacks.map((fb) => {
           const statusInfo = STATUS_MAP[fb.status] || STATUS_MAP.pending;
           return (
-            <div key={fb.id} className="bg-white rounded-xl p-4 shadow-sm space-y-2">
+            <div key={fb.id} className="glass-card rounded-xl p-4 space-y-2">
               {/* Header row */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

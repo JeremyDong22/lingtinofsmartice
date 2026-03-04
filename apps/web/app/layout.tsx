@@ -36,7 +36,7 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
       </head>
-      <body className="min-h-screen bg-gray-50">
+      <body className="min-h-screen">
         <AuthProvider>
           <SWRProvider>
             <UpdatePrompt />

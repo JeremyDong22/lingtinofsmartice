@@ -74,11 +74,11 @@ export function MeetingAgendaCard({ restaurantId }: MeetingAgendaCardProps) {
   const agendaItems = summary.agenda_items;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-primary-50 to-white"
+        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-primary-50/60 to-transparent"
       >
         <div className="flex items-center gap-2">
           <ClipboardList className="w-4 h-4 text-primary-600" />
