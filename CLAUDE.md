@@ -108,6 +108,37 @@ master_employee (1)   ──< visit_records (N)
 > 部署配置详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，工作流详见 `.claude/rules/workflow.md`
 > 服务器迁移计划：后端将从阿里云迁移到新加坡区域
 
+### Zeabur 项目信息
+
+**项目 ID**: `697a5cfa06505fdd547f6889`
+**项目名称**: `lingtin-chengdu-service`
+
+### Zeabur CLI 使用规范
+
+**⚠️ 重要：仅用于查看状态，禁止用于部署**
+
+部署方式：**GitHub push 自动触发**，不要使用 `zeabur deploy` 命令（避免 context 混淆导致代码部署到错误项目）
+
+**查看部署状态：**
+```bash
+# 1. 切换到正确的项目 context（必须）
+zeabur context set project --id=697a5cfa06505fdd547f6889
+
+# 2. 查看当前 context（确认项目正确）
+zeabur context get
+
+# 3. 查看服务列表
+zeabur service list
+
+# 4. 查看部署日志
+zeabur deployment list
+zeabur deployment logs <deployment-id>
+```
+
+**禁止操作：**
+- ❌ `zeabur deploy` — 使用 GitHub push 代替
+- ❌ 不带 `--id` 的 context 切换 — 必须使用项目 ID
+
 > 产品使用手册详见 [docs/user-guides/README.md](docs/user-guides/README.md)
 
 ## 上下文管理
