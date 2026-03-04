@@ -1,4 +1,6 @@
 // Chat Service - AI assistant with tool use for database queries
+// v5.0 - Arch: materialized views (ai_visits/ai_actions/ai_feedbacks) — AI only queries views, DB-level security
+// v4.2 - Fix: added lingtin_action_items full schema to all 3 role prompts + action items strategy hints
 // v4.1 - Perf: briefing model → qwen-turbo, max_tokens 512, timeout 30s, prompt slimmed (no lingtin:// links)
 // IMPORTANT: Never return raw_transcript to avoid context explosion
 
@@ -20,41 +22,36 @@ const MANAGER_SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析�
 - 问之前聊过的内容（如"我叫什么"）→ 根据对话历史回答
 - **业务问题**（桌访、菜品、顾客、服务等）→ **立即调用 query_database 工具，不要说"请稍等"或"我来查一下"之类的话**
 
-## 数据库字段（内部使用，绝不向用户暴露）
-**lingtin_visit_records** 表：
-- table_id: 桌号（A1, B3, D5）
-- ai_summary: 20字摘要
-- sentiment_score: 满意度 0-100（0=极差, 100=极好）
-- feedbacks: JSONB数组，每条含 text + sentiment(positive/negative/neutral) + score(0-100)
-- manager_questions: 店长问的话（数组）
-- customer_answers: 顾客回答（数组）
-- visit_date, created_at: 时间
+## 可查询的视图（你只能查询这 3 个视图，不能查其他表）
 
-**lingtin_dish_mentions** 表：
-- dish_name: 菜品名
-- sentiment: positive/negative/neutral
-- feedback_text: 具体评价
+**ai_visits**（桌访记录）：
+visit_id, restaurant_name, restaurant_id, table_id, visit_date, visit_period,
+sentiment_score(0-100), ai_summary, feedbacks(JSONB数组), manager_questions(JSONB),
+customer_answers(JSONB), keywords(JSONB), customer_source, visit_frequency, status, created_at
 
-## 智能回答策略（重要！）
-根据问题类型，**组合多个字段**给出有洞察力的回答：
+**ai_actions**（行动建议/待办）：
+action_id, restaurant_name, restaurant_id, action_date, category(dish_quality/service_speed/environment/staff_attitude/other),
+suggestion_text, priority(high/medium/low), status(pending/acknowledged/resolved/dismissed),
+evidence(JSONB), assignee, deadline, source_type, created_at
 
-**问覆盖率/统计** → 查 COUNT + visit_date，给出趋势分析
-**问菜品反馈** → 查 lingtin_dish_mentions，按好评/差评分类总结
-**问顾客满意度** → 结合 sentiment_score + feedbacks，给出整体画像
-**问店长话术** → 分析 manager_questions，找出高频问题和优秀示范
-**问顾客心声** → 分析 customer_answers，提炼共性需求
-**问问题/投诉** → 筛选 sentiment='negative' 的 feedbacks，给改进建议
-**问摘要/概况** → 用 ai_summary 快速了解每桌情况
+**ai_feedbacks**（逐条反馈，从桌访展开）：
+feedback_id, visit_id, restaurant_name, restaurant_id, visit_date, table_id,
+feedback_text, sentiment(positive/negative/neutral), score(0-100)
 
 ## 查询规范
-1. **永远不要查询 raw_transcript** - 太大会崩溃
+1. **只能查 ai_visits、ai_actions、ai_feedbacks** — 其他表名一律不可用
 2. 限制返回行数 LIMIT 10-20
 3. 按时间倒序 ORDER BY created_at DESC
-4. **日期查询语法（PostgreSQL）**：
-   - 今天: \`visit_date = CURRENT_DATE\`
-   - 本周: \`visit_date >= date_trunc('week', CURRENT_DATE)\`
-   - 日期范围: \`visit_date BETWEEN '2026-01-25' AND '2026-01-31'\`
-   - ❌ 错误: \`date('2026-01-25', '2026-01-31')\` - PostgreSQL 不支持这种语法
+4. **日期语法**：今天 \`visit_date = CURRENT_DATE\`，本周 \`visit_date >= date_trunc('week', CURRENT_DATE)\`
+
+## 智能回答策略
+**问覆盖率/统计** → 查 ai_visits COUNT + visit_date
+**问菜品反馈** → 查 ai_feedbacks，按好评/差评分类总结
+**问顾客满意度** → 查 ai_visits 的 sentiment_score
+**问店长话术** → 查 ai_visits 的 manager_questions
+**问顾客心声** → 查 ai_visits 的 customer_answers
+**问负面反馈** → 查 ai_feedbacks WHERE sentiment='negative'
+**问待办/行动建议** → 查 ai_actions WHERE status='pending' ORDER BY priority
 
 ## 回答规范（非常重要）
 1. **像跟同事聊天一样**，亲切、实用、有帮助
@@ -114,41 +111,35 @@ const BOSS_SYSTEM_PROMPT = `你是灵听，一个专业的餐饮数据分析助�
 - 问之前聊过的内容（如"我叫什么"）→ 根据对话历史回答
 - **业务问题**（桌访、菜品、顾客、服务等）→ **立即调用 query_database 工具，不要说"请稍等"或"我来查一下"之类的话**
 
-## 数据库字段（内部使用，绝不向用户暴露）
-**lingtin_visit_records** 表：
-- table_id: 桌号（A1, B3, D5）
-- ai_summary: 20字摘要
-- sentiment_score: 满意度 0-100（0=极差, 100=极好）
-- feedbacks: JSONB数组，每条含 text + sentiment(positive/negative/neutral) + score(0-100)
-- manager_questions: 店长问的话（数组）
-- customer_answers: 顾客回答（数组）
-- visit_date, created_at: 时间
+## 可查询的视图（你只能查询这 3 个视图，不能查其他表）
 
-**lingtin_dish_mentions** 表：
-- dish_name: 菜品名
-- sentiment: positive/negative/neutral
-- feedback_text: 具体评价
+**ai_visits**（桌访记录）：
+visit_id, restaurant_name, restaurant_id, table_id, visit_date, visit_period,
+sentiment_score(0-100), ai_summary, feedbacks(JSONB数组), manager_questions(JSONB),
+customer_answers(JSONB), keywords(JSONB), customer_source, visit_frequency, status, created_at
 
-## 智能回答策略（重要！）
-作为老板的助手，重点关注**经营洞察和趋势分析**：
+**ai_actions**（行动建议/待办）：
+action_id, restaurant_name, restaurant_id, action_date, category(dish_quality/service_speed/environment/staff_attitude/other),
+suggestion_text, priority(high/medium/low), status(pending/acknowledged/resolved/dismissed),
+evidence(JSONB), assignee, deadline, source_type, created_at
 
-**问整体经营** → 综合 sentiment_score 趋势 + 桌访覆盖率，给出经营健康度评估
-**问菜品表现** → 查 lingtin_dish_mentions，按好评/差评排名，找出明星菜和问题菜
-**问顾客满意度** → 分析 sentiment_score 分布，对比不同时段/日期的变化趋势
-**问店长执行** → 分析 manager_questions 的质量和频率，评估团队执行力
-**问顾客心声** → 提炼 customer_answers 中的共性需求和潜在商机
-**问问题/投诉** → 汇总 sentiment='negative' 的反馈，按严重程度排序
-**问摘要/概况** → 用 ai_summary 快速了解整体情况
+**ai_feedbacks**（逐条反馈，从桌访展开）：
+feedback_id, visit_id, restaurant_name, restaurant_id, visit_date, table_id,
+feedback_text, sentiment(positive/negative/neutral), score(0-100)
 
 ## 查询规范
-1. **永远不要查询 raw_transcript** - 太大会崩溃
+1. **只能查 ai_visits、ai_actions、ai_feedbacks** — 其他表名一律不可用
 2. 限制返回行数 LIMIT 10-20
 3. 按时间倒序 ORDER BY created_at DESC
-4. **日期查询语法（PostgreSQL）**：
-   - 今天: \`visit_date = CURRENT_DATE\`
-   - 本周: \`visit_date >= date_trunc('week', CURRENT_DATE)\`
-   - 日期范围: \`visit_date BETWEEN '2026-01-25' AND '2026-01-31'\`
-   - ❌ 错误: \`date('2026-01-25', '2026-01-31')\` - PostgreSQL 不支持这种语法
+4. **日期语法**：今天 \`visit_date = CURRENT_DATE\`，本周 \`visit_date >= date_trunc('week', CURRENT_DATE)\`
+
+## 智能回答策略
+**问整体经营** → 查 ai_visits 的 sentiment_score 趋势，按 restaurant_name 分组对比
+**问菜品反馈** → 查 ai_feedbacks，按好评/差评排名
+**问顾客满意度** → 查 ai_visits 的 sentiment_score 分布
+**问店长执行** → 查 ai_visits 的 manager_questions
+**问负面反馈** → 查 ai_feedbacks WHERE sentiment='negative'
+**问跨店待办** → 查 ai_actions WHERE status='pending'，按 restaurant_name 分组 + priority 排序
 
 ## 回答规范（非常重要）
 1. **像汇报工作一样**，简洁、有洞察、数据驱动
@@ -208,42 +199,36 @@ const CHEF_SYSTEM_PROMPT = `你是灵听，一个专业的厨房运营助手。�
 - 问之前聊过的内容（如"我叫什么"）→ 根据对话历史回答
 - **业务问题**（菜品、反馈、厨房任务等）→ **立即调用 query_database 工具，不要说"请稍等"或"我来查一下"之类的话**
 
-## 数据库字段（内部使用，绝不向用户暴露）
-**lingtin_visit_records** 表：
-- table_id: 桌号（A1, B3, D5）
-- ai_summary: 20字摘要
-- sentiment_score: 满意度 0-100（0=极差, 100=极好）
-- feedbacks: JSONB数组，每条含 text + sentiment(positive/negative/neutral) + score(0-100)
-- visit_date, created_at: 时间
+## 可查询的视图（你只能查询这 3 个视图，不能查其他表）
 
-**lingtin_dish_mentions** 表：
-- dish_name: 菜品名
-- sentiment: positive/negative/neutral
-- feedback_text: 具体评价
+**ai_visits**（桌访记录）：
+visit_id, restaurant_name, restaurant_id, table_id, visit_date, visit_period,
+sentiment_score(0-100), ai_summary, feedbacks(JSONB数组), manager_questions(JSONB),
+customer_answers(JSONB), keywords(JSONB), customer_source, visit_frequency, status, created_at
 
-**lingtin_action_items** 表：
-- category: dish_quality/service_speed/environment/staff_attitude/other
-- suggestion_text: 改善建议
-- priority: high/medium/low
-- status: pending/acknowledged/resolved/dismissed
+**ai_actions**（行动建议/待办）：
+action_id, restaurant_name, restaurant_id, action_date, category(dish_quality/service_speed/environment/staff_attitude/other),
+suggestion_text, priority(high/medium/low), status(pending/acknowledged/resolved/dismissed),
+evidence(JSONB), assignee, deadline, source_type, created_at
+
+**ai_feedbacks**（逐条反馈，从桌访展开）：
+feedback_id, visit_id, restaurant_name, restaurant_id, visit_date, table_id,
+feedback_text, sentiment(positive/negative/neutral), score(0-100)
+
+## 查询规范
+1. **只能查 ai_visits、ai_actions、ai_feedbacks** — 其他表名一律不可用
+2. 限制返回行数 LIMIT 10-20
+3. 按时间倒序 ORDER BY created_at DESC
+4. **日期语法**：今天 \`visit_date = CURRENT_DATE\`，本周 \`visit_date >= date_trunc('week', CURRENT_DATE)\`
 
 ## 智能回答策略（重要！）
 作为厨师长的助手，**只关注菜品和厨房相关**：
 
-**问菜品反馈** → 查 lingtin_dish_mentions，按好评/差评分类，重点关注差评原因
-**问某道菜** → 查该菜品所有 mentions，总结顾客对该菜的看法
-**问厨房任务** → 查 lingtin_action_items 中 category='dish_quality' 的待办
-**问趋势** → 查最近几天的菜品 mentions，看哪些菜持续差评
-**问好评菜** → 查 sentiment='positive' 的 mentions，总结做对了什么
-
-## 查询规范
-1. **永远不要查询 raw_transcript** - 太大会崩溃
-2. 限制返回行数 LIMIT 10-20
-3. 按时间倒序 ORDER BY created_at DESC
-4. **日期查询语法（PostgreSQL）**：
-   - 今天: \`visit_date = CURRENT_DATE\`
-   - 本周: \`visit_date >= date_trunc('week', CURRENT_DATE)\`
-   - 日期范围: \`visit_date BETWEEN '2026-01-25' AND '2026-01-31'\`
+**问菜品反馈** → 查 ai_feedbacks，按好评/差评分类，重点关注差评原因
+**问某道菜** → 查 ai_feedbacks WHERE feedback_text ILIKE '%菜名%'，总结顾客对该菜的看法
+**问厨房待办/任务** → 查 ai_actions WHERE category='dish_quality' AND status='pending'，按 priority 排序（high优先）
+**问趋势** → 查最近几天的 ai_feedbacks，看哪些菜持续差评
+**问好评菜** → 查 ai_feedbacks WHERE sentiment='positive'，总结做对了什么
 
 ## 回答规范（非常重要）
 1. **像厨房人之间聊天一样**，直接、实用、不绕弯
@@ -292,13 +277,19 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'query_database',
-      description: '查询餐厅桌访数据库。只支持 SELECT 查询。可查询 lingtin_visit_records（桌访记录）、lingtin_dish_mentions（菜品提及）、lingtin_action_items（行动建议）和 lingtin_table_sessions（开台数据）表。支持 JOIN 查询 master_restaurant 表获取门店名称。',
+      description: `查询餐厅数据的只读视图。只支持 SELECT，只能查 ai_visits、ai_actions、ai_feedbacks 三个视图。
+
+ai_visits（桌访记录）: visit_id, restaurant_name, restaurant_id, table_id, visit_date, visit_period, sentiment_score(0-100), ai_summary, feedbacks(JSONB数组), manager_questions(JSONB), customer_answers(JSONB), keywords(JSONB), customer_source, visit_frequency, status, created_at
+
+ai_actions（行动建议/待办）: action_id, restaurant_name, restaurant_id, action_date, category(dish_quality/service_speed/environment/staff_attitude/other), suggestion_text, priority(high/medium/low), status(pending/acknowledged/resolved/dismissed), evidence(JSONB), assignee, deadline, source_type, created_at
+
+ai_feedbacks（逐条反馈）: feedback_id, visit_id, restaurant_name, restaurant_id, visit_date, table_id, feedback_text, sentiment(positive/negative/neutral), score(0-100)`,
       parameters: {
         type: 'object',
         properties: {
           sql: {
             type: 'string',
-            description: 'SQL SELECT 查询语句。例如: SELECT dish_name, sentiment, feedback_text FROM lingtin_dish_mentions WHERE sentiment = \'negative\' ORDER BY created_at DESC LIMIT 10',
+            description: 'SQL SELECT 查询语句。例如: SELECT feedback_text, sentiment, score FROM ai_feedbacks WHERE sentiment = \'negative\' ORDER BY visit_date DESC LIMIT 10',
           },
           purpose: {
             type: 'string',
@@ -463,7 +454,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
                 res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingStatus })}\n\n`);
 
                 const toolStart = Date.now();
-                const result = await this.executeToolCall(toolCall, restaurantId, managedRestaurantIds);
+                const result = await this.executeToolCall(toolCall);
                 const toolMs = Date.now() - toolStart;
                 const resultStr = JSON.stringify(result);
                 this.logger.log(`  ← ${toolCall.function.name} ${toolMs}ms | ${resultStr.length} chars`);
@@ -569,7 +560,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
     this.logger.log(`[OpenRouter] model=${requestBody.model} msgs=${messages.length} max_tokens=${requestBody.max_tokens}`);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60_000);
+    const timeout = setTimeout(() => controller.abort(), 120_000);
 
     try {
       const response = await fetch(OPENROUTER_API_URL, {
@@ -708,12 +699,10 @@ this.logger.log(`Messages in context: ${messages.length}`);
    */
   private async executeToolCall(
     toolCall: { id: string; type: string; function: { name: string; arguments: string } },
-    restaurantId: string,
-    managedRestaurantIds: string[] | null = null,
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     const { name, arguments: argsJson } = toolCall.function;
 
-this.logger.log(`Executing tool: ${name}`);
+    this.logger.log(`Executing tool: ${name}`);
 
     try {
       const args = JSON.parse(argsJson);
@@ -722,7 +711,7 @@ this.logger.log(`Executing tool: ${name}`);
         const { sql, purpose } = args;
         this.logger.log(`[query_database] ${purpose}`);
 
-        const result = await this.executeQuery(sql, restaurantId, managedRestaurantIds);
+        const result = await this.executeQuery(sql);
         this.logger.log(`[query_database] Returned ${result?.length || 0} rows`);
 
         return { success: true, data: result };
@@ -931,190 +920,49 @@ this.logger.log(`Executing tool: ${name}`);
   }
 
   /**
-   * Execute SQL query against the database
-   * Security: Only allows read-only SELECT queries on allowed tables
+   * Execute AI-generated SQL against read-only materialized views.
+   * Security is enforced at the database level:
+   * - AI can ONLY query ai_visits, ai_actions, ai_feedbacks (materialized views)
+   * - Views contain no sensitive fields (no raw_transcript, audio_url)
+   * - Views are refreshed every 5 min via pg_cron
+   * - No SQL rewriting, no regex injection — just validate and execute
    */
-  private async executeQuery(sql: string, restaurantId: string, managedRestaurantIds: string[] | null = null): Promise<any[]> {
-    // Normalize SQL for validation
+  private async executeQuery(sql: string): Promise<any[]> {
     const normalizedSql = sql.trim().toLowerCase().replace(/\s+/g, ' ');
 
-    // Security: Only allow SELECT queries (must start with SELECT)
+    // Must be a SELECT statement
     if (!normalizedSql.startsWith('select ')) {
       throw new Error('Only SELECT queries are allowed');
     }
 
-    // Security: Block dangerous keywords that could modify data or schema
-    // Use word boundary regex to avoid false positives (e.g., 'created_at' matching 'create')
-    const dangerousKeywords = [
-      'drop', 'delete', 'update', 'insert', 'alter', 'truncate',
-      'grant', 'revoke', 'exec', 'execute', 'call',
-      'merge', 'replace', 'upsert',
-      'pg_', 'information_schema', 'pg_catalog',
-      '--', '/*', '*/', 'union all select',
-    ];
-    // Keywords that need word boundary check (to allow created_at, updated_at, etc.)
-    const wordBoundaryKeywords = ['create', 'into', 'set'];
+    // Only allow queries on materialized views
+    const allowedViews = ['ai_visits', 'ai_actions', 'ai_feedbacks'];
+    const fromPattern = /(?:from|join)\s+([a-z_]+)/gi;
+    const matches = [...normalizedSql.matchAll(fromPattern)];
 
-    for (const keyword of dangerousKeywords) {
-      if (normalizedSql.includes(keyword)) {
-        throw new Error(`Query contains forbidden keyword: ${keyword}`);
-      }
+    if (matches.length === 0) {
+      throw new Error('Query must reference a view: ai_visits, ai_actions, or ai_feedbacks');
     }
 
-    // Check word boundary keywords with regex
-    for (const keyword of wordBoundaryKeywords) {
-      // Match keyword as a standalone word (not part of column names like created_at)
-      const regex = new RegExp(`\\b${keyword}\\b(?!_)`, 'i');
-      if (regex.test(normalizedSql)) {
-        throw new Error(`Query contains forbidden keyword: ${keyword}`);
-      }
-    }
-
-    // Security: Only allow queries on specific tables
-    const allowedTables = ['lingtin_visit_records', 'lingtin_dish_mentions', 'lingtin_table_sessions', 'lingtin_action_items', 'master_restaurant'];
-    const tablePattern = /(?:from|join)\s+([a-z_]+)/gi;
-    const matches = [...sql.matchAll(tablePattern)];
     for (const match of matches) {
-      const tableName = match[1].toLowerCase();
-      if (!allowedTables.includes(tableName)) {
-        throw new Error(`Query on table '${tableName}' is not allowed. Allowed tables: ${allowedTables.join(', ')}`);
+      if (!allowedViews.includes(match[1])) {
+        throw new Error(`Only these views are allowed: ${allowedViews.join(', ')}. Got: ${match[1]}`);
       }
     }
 
-    // Security: Block subqueries that might access other tables
-    if ((normalizedSql.match(/select/g) || []).length > 1) {
-      throw new Error('Subqueries are not allowed for security reasons');
-    }
+    this.logger.log(`[executeQuery] SQL: ${sql.slice(0, 150)}...`);
 
     const client = this.supabase.getClient();
-
-    // Fix #1: UUID-validate restaurantId before SQL interpolation
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
-    const safeRestaurantId = UUID_RE.test(restaurantId) ? restaurantId : DEFAULT_RESTAURANT_ID;
-
-    // Build scope filter based on managed IDs or single restaurant
-    let modifiedSql = sql;
-    const buildScopeFilter = (alias?: string): string => {
-      const prefix = alias ? `${alias}.` : '';
-      if (managedRestaurantIds && managedRestaurantIds.length > 0) {
-        const validIds = managedRestaurantIds.filter(id => UUID_RE.test(id));
-        const idList = (validIds.length > 0 ? validIds : [safeRestaurantId])
-          .map(id => `'${id}'`).join(',');
-        return `${prefix}restaurant_id IN (${idList})`;
-      }
-      return `${prefix}restaurant_id = '${safeRestaurantId}'`;
-    };
-
-    // Fix #2: For tables with restaurant_id, always add scope filter for security
-    // Check if WHERE clause already has restaurant_id as an equality/IN filter (not just in JOINs)
-    const tablesToScope = ['lingtin_visit_records', 'lingtin_action_items', 'lingtin_dish_mentions'];
-    const whereClauseMatch = normalizedSql.match(/\bwhere\b([\s\S]*)/i);
-    const whereClause = whereClauseMatch ? whereClauseMatch[1] : '';
-    const hasRestaurantIdInWhere = whereClause.includes('restaurant_id');
-
-    for (const tableName of tablesToScope) {
-      if (normalizedSql.includes(tableName) && !hasRestaurantIdInWhere) {
-        // Check if table has an alias (e.g., "lingtin_visit_records vr")
-        const aliasMatch = sql.match(new RegExp(`${tableName}\\s+([a-z]{1,3})(?:\\s|$|,)`, 'i'));
-        const alias = aliasMatch?.[1];
-        const scopeFilter = buildScopeFilter(alias);
-
-        if (normalizedSql.includes('where')) {
-          modifiedSql = modifiedSql.replace(/\bwhere\b/i, `WHERE ${scopeFilter} AND`);
-        } else {
-          const tableRegex = new RegExp(`(from\\s+${tableName}(?:\\s+[a-z]{1,3})?)`, 'i');
-          modifiedSql = modifiedSql.replace(tableRegex, `$1 WHERE ${scopeFilter}`);
-        }
-        break; // Only add scope once (for the main FROM table)
-      }
-    }
-
-    this.logger.log(`[executeQuery] SQL: ${modifiedSql.slice(0, 100)}...`);
-
-    // Execute the query using Supabase's raw SQL capability
     const { data, error } = await client.rpc('execute_readonly_query', {
-      query_text: modifiedSql,
+      query_text: sql.trim(),
     });
 
     if (error) {
-      // If RPC doesn't exist, try direct query on the table
-      this.logger.warn(`RPC failed: ${error.message}, trying direct query`);
-
-      // Parse the SQL to extract table and conditions for Supabase query builder
-      const result = await this.executeDirectQuery(modifiedSql, client);
-      return result;
+      this.logger.error(`[executeQuery] RPC error: ${error.message}`);
+      throw new Error(`Query failed: ${error.message}`);
     }
 
     return data || [];
-  }
-
-  /**
-   * Execute query directly using Supabase query builder (fallback)
-   */
-  private async executeDirectQuery(sql: string, client: any): Promise<any[]> {
-    const normalizedSql = sql.toLowerCase();
-
-    // Try to extract table name and handle common query patterns
-    if (normalizedSql.includes('lingtin_dish_mentions')) {
-      // Query dish mentions
-      let query = client.from('lingtin_dish_mentions').select('*');
-
-      if (normalizedSql.includes("sentiment = 'negative'") || normalizedSql.includes('sentiment = \'negative\'')) {
-        query = query.eq('sentiment', 'negative');
-      } else if (normalizedSql.includes("sentiment = 'positive'") || normalizedSql.includes('sentiment = \'positive\'')) {
-        query = query.eq('sentiment', 'positive');
-      }
-
-      // Add limit
-      const limitMatch = normalizedSql.match(/limit\s+(\d+)/i);
-      if (limitMatch) {
-        query = query.limit(parseInt(limitMatch[1]));
-      } else {
-        query = query.limit(20);
-      }
-
-      // Add ordering
-      if (normalizedSql.includes('order by')) {
-        query = query.order('created_at', { ascending: false });
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    }
-
-    if (normalizedSql.includes('lingtin_visit_records')) {
-      let query = client.from('lingtin_visit_records').select('*');
-
-      // Add sentiment filter if present
-      if (normalizedSql.includes('sentiment_score <')) {
-        query = query.lt('sentiment_score', 40);
-      } else if (normalizedSql.includes('sentiment_score >')) {
-        query = query.gt('sentiment_score', 60);
-      }
-
-      // Add visit_type filter
-      if (normalizedSql.includes("visit_type = 'complaint'")) {
-        query = query.eq('visit_type', 'complaint');
-      }
-
-      // Add limit
-      const limitMatch = normalizedSql.match(/limit\s+(\d+)/i);
-      if (limitMatch) {
-        query = query.limit(parseInt(limitMatch[1]));
-      } else {
-        query = query.limit(20);
-      }
-
-      query = query.order('created_at', { ascending: false });
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    }
-
-    throw new Error('Unsupported query pattern');
   }
 
   /**
