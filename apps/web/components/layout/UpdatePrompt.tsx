@@ -9,7 +9,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 export const APP_VERSION = '2.1.4';
 export const BUILD_DATE = '2026-03-04';
 
-const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
+const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 // Force clear all caches, unregister SW, and hard reload
 async function forceUpdateApp() {
