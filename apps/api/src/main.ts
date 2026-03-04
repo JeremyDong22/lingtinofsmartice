@@ -1,6 +1,12 @@
 // NestJS Application Entry Point
 // v1.4 - Updated CORS to support multiple origins (localhost + production)
 
+// Polyfill global crypto for Node.js < 19 (@nestjs/schedule@6+ requires it)
+if (!global.crypto) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  (global as unknown as { crypto: unknown }).crypto = require('node:crypto').webcrypto;
+}
+
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
