@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SWRProvider } from '@/contexts/SWRProvider';
+import { I18nProvider } from '@/lib/i18n';
 import { UpdatePrompt } from '@/components/layout/UpdatePrompt';
 
 export const metadata: Metadata = {
@@ -38,10 +39,12 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen">
         <AuthProvider>
-          <SWRProvider>
-            <UpdatePrompt />
-            {children}
-          </SWRProvider>
+          <I18nProvider>
+            <SWRProvider>
+              <UpdatePrompt />
+              {children}
+            </SWRProvider>
+          </I18nProvider>
         </AuthProvider>
       </body>
     </html>

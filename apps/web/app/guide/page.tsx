@@ -9,15 +9,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
 import { getNotesForRole, type ReleaseNote, type ReleaseNoteItem } from '@/lib/release-notes';
+import { useT } from '@/lib/i18n';
 
 const LS_KEY = 'lingtin_guide_seen_version';
-
-const ROLE_LABELS: Record<string, string> = {
-  manager: '店长',
-  administrator: '管理层',
-  head_chef: '厨师长',
-  chef: '厨师长',
-};
 
 function NoteItemCard({ item }: { item: ReleaseNoteItem }) {
   return (
@@ -41,6 +35,7 @@ function NoteItemCard({ item }: { item: ReleaseNoteItem }) {
 
 function VersionCard({ note, isLatest }: { note: ReleaseNote; isLatest: boolean }) {
   const [expanded, setExpanded] = useState(isLatest);
+  const { t } = useT();
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
@@ -55,7 +50,7 @@ function VersionCard({ note, isLatest }: { note: ReleaseNote; isLatest: boolean 
           </span>
           {isLatest && (
             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 shrink-0">
-              最新
+              {t('guide.latest')}
             </span>
           )}
           <span className="text-sm font-medium text-gray-900 truncate">{note.title}</span>
@@ -92,6 +87,7 @@ export default function GuidePage() {
   const { user } = useAuth();
   const router = useRouter();
   const [notes, setNotes] = useState<ReleaseNote[]>([]);
+  const { t } = useT();
 
   // Mark as seen on mount → clear red dot
   useEffect(() => {
@@ -106,7 +102,7 @@ export default function GuidePage() {
 
   if (!user) return null;
 
-  const roleLabel = ROLE_LABELS[user.roleCode] || user.roleCode;
+  const roleLabel = t(`guide.roleLabel.${user.roleCode}`) || user.roleCode;
 
   return (
     <div className="min-h-screen">
@@ -121,7 +117,7 @@ export default function GuidePage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-lg font-semibold text-gray-900">使用指南</h1>
+          <h1 className="text-lg font-semibold text-gray-900">{t('guide.title')}</h1>
         </div>
         <UserMenu />
       </header>
@@ -129,7 +125,7 @@ export default function GuidePage() {
       {/* Banner */}
       <div className="bg-gradient-to-b from-primary-50 to-transparent px-4 pt-4 pb-2 island-page-top">
         <p className="text-xs text-gray-500">
-          {roleLabel}版 · 共 {notes.length} 个版本更新
+          {t('guide.versionCount', roleLabel, notes.length)}
         </p>
       </div>
 
@@ -137,7 +133,7 @@ export default function GuidePage() {
       <div className="px-4 space-y-3 island-page-bottom">
         {notes.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">
-            暂无与你角色相关的更新记录
+            {t('guide.empty')}
           </div>
         )}
         {notes.map((note, i) => (

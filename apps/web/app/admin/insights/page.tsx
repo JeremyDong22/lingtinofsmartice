@@ -14,13 +14,16 @@ import { CustomerProfile } from '@/components/admin/CustomerProfile';
 import { FeedbackManagement } from '@/components/admin/FeedbackManagement';
 import { getChinaYesterday, singleDay } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
-import { DatePicker, adminPresets } from '@/components/shared/DatePicker';
+import { DatePicker, useAdminPresets } from '@/components/shared/DatePicker';
+import { useT } from '@/lib/i18n';
 
 type InsightTab = 'customer' | 'profile' | 'feedback' | 'product';
 
 function InsightsContent() {
+  const { t } = useT();
   const { user } = useAuth();
   const { managedIdsParam } = useManagedScope();
+  const adminPresets = useAdminPresets();
   const isSuperAdmin = user?.isSuperAdmin === true;
   const searchParams = useSearchParams();
 
@@ -47,7 +50,7 @@ function InsightsContent() {
       {/* Header */}
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">
-          {activeTab === 'product' ? '产品洞察' : '洞察'}
+          {activeTab === 'product' ? t('insights.productTitle') : t('insights.title')}
         </h1>
         <div className="flex items-center gap-2">
           {showDatePicker && (
@@ -74,7 +77,7 @@ function InsightsContent() {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              顾客
+              {t('insights.tabCustomer')}
             </button>
             <button
               onClick={() => setActiveTab('profile')}
@@ -84,7 +87,7 @@ function InsightsContent() {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              画像
+              {t('insights.tabProfile')}
             </button>
             <button
               onClick={() => setActiveTab('feedback')}
@@ -94,7 +97,7 @@ function InsightsContent() {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              员工反馈
+              {t('insights.tabStaff')}
             </button>
           </div>
         </div>
@@ -115,10 +118,11 @@ function InsightsContent() {
 }
 
 export default function InsightsPage() {
+  const { t } = useT();
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
+        <div className="text-gray-500">{t('chat.loading')}</div>
       </div>
     }>
       <InsightsContent />

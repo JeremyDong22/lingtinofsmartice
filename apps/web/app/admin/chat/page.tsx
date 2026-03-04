@@ -1,35 +1,37 @@
 // Admin Chat Page - AI assistant for boss/administrator role
-// v3.0 - Added welcomeMessage config
+// v3.1 - Added i18n support
 
 'use client';
 
 import ChatPage from '@/components/chat/ChatPage';
+import { useT } from '@/lib/i18n';
 
 export default function AdminChatPage() {
+  const { t } = useT();
   return (
     <ChatPage
       config={{
         role: 'admin',
-        headerTitle: 'AI 智库',
-        placeholder: '问我任何关于经营的问题...',
+        headerTitle: t('chat.admin.title'),
+        placeholder: t('chat.admin.placeholder'),
         chatBasePath: '/admin/chat',
         fallbackQuickQuestions: [
-          '本周整体经营情况如何',
-          '哪些菜品需要重点关注',
-          '顾客满意度趋势怎么样',
-          '店长执行情况分析',
+          t('chat.admin.q1'),
+          t('chat.admin.q2'),
+          t('chat.admin.q3'),
+          t('chat.admin.q4'),
         ],
         actionLinks: [
-          { label: '查看总览', path: '/admin/briefing' },
-          { label: '深入分析', path: '/admin/insights' },
+          { label: t('chat.admin.link1'), path: '/admin/briefing' },
+          { label: t('chat.admin.link2'), path: '/admin/insights' },
         ],
         welcomeMessage: {
-          title: '我是你的 AI 经营顾问',
-          subtitle: '汇总了所有门店的经营数据，我能帮你：',
+          title: t('chat.admin.welcomeTitle'),
+          subtitle: t('chat.admin.welcomeSubtitle'),
           capabilities: [
-            { icon: 'BarChart3', text: '跨店对比，快速定位需要关注的门店' },
-            { icon: 'ListTodo', text: '将问题转化为门店待办，推动各店执行' },
-            { icon: 'CheckCircle', text: '跟踪各店改善进度，确认任务是否落地' },
+            { icon: 'BarChart3', text: t('chat.admin.cap1') },
+            { icon: 'ListTodo', text: t('chat.admin.cap2') },
+            { icon: 'CheckCircle', text: t('chat.admin.cap3') },
           ],
         },
       }}

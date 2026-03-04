@@ -5,11 +5,13 @@ import { createPortal } from 'react-dom';
 import {
   getChinaToday,
   getChinaDaysAgo,
-  getChineseWeekday,
   getMonthGrid,
   isSameDate,
 } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
+import { useT } from '@/lib/i18n';
+
+const WEEKDAY_I18N_KEYS = ['date.weekday.sun', 'date.weekday.mon', 'date.weekday.tue', 'date.weekday.wed', 'date.weekday.thu', 'date.weekday.fri', 'date.weekday.sat'] as const;
 
 interface DateRangePreset {
   label: string;
@@ -25,23 +27,26 @@ interface DatePickerProps {
   className?: string;
 }
 
-// Default presets for admin pages
-export const adminPresets: DateRangePreset[] = [
-  { label: '昨日', getRange: () => ({ startDate: getChinaDaysAgo(1), endDate: getChinaDaysAgo(1) }) },
-  { label: '前天', getRange: () => ({ startDate: getChinaDaysAgo(2), endDate: getChinaDaysAgo(2) }) },
-  { label: '近7天', getRange: () => ({ startDate: getChinaDaysAgo(7), endDate: getChinaDaysAgo(1) }) },
-  { label: '近30天', getRange: () => ({ startDate: getChinaDaysAgo(30), endDate: getChinaDaysAgo(1) }) },
-];
+// Preset factory functions — call useAdminPresets() / useStorePresets() inside components
+export function useAdminPresets(): DateRangePreset[] {
+  const { t } = useT();
+  return useMemo(() => [
+    { label: t('date.yesterday'), getRange: () => ({ startDate: getChinaDaysAgo(1), endDate: getChinaDaysAgo(1) }) },
+    { label: t('date.dayBefore'), getRange: () => ({ startDate: getChinaDaysAgo(2), endDate: getChinaDaysAgo(2) }) },
+    { label: t('date.last7days'), getRange: () => ({ startDate: getChinaDaysAgo(7), endDate: getChinaDaysAgo(1) }) },
+    { label: t('date.last30days'), getRange: () => ({ startDate: getChinaDaysAgo(30), endDate: getChinaDaysAgo(1) }) },
+  ], [t]);
+}
 
-// Default presets for store manager / chef pages
-export const storePresets: DateRangePreset[] = [
-  { label: '今日', getRange: () => ({ startDate: getChinaToday(), endDate: getChinaToday() }) },
-  { label: '昨日', getRange: () => ({ startDate: getChinaDaysAgo(1), endDate: getChinaDaysAgo(1) }) },
-  { label: '前天', getRange: () => ({ startDate: getChinaDaysAgo(2), endDate: getChinaDaysAgo(2) }) },
-  { label: '近7天', getRange: () => ({ startDate: getChinaDaysAgo(7), endDate: getChinaToday() }) },
-];
-
-const WEEKDAY_HEADERS = ['一', '二', '三', '四', '五', '六', '日'];
+export function useStorePresets(): DateRangePreset[] {
+  const { t } = useT();
+  return useMemo(() => [
+    { label: t('date.today'), getRange: () => ({ startDate: getChinaToday(), endDate: getChinaToday() }) },
+    { label: t('date.yesterday'), getRange: () => ({ startDate: getChinaDaysAgo(1), endDate: getChinaDaysAgo(1) }) },
+    { label: t('date.dayBefore'), getRange: () => ({ startDate: getChinaDaysAgo(2), endDate: getChinaDaysAgo(2) }) },
+    { label: t('date.last7days'), getRange: () => ({ startDate: getChinaDaysAgo(7), endDate: getChinaToday() }) },
+  ], [t]);
+}
 
 // Check if dateStr is between start and end (exclusive of endpoints)
 function isBetween(dateStr: string, start: string, end: string): boolean {
@@ -56,6 +61,8 @@ export function DatePicker({
   presets = [],
   className = '',
 }: DatePickerProps) {
+  const { t } = useT();
+  const weekdayHeaders = useMemo(() => t('date.weekdays').split(','), [t]);
   const [open, setOpen] = useState(false);
   // Range selection state: first click sets rangeStart, second click completes range
   const [rangeStart, setRangeStart] = useState<string | null>(null);
@@ -85,12 +92,12 @@ export function DatePicker({
     }
     if (isSameDate(value.startDate, value.endDate)) {
       const d = new Date(value.startDate + 'T00:00:00');
-      return `${d.getMonth() + 1}/${d.getDate()} ${getChineseWeekday(value.startDate)}`;
+      return `${d.getMonth() + 1}/${d.getDate()} ${t(WEEKDAY_I18N_KEYS[d.getDay()])}`;
     }
     const s = new Date(value.startDate + 'T00:00:00');
     const e = new Date(value.endDate + 'T00:00:00');
     return `${s.getMonth() + 1}/${s.getDate()} - ${e.getMonth() + 1}/${e.getDate()}`;
-  }, [value, presets]);
+  }, [value, presets, t]);
 
   const grid = useMemo(() => getMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
 
@@ -233,7 +240,7 @@ export function DatePicker({
               {/* Range selection hint */}
               {rangeStart && (
                 <div className="text-xs text-primary-600 text-center mb-2">
-                  再点一个日期作为结束
+                  {t('date.pickEnd')}
                 </div>
               )}
 
@@ -248,7 +255,7 @@ export function DatePicker({
                   </svg>
                 </button>
                 <span className="text-base font-semibold text-gray-800">
-                  {viewYear}年{viewMonth}月
+                  {t('date.monthYear', viewYear, viewMonth)}
                 </span>
                 <button
                   onClick={goToNextMonth}
@@ -267,7 +274,7 @@ export function DatePicker({
 
               {/* Weekday header */}
               <div className="grid grid-cols-7 mb-1">
-                {WEEKDAY_HEADERS.map((wd) => (
+                {weekdayHeaders.map((wd) => (
                   <div key={wd} className="text-center text-xs text-gray-400 py-1">
                     {wd}
                   </div>

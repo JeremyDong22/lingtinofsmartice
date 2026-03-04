@@ -13,7 +13,8 @@ import { UserMenu } from '@/components/layout/UserMenu';
 import { BenchmarkPanel } from '@/components/admin/BenchmarkPanel';
 import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
-import { DatePicker, adminPresets } from '@/components/shared/DatePicker';
+import { DatePicker, useAdminPresets } from '@/components/shared/DatePicker';
+import { useT } from '@/lib/i18n';
 
 // --- Types ---
 interface BriefingEvidence {
@@ -72,16 +73,18 @@ interface OverviewResponse {
 }
 
 function getSatisfactionDisplay(score: number | null): { color: string; bg: string; label: string } {
-  if (score === null) return { color: 'text-gray-400', bg: 'bg-gray-100', label: '暂无' };
-  if (score >= 70) return { color: 'text-green-600', bg: 'bg-green-100', label: '满意' };
-  if (score >= 50) return { color: 'text-yellow-600', bg: 'bg-yellow-100', label: '一般' };
-  return { color: 'text-red-600', bg: 'bg-red-100', label: '不满意' };
+  if (score === null) return { color: 'text-gray-400', bg: 'bg-gray-100', label: 'none' };
+  if (score >= 70) return { color: 'text-green-600', bg: 'bg-green-100', label: 'positive' };
+  if (score >= 50) return { color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'neutral' };
+  return { color: 'text-red-600', bg: 'bg-red-100', label: 'negative' };
 }
 
 export default function AdminBriefingPage() {
   const { user } = useAuth();
   const { isScoped, managedIdsParam, storeCount } = useManagedScope();
   const router = useRouter();
+  const { t, locale } = useT();
+  const adminPresets = useAdminPresets();
 
   // Date navigation
   const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaYesterday()));
@@ -140,8 +143,13 @@ export default function AdminBriefingPage() {
     summary: { repeat_ratio: number | null; data_coverage: number };
   }>(`/api/dashboard/customer-profile?${dateRangeParams(dateRange)}${managedIdsParam}`);
 
-  const userName = user?.employeeName || user?.username || '您';
-  const greeting = data?.greeting || '您好';
+  const userName = user?.employeeName || user?.username || (locale === 'en' ? 'there' : '您');
+  const greetingMap: Record<string, string> = {
+    '早安': t('briefing.greetingMorning'),
+    '下午好': t('briefing.greetingAfternoon'),
+    '晚上好': t('briefing.greetingEvening'),
+  };
+  const greeting = greetingMap[data?.greeting || ''] || data?.greeting || t('briefing.greetingMorning');
   const problems = data?.problems || [];
   const restaurantCount = data?.restaurant_count ?? 0;
   const avgSentiment = data?.avg_sentiment;
@@ -174,10 +182,10 @@ export default function AdminBriefingPage() {
       {/* Header */}
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold text-gray-900">总览</h1>
+          <h1 className="text-lg font-semibold text-gray-900">{t('briefing.title')}</h1>
           {isScoped && (
             <span className="text-xs bg-primary-50 text-primary-600 px-2 py-0.5 rounded-full">
-              管理 {storeCount} 家门店
+              {t('briefing.managingStores', storeCount ?? 0)}
             </span>
           )}
         </div>
@@ -196,16 +204,16 @@ export default function AdminBriefingPage() {
         {/* Greeting banner */}
         <div>
           <h2 className="text-xl font-bold text-gray-900">
-            {greeting}，{userName.slice(0, 3)}
+            {greeting}{locale === 'en' ? ', ' : '，'}{userName.slice(0, 3)}
           </h2>
           {!isLoading && problems.length > 0 && (
             <p className="text-sm text-gray-500 mt-0.5">
-              {restaurantCount} 家门店，{problems.length} 件事需要关注
+              {t('briefing.storesAttention', restaurantCount, problems.length)}
             </p>
           )}
           {!isLoading && problems.length === 0 && restaurantCount > 0 && (
             <p className="text-sm text-gray-500 mt-0.5">
-              {restaurantCount} 家门店均运营良好
+              {t('briefing.storesHealthy', restaurantCount)}
             </p>
           )}
         </div>
@@ -214,16 +222,16 @@ export default function AdminBriefingPage() {
         {!isLoading && (
           <div className="grid grid-cols-2 gap-3">
             <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">满意度</div>
+              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.satisfaction')}</div>
               <div className={`text-xl font-bold ${getSatisfactionDisplay(avgSentiment ?? null).color}`}>
-                {avgSentiment != null ? `${Math.round(avgSentiment)}分` : '--'}
+                {avgSentiment != null ? t('briefing.score', Math.round(avgSentiment)) : '--'}
               </div>
               <div className="text-xs text-gray-400">
-                {summary?.total_visits ?? 0}次桌访
+                {t('briefing.visits', summary?.total_visits ?? 0)}
               </div>
             </div>
             <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">覆盖率</div>
+              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.coverage')}</div>
               <div className={`text-xl font-bold ${
                 (data?.avg_coverage ?? 0) >= 60 ? 'text-green-600' :
                 (data?.avg_coverage ?? 0) >= 30 ? 'text-yellow-600' :
@@ -233,11 +241,11 @@ export default function AdminBriefingPage() {
                 {data?.avg_coverage != null ? `${Math.round(data.avg_coverage)}%` : '--'}
               </div>
               <div className="text-xs text-gray-400">
-                {restaurantCount} 家门店
+                {t('briefing.stores', restaurantCount)}
               </div>
             </div>
             <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">复盘完成</div>
+              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.reviewCompletion')}</div>
               <div className={`text-xl font-bold ${
                 avgReviewCompletion >= 80 ? 'text-green-600' :
                 avgReviewCompletion >= 50 ? 'text-yellow-600' :
@@ -249,7 +257,7 @@ export default function AdminBriefingPage() {
               <div className="text-xs text-gray-400">&nbsp;</div>
             </div>
             <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">老客占比</div>
+              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.repeatCustomer')}</div>
               {(() => {
                 const ratio = profileData?.summary?.repeat_ratio;
                 const coverage = profileData?.summary?.data_coverage ?? 0;
@@ -262,7 +270,7 @@ export default function AdminBriefingPage() {
                       {ratio != null ? `${ratio}%` : '--'}
                     </div>
                     <div className="text-xs text-gray-400">
-                      {ratio != null && coverage < 80 ? `基于${coverage}%数据` : '\u00A0'}
+                      {ratio != null && coverage < 80 ? t('briefing.basedOnData', coverage) : '\u00A0'}
                     </div>
                   </>
                 );
@@ -314,15 +322,15 @@ export default function AdminBriefingPage() {
                         <span className="text-sm font-semibold text-gray-900 truncate">{rest.name}</span>
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                        <span>{rest.visit_count}次桌访</span>
+                        <span>{t('briefing.visits', rest.visit_count)}</span>
                         <span>·</span>
-                        <span className={sentiment.color}>{rest.avg_sentiment != null ? `${Math.round(rest.avg_sentiment)}分` : '--'}</span>
+                        <span className={sentiment.color}>{rest.avg_sentiment != null ? t('briefing.score', Math.round(rest.avg_sentiment)) : '--'}</span>
                         <span>·</span>
-                        <span className={`flex items-center gap-0.5 ${hasReviewed ? 'text-green-600' : 'text-red-500'}`}>复盘<ReviewIcon className="w-3 h-3" /></span>
+                        <span className={`flex items-center gap-0.5 ${hasReviewed ? 'text-green-600' : 'text-red-500'}`}>{t('briefing.review')}<ReviewIcon className="w-3 h-3" /></span>
                         {restProblems.length > 0 && (
                           <>
                             <span>·</span>
-                            <span className="text-red-600">{restProblems.length}个问题</span>
+                            <span className="text-red-600">{t('briefing.problems', restProblems.length)}</span>
                           </>
                         )}
                       </div>
@@ -360,14 +368,14 @@ export default function AdminBriefingPage() {
                         <div className="bg-primary-50/50 border border-primary-100 rounded-xl p-3">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-                            <span className="text-xs font-medium text-primary-700">最近复盘记录</span>
+                            <span className="text-xs font-medium text-primary-700">{t('briefing.recentReview')}</span>
                           </div>
                           {rest.latest_review.ai_summary && (
                             <p className="text-sm text-gray-700 leading-relaxed">{rest.latest_review.ai_summary}</p>
                           )}
                           {Array.isArray(rest.latest_review.action_items) && rest.latest_review.action_items.length > 0 && (
                             <div className="mt-2">
-                              <div className="text-[10px] text-gray-400 mb-1">行动事项</div>
+                              <div className="text-[10px] text-gray-400 mb-1">{t('briefing.actionItems')}</div>
                               <ul className="space-y-1">
                                 {rest.latest_review.action_items.map((item: unknown, i: number) => {
                                   const text = typeof item === 'string' ? item
@@ -385,7 +393,7 @@ export default function AdminBriefingPage() {
                           )}
                           {Array.isArray(rest.latest_review.key_decisions) && rest.latest_review.key_decisions.length > 0 && (
                             <div className="mt-2">
-                              <div className="text-[10px] text-gray-400 mb-1">关键决定</div>
+                              <div className="text-[10px] text-gray-400 mb-1">{t('briefing.keyDecisions')}</div>
                               <ul className="space-y-1">
                                 {rest.latest_review.key_decisions.map((d: unknown, i: number) => {
                                   const text = typeof d === 'string' ? d
@@ -404,7 +412,7 @@ export default function AdminBriefingPage() {
                         </div>
                       ) : (
                         <div className="text-center py-2 text-xs text-gray-400">
-                          该门店尚未录制复盘会议
+                          {t('briefing.noMeeting')}
                         </div>
                       )}
 
@@ -413,7 +421,7 @@ export default function AdminBriefingPage() {
                         onClick={() => router.push(`/admin/restaurant-detail?id=${rest.id}`)}
                         className="w-full text-center text-xs text-primary-600 hover:text-primary-700 py-3 transition-colors"
                       >
-                        查看详情 &rsaquo;
+                        {t('briefing.viewDetail')}
                       </button>
                     </div>
                   )}
@@ -427,9 +435,9 @@ export default function AdminBriefingPage() {
         {!isLoading && sortedRestaurants.length === 0 && restaurantCount > 0 && (
           <div className="glass-card rounded-xl p-6 text-center">
             <div className="flex justify-center mb-3"><CheckCircle className="w-10 h-10 text-green-400" /></div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">一切正常</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">{t('briefing.allGood')}</h3>
             <p className="text-sm text-gray-500">
-              {restaurantCount} 家门店均运营良好
+              {t('briefing.storesHealthy', restaurantCount)}
             </p>
           </div>
         )}
@@ -448,6 +456,7 @@ export default function AdminBriefingPage() {
 
 // --- Inline Q&A conversation renderer ---
 function QAConversation({ questions, answers }: { questions: string[]; answers: string[] }) {
+  const { t } = useT();
   const maxLen = Math.max(questions.length, answers.length);
   if (maxLen === 0) return null;
   return (
@@ -456,13 +465,13 @@ function QAConversation({ questions, answers }: { questions: string[]; answers: 
         <Fragment key={j}>
           {questions[j] && (
             <div className="flex gap-2">
-              <span className="text-[10px] text-gray-400 mt-0.5 flex-shrink-0 w-7 text-right">店长</span>
+              <span className="text-[10px] text-gray-400 mt-0.5 flex-shrink-0 w-7 text-right">{t('briefing.manager')}</span>
               <p className="text-xs text-gray-500 flex-1">{questions[j]}</p>
             </div>
           )}
           {answers[j] && (
             <div className="flex gap-2">
-              <span className="text-[10px] text-primary-500 mt-0.5 flex-shrink-0 w-7 text-right">顾客</span>
+              <span className="text-[10px] text-primary-500 mt-0.5 flex-shrink-0 w-7 text-right">{t('briefing.customer')}</span>
               <p className="text-xs text-gray-800 flex-1">{answers[j]}</p>
             </div>
           )}

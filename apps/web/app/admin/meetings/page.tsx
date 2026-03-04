@@ -9,9 +9,10 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { useManagedScope } from '@/hooks/useManagedScope';
+import { useT, getLocale } from '@/lib/i18n';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
-import { DatePicker, adminPresets } from '@/components/shared/DatePicker';
+import { DatePicker, useAdminPresets } from '@/components/shared/DatePicker';
 import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import type { MeetingRecord, MeetingType, MeetingStatus } from '@/hooks/useMeetingStore';
@@ -47,34 +48,53 @@ interface AdminOverviewResponse {
   my_meetings: ApiMeeting[];
 }
 
-const MEETING_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  pre_meal: { label: '餐前会', color: 'bg-primary-100 text-primary-700' },
-  daily_review: { label: '复盘', color: 'bg-amber-100 text-amber-700' },
-  weekly: { label: '周例会', color: 'bg-purple-100 text-purple-700' },
-  kitchen_meeting: { label: '厨房会议', color: 'bg-orange-100 text-orange-700' },
-  cross_store_review: { label: '经营会', color: 'bg-primary-100 text-primary-700' },
-  one_on_one: { label: '店长沟通', color: 'bg-teal-100 text-teal-700' },
+const MEETING_TYPE_COLORS: Record<string, string> = {
+  pre_meal: 'bg-primary-100 text-primary-700',
+  daily_review: 'bg-amber-100 text-amber-700',
+  weekly: 'bg-purple-100 text-purple-700',
+  kitchen_meeting: 'bg-orange-100 text-orange-700',
+  cross_store_review: 'bg-primary-100 text-primary-700',
+  one_on_one: 'bg-teal-100 text-teal-700',
 };
 
-function formatDateLabel(dateStr: string): string {
+type TFunc = (key: string, ...args: (string | number)[]) => string;
+
+function getMeetingTypeLabel(type: string, t: TFunc): { label: string; color: string } {
+  const typeKeyMap: Record<string, string> = {
+    pre_meal: 'meetings.type.pre_shift',
+    daily_review: 'meetings.type.daily_review',
+    weekly: 'meetings.type.weekly',
+    kitchen_meeting: 'meetings.type.kitchen',
+    cross_store_review: 'meetings.type.business',
+    one_on_one: 'meetings.type.manager_sync',
+  };
+  const key = typeKeyMap[type];
+  return {
+    label: key ? t(key) : type,
+    color: MEETING_TYPE_COLORS[type] || 'bg-gray-100 text-gray-700',
+  };
+}
+
+function formatDateLabel(dateStr: string, locale: string = 'zh-CN'): string {
   const d = new Date(dateStr + 'T00:00:00');
+  if (locale === 'en') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
-function formatTime(isoStr: string): string {
-  return new Date(isoStr).toLocaleTimeString('zh-CN', {
+function formatTime(isoStr: string, locale: string = 'zh-CN'): string {
+  return new Date(isoStr).toLocaleTimeString(locale === 'en' ? 'en-US' : 'zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
   });
 }
 
-function formatDuration(seconds: number | null): string {
+function formatDuration(seconds: number | null, t: TFunc): string {
   if (!seconds) return '';
   if (seconds >= 60) {
     const mins = Math.floor(seconds / 60);
-    return `${mins}分钟`;
+    return t('meetings.mins', mins);
   }
-  return `${seconds}秒`;
+  return t('meetings.secs', seconds);
 }
 
 function apiToMeetingRecord(m: ApiMeeting): MeetingRecord {
@@ -95,11 +115,13 @@ function apiToMeetingRecord(m: ApiMeeting): MeetingRecord {
 function MeetingSummaryRow({
   meeting,
   onTap,
+  t,
 }: {
   meeting: ApiMeeting;
   onTap: () => void;
+  t: TFunc;
 }) {
-  const typeInfo = MEETING_TYPE_LABELS[meeting.meeting_type] || { label: meeting.meeting_type, color: 'bg-gray-100 text-gray-700' };
+  const typeInfo = getMeetingTypeLabel(meeting.meeting_type, t);
   const actionCount = meeting.action_items?.length || 0;
   const isProcessed = meeting.status === 'processed';
 
@@ -114,11 +136,11 @@ function MeetingSummaryRow({
             {typeInfo.label}
           </span>
           <span className="text-xs text-gray-400">
-            {formatTime(meeting.created_at)}
+            {formatTime(meeting.created_at, getLocale())}
           </span>
           {meeting.duration_seconds && (
             <span className="text-xs text-gray-300">
-              {formatDuration(meeting.duration_seconds)}
+              {formatDuration(meeting.duration_seconds, t)}
             </span>
           )}
         </div>
@@ -128,17 +150,17 @@ function MeetingSummaryRow({
         {meeting.status === 'processing' && (
           <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-            AI分析中...
+            {t('meetings.analyzing')}
           </p>
         )}
         {meeting.status === 'error' && (
-          <p className="text-xs text-red-500 mt-1">处理失败</p>
+          <p className="text-xs text-red-500 mt-1">{t('meetings.failed')}</p>
         )}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
         {isProcessed && actionCount > 0 && (
           <span className="text-[11px] text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded">
-            {actionCount}项待办
+            {t('meetings.actionCount', actionCount)}
           </span>
         )}
         {isProcessed && (
@@ -157,11 +179,13 @@ function StoreMeetingCard({
   expanded,
   onToggle,
   onMeetingTap,
+  t,
 }: {
   store: StoreOverview;
   expanded: boolean;
   onToggle: () => void;
   onMeetingTap: (m: ApiMeeting) => void;
+  t: TFunc;
 }) {
   const hasMeetings = store.meetings.length > 0;
 
@@ -183,8 +207,8 @@ function StoreMeetingCard({
           {!hasMeetings && (
             <span className="text-xs text-gray-300">
               {store.last_meeting_date
-                ? `上次 ${formatDateLabel(store.last_meeting_date)}`
-                : '暂无会议'}
+                ? t('meetings.lastMeeting', formatDateLabel(store.last_meeting_date, getLocale()))
+                : t('meetings.noMeeting')}
             </span>
           )}
           {hasMeetings && (
@@ -200,7 +224,7 @@ function StoreMeetingCard({
       {hasMeetings && expanded && (
         <div className="px-4 divide-y divide-gray-50 border-t border-gray-50">
           {store.meetings.map((m) => (
-            <MeetingSummaryRow key={m.id} meeting={m} onTap={() => onMeetingTap(m)} />
+            <MeetingSummaryRow key={m.id} meeting={m} onTap={() => onMeetingTap(m)} t={t} />
           ))}
         </div>
       )}
@@ -211,6 +235,8 @@ function StoreMeetingCard({
 export default function AdminMeetingsPage() {
   const { user } = useAuth();
   const { managedIdsParam } = useManagedScope();
+  const { t } = useT();
+  const adminPresets = useAdminPresets();
   const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaYesterday()));
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingRecord | null>(null);
   const [showMyMeetings, setShowMyMeetings] = useState(true);
@@ -235,7 +261,7 @@ export default function AdminMeetingsPage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-900">会议</h1>
+        <h1 className="text-lg font-semibold text-gray-900">{t('meetings.title')}</h1>
         <div className="flex items-center gap-2">
           <DatePicker
             value={dateRange}
@@ -250,7 +276,7 @@ export default function AdminMeetingsPage() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            录制
+            {t('meetings.record')}
           </Link>
           <UserMenu />
         </div>
@@ -280,7 +306,7 @@ export default function AdminMeetingsPage() {
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
                 <span className="text-sm font-semibold text-primary-800">
-                  我的会议 · {data.my_meetings.length}条记录
+                  {t('meetings.myMeetings', data.my_meetings.length)}
                 </span>
               </div>
               <svg
@@ -297,6 +323,7 @@ export default function AdminMeetingsPage() {
                     key={m.id}
                     meeting={m}
                     onTap={() => setSelectedMeeting(apiToMeetingRecord(m))}
+                    t={t}
                   />
                 ))}
               </div>
@@ -307,9 +334,9 @@ export default function AdminMeetingsPage() {
         {/* Summary stats */}
         {hasData && !isLoading && (
           <div className="text-xs text-gray-400 px-1">
-            {data.stores.length} 家门店 · {data.summary.total_meetings} 次会议
+            {t('meetings.storesSummary', data.stores.length, data.summary.total_meetings)}
             {data.summary.stores_without > 0 && (
-              <> · <span className="text-amber-500">{data.summary.stores_without} 家未开会</span></>
+              <> · <span className="text-amber-500">{t('meetings.storesWithout', data.summary.stores_without)}</span></>
             )}
           </div>
         )}
@@ -322,6 +349,7 @@ export default function AdminMeetingsPage() {
             expanded={expandedStoreId === store.id}
             onToggle={() => setExpandedStoreId(prev => prev === store.id ? null : store.id)}
             onMeetingTap={(m) => setSelectedMeeting(apiToMeetingRecord(m))}
+            t={t}
           />
         ))}
 
@@ -329,7 +357,7 @@ export default function AdminMeetingsPage() {
         {storesWithout.length > 0 && (
           <div className="glass-card rounded-2xl p-4">
             <div className="text-sm font-medium text-gray-400 mb-2">
-              未开会门店 ({storesWithout.length})
+              {t('meetings.storesWithoutTitle', storesWithout.length)}
             </div>
             <div className="flex flex-wrap gap-2">
               {storesWithout.map((store) => (
@@ -337,7 +365,7 @@ export default function AdminMeetingsPage() {
                   {store.name}
                   {store.last_meeting_date && (
                     <span className="text-gray-300 ml-1">
-                      · {formatDateLabel(store.last_meeting_date)}
+                      · {formatDateLabel(store.last_meeting_date, getLocale())}
                     </span>
                   )}
                 </span>
@@ -353,9 +381,9 @@ export default function AdminMeetingsPage() {
         ) && (
           <div className="glass-card rounded-2xl p-8 text-center">
             <div className="flex justify-center mb-3"><ClipboardList className="w-10 h-10 text-gray-300" /></div>
-            <h3 className="text-base font-medium text-gray-700 mb-1">当日暂无会议</h3>
+            <h3 className="text-base font-medium text-gray-700 mb-1">{t('meetings.emptyTitle')}</h3>
             <p className="text-sm text-gray-400">
-              各门店开会后，会议纪要将自动同步到这里
+              {t('meetings.emptyBody')}
             </p>
           </div>
         )}
