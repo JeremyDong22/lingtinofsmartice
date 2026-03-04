@@ -49,7 +49,7 @@ export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl p-4 shadow-sm animate-pulse">
+      <div className="glass-card rounded-2xl p-4 animate-pulse">
         <div className="h-4 bg-gray-200 rounded w-1/3 mb-3"></div>
         <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
         <div className="h-3 bg-gray-200 rounded w-2/3"></div>

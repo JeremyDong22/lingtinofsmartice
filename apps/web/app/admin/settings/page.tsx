@@ -13,7 +13,7 @@ export default function AdminSettingsPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-30 glass-nav px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.back()}

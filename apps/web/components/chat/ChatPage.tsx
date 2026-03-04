@@ -177,7 +177,7 @@ const MessageBubble = memo(function MessageBubble({
 
 function ChatLoadingFallback({ title }: { title: string }) {
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
       <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
       </header>
@@ -304,7 +304,7 @@ function ChatContent({ config }: ChatPageProps) {
   const firstAssistantIndex = messages.findIndex(m => m.role === 'assistant');
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header — #3: removed clear button */}
       <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">{config.headerTitle}</h1>
