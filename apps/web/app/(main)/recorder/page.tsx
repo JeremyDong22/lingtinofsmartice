@@ -3,7 +3,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import useSWR from 'swr';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useRecordingStore } from '@/hooks/useRecordingStore';
@@ -23,7 +23,7 @@ import { MeetingDetail } from '@/components/recorder/MeetingDetail';
 import { MotivationBanner } from '@/components/recorder/MotivationBanner';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, CloudUpload } from 'lucide-react';
 import {
   processRecordingInBackground,
   processMeetingInBackground,
@@ -77,7 +77,7 @@ export default function RecorderPage() {
 
   // Refs
   const processingIdsRef = useRef<Set<string>>(new Set());
-  const retryEffectRanRef = useRef(false);
+  const isRetryingRef = useRef(false);
   const pendingTableIdRef = useRef<string>('');
   const pendingMeetingTypeRef = useRef<MeetingType | ''>('');
 
@@ -131,17 +131,17 @@ export default function RecorderPage() {
     retryPending();
   }, [showToast]);
 
-  // Auto-retry interrupted uploads (visit + meeting)
-  useEffect(() => {
-    if (retryEffectRanRef.current) return;
-    retryEffectRanRef.current = true;
+  // Retry stuck uploads (visit + meeting) — extracted for reuse
+  const runRetry = useCallback(async () => {
+    if (isRetryingRef.current) return;
+    isRetryingRef.current = true;
 
-    const retryInterrupted = async () => {
+    try {
       // Retry visit recordings
       const visitRetry = getRecordingsNeedingRetry();
       const visitToRetry = visitRetry.filter(r => !processingIdsRef.current.has(r.id));
       if (visitToRetry.length > 0) {
-        showToast(`发现 ${visitToRetry.length} 条未完成上传`, 'info');
+        showToast(`正在重试 ${visitToRetry.length} 条录音上传`, 'info');
         for (const recording of visitToRetry) {
           processingIdsRef.current.add(recording.id);
           processRecordingInBackground(recording, {
@@ -181,11 +181,23 @@ export default function RecorderPage() {
           }, restaurantId);
         }
       }
-    };
+    } finally {
+      isRetryingRef.current = false;
+    }
+  }, [getRecordingsNeedingRetry, getMeetingsNeedingRetry, updateRecording, updateMeeting, showToast, restaurantId]);
 
-    const timer = setTimeout(retryInterrupted, 1000);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Keep a ref to the latest runRetry so the interval stays stable
+  const runRetryRef = useRef(runRetry);
+  runRetryRef.current = runRetry;
+
+  // Periodic retry: first after 1.5s, then every 30s (stable interval, no churn)
+  useEffect(() => {
+    const initialTimer = setTimeout(() => runRetryRef.current(), 1500);
+    const interval = setInterval(() => runRetryRef.current(), 30000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, []);
 
   // Periodic cleanup of stale processingIdsRef entries
@@ -346,6 +358,13 @@ export default function RecorderPage() {
     }
   }, [meetings, updateMeeting, showToast, restaurantId]);
 
+  // Count stuck uploads (saved with audioData = not yet uploaded to cloud)
+  const stuckCount = useMemo(() => {
+    const stuckRecordings = recordings.filter(r => r.status === 'saved' && r.audioData);
+    const stuckMeetings = meetings.filter(m => m.status === 'saved' && m.audioData);
+    return stuckRecordings.length + stuckMeetings.length;
+  }, [recordings, meetings]);
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Stealth Mode Overlay - fake WeChat interface */}
@@ -396,6 +415,22 @@ export default function RecorderPage() {
           <UserMenu />
         </div>
       </header>
+
+      {/* Pending upload banner */}
+      {stuckCount > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-amber-700">
+            <CloudUpload className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm">{stuckCount} 条录音待上传，网络恢复后将自动重试</span>
+          </div>
+          <button
+            onClick={runRetry}
+            className="text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-lg transition-colors"
+          >
+            立即重试
+          </button>
+        </div>
+      )}
 
       <main className="px-4 pt-4 pb-20">
         {/* Toast */}
