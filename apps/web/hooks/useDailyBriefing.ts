@@ -1,9 +1,9 @@
 // Daily Briefing Hook - Auto-trigger daily AI briefing on first visit
+// v3.0 - Expose triggerBriefing() for manual invocation
 // v2.0 - Once-per-day: localStorage 记录日期，当天只触发一次，清空对话不重复触发
 // v1.4 - Cooldown: 5-min sessionStorage guard prevents rapid retries on backend failure
-// v1.3 - Also re-trigger if cached messages are all errors/empty (fixes PWA stuck)
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Message, SendMessageOptions } from './useChatStream';
 
@@ -43,18 +43,16 @@ export function useDailyBriefing({
 
     // Skip if there are valid messages (briefing completed or user has history)
     if (messageCount > 0) {
-      // But re-trigger if all assistant messages are errors or empty (previous attempt failed)
       const hasValidAssistant = messages.some(
         m => m.role === 'assistant' && !m.isError && !m.isStopped && m.content.length > 10,
       );
       if (hasValidAssistant) {
-        // 有有效简报，标记今天已完成
         localStorage.setItem(BRIEFING_DATE_KEY, getTodayStr());
         return;
       }
     }
 
-    // Cooldown: don't retry within 5 minutes of a previous attempt (survives page refresh)
+    // Cooldown: don't retry within 5 minutes of a previous attempt
     const lastAttempt = sessionStorage.getItem(COOLDOWN_KEY);
     if (lastAttempt && Date.now() - Number(lastAttempt) < COOLDOWN_MS) {
       return;
@@ -65,4 +63,11 @@ export function useDailyBriefing({
     localStorage.setItem(BRIEFING_DATE_KEY, getTodayStr());
     sendMessage('__DAILY_BRIEFING__', { hideUserMessage: true });
   }, [isInitialized, isLoading, user, messageCount, messages, sendMessage]);
+
+  /** Manual trigger — always fires regardless of once-per-day guard */
+  const triggerBriefing = useCallback(() => {
+    sendMessage('__DAILY_BRIEFING__', { hideUserMessage: true });
+  }, [sendMessage]);
+
+  return { triggerBriefing };
 }

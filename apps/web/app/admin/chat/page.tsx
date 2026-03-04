@@ -1,5 +1,5 @@
 // Admin Chat Page - AI assistant for boss/administrator role
-// v2.1 - Added actionLinks for briefing quick-actions
+// v3.0 - Added welcomeMessage config
 
 'use client';
 
@@ -23,6 +23,15 @@ export default function AdminChatPage() {
           { label: '查看总览', path: '/admin/briefing' },
           { label: '深入分析', path: '/admin/insights' },
         ],
+        welcomeMessage: {
+          title: '我是你的 AI 经营顾问',
+          subtitle: '汇总了所有门店的经营数据，我能帮你：',
+          capabilities: [
+            { icon: 'BarChart3', text: '跨店对比，快速定位需要关注的门店' },
+            { icon: 'ListTodo', text: '将问题转化为门店待办，推动各店执行' },
+            { icon: 'CheckCircle', text: '跟踪各店改善进度，确认任务是否落地' },
+          ],
+        },
       }}
     />
   );

@@ -1,5 +1,5 @@
 // Store Manager Chat Page - AI assistant for store managers
-// v3.1 - Added actionLinks for briefing quick-actions
+// v4.0 - Added welcomeMessage config
 
 'use client';
 
@@ -23,6 +23,15 @@ export default function ManagerChatPage() {
           { label: '开始桌访', path: '/recorder' },
           { label: '查看看板', path: '/dashboard' },
         ],
+        welcomeMessage: {
+          title: '我是你的 AI 运营助手',
+          subtitle: '基于你每天的桌访录音，我能帮你：',
+          capabilities: [
+            { icon: 'Search', text: '从顾客真实反馈中发现菜品和服务问题' },
+            { icon: 'ListTodo', text: '自动生成待办事项，驱动每日改善落地' },
+            { icon: 'CheckCircle', text: '追踪任务完成情况，验证改善是否见效' },
+          ],
+        },
       }}
     />
   );
