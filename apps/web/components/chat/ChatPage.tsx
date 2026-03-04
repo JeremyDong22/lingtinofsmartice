@@ -177,8 +177,8 @@ const MessageBubble = memo(function MessageBubble({
 
 function ChatLoadingFallback({ title }: { title: string }) {
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
       </header>
       <div className="flex-1 flex items-center justify-center">
@@ -304,9 +304,9 @@ function ChatContent({ config }: ChatPageProps) {
   const firstAssistantIndex = messages.findIndex(m => m.role === 'assistant');
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header — #3: removed clear button */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">{config.headerTitle}</h1>
         <UserMenu />
       </header>
@@ -321,7 +321,7 @@ function ChatContent({ config }: ChatPageProps) {
           <>
             {/* Welcome card */}
             {config.welcomeMessage && (
-              <div className="bg-white rounded-2xl px-6 pt-7 pb-5 shadow-sm w-full max-w-sm mb-6">
+              <div className="glass-card rounded-2xl px-6 pt-7 pb-5 w-full max-w-sm mb-6">
                 <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-4">
                   <Bot className="w-6 h-6 text-primary-600" />
                 </div>

@@ -79,7 +79,7 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
   // Low data state
   if (coverage < 30 && withData === 0) {
     return (
-      <div className="bg-white rounded-xl p-6 text-center">
+      <div className="glass-card rounded-xl p-6 text-center">
         <div className="flex justify-center mb-3"><BarChart3 className="w-10 h-10 text-gray-300" /></div>
         <h3 className="text-base font-semibold text-gray-900 mb-1">数据积累中</h3>
         <p className="text-sm text-gray-500">
@@ -92,7 +92,7 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
   return (
     <div className="space-y-3">
       {/* Overview card */}
-      <div className="bg-white rounded-2xl p-4 space-y-3">
+      <div className="glass-card rounded-2xl p-4 space-y-3">
         {/* Frequency bar */}
         <div>
           <FrequencyBar frequency={freq} />
@@ -133,7 +133,7 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
             const topSource = rest.source_distribution[0];
 
             return (
-              <div key={rest.restaurant_id} className="bg-white rounded-2xl overflow-hidden">
+              <div key={rest.restaurant_id} className="glass-card rounded-2xl overflow-hidden">
                 {/* Restaurant summary row */}
                 <div
                   className="px-4 py-3 flex items-center gap-3 cursor-pointer active:bg-gray-50 transition-colors"

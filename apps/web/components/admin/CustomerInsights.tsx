@@ -350,7 +350,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
         const hasPos = store.positive_feedbacks.length > 0;
 
         return (
-          <div key={store.restaurant_id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div key={store.restaurant_id} className="glass-card rounded-2xl overflow-hidden">
             {/* Store header — always visible */}
             <div
               className="px-4 py-3.5 flex items-center justify-between cursor-pointer active:bg-gray-50 transition-colors"
@@ -419,7 +419,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
 
       {/* Empty state */}
       {!isLoading && mergedStores.length === 0 && (
-        <div className="bg-white rounded-xl p-8 text-center">
+        <div className="glass-card rounded-xl p-8 text-center">
           <div className="flex justify-center mb-3"><Lightbulb className="w-10 h-10 text-gray-300" /></div>
           <h3 className="text-base font-medium text-gray-700 mb-1">暂无顾客洞察</h3>
           <p className="text-sm text-gray-400">

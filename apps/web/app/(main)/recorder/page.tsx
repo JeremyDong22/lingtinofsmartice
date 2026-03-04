@@ -366,7 +366,7 @@ export default function RecorderPage() {
   }, [recordings, meetings]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen pb-20">
       {/* Stealth Mode Overlay - fake WeChat interface */}
       <StealthOverlay visible={stealthMode} onDismiss={() => setStealthMode(false)} />
 
@@ -374,7 +374,7 @@ export default function RecorderPage() {
       <MeetingDetail meeting={detailMeeting} onClose={() => setDetailMeeting(null)} />
 
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {/* Mode Switcher */}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
@@ -467,7 +467,7 @@ export default function RecorderPage() {
 
         {/* Waveform Visualizer - only visible when recording */}
         {isRecording && (
-          <div className="bg-white rounded-2xl shadow-sm p-4 mb-6">
+          <div className="glass-card rounded-2xl p-4 mb-6">
             <WaveformVisualizer
               analyserData={analyserData}
               isRecording={isRecording}

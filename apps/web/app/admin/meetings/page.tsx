@@ -166,7 +166,7 @@ function StoreMeetingCard({
   const hasMeetings = store.meetings.length > 0;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden">
       <div
         className={`px-4 py-3 flex items-center justify-between ${hasMeetings ? 'cursor-pointer active:bg-gray-50' : ''}`}
         onClick={hasMeetings ? onToggle : undefined}
@@ -232,9 +232,9 @@ export default function AdminMeetingsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen pb-20">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">会议</h1>
         <div className="flex items-center gap-2">
           <DatePicker
@@ -327,7 +327,7 @@ export default function AdminMeetingsPage() {
 
         {/* Stores without meetings */}
         {storesWithout.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="glass-card rounded-2xl p-4">
             <div className="text-sm font-medium text-gray-400 mb-2">
               未开会门店 ({storesWithout.length})
             </div>
@@ -351,7 +351,7 @@ export default function AdminMeetingsPage() {
           (hasData && data.summary.total_meetings === 0 && data.my_meetings.length === 0) ||
           (!hasData && !isLoading)
         ) && (
-          <div className="bg-white rounded-2xl p-8 text-center">
+          <div className="glass-card rounded-2xl p-8 text-center">
             <div className="flex justify-center mb-3"><ClipboardList className="w-10 h-10 text-gray-300" /></div>
             <h3 className="text-base font-medium text-gray-700 mb-1">当日暂无会议</h3>
             <p className="text-sm text-gray-400">

@@ -246,9 +246,9 @@ export default function ChefDishesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div className="text-base font-semibold text-gray-800">厨房反馈</div>
         <div className="flex items-center gap-2">
           <DatePicker
@@ -288,7 +288,7 @@ export default function ChefDishesPage() {
                   {kitchenProblems.map((kp) => {
                     const isExpanded = expandedKitchen === kp.label;
                     return (
-                      <div key={kp.label} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                      <div key={kp.label} className="glass-card rounded-2xl overflow-hidden">
                         <button
                           onClick={() => {
                             if (isExpanded) stopAudio();
@@ -403,7 +403,7 @@ export default function ChefDishesPage() {
                     return (
                       <div
                         key={dish.dish_name}
-                        className="bg-white rounded-2xl shadow-sm overflow-hidden"
+                        className="glass-card rounded-2xl overflow-hidden"
                       >
                         {/* Clickable card header */}
                         <button
@@ -524,7 +524,7 @@ export default function ChefDishesPage() {
                   <span className="text-sm font-semibold text-gray-700">值得保持</span>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-50">
+                <div className="glass-card rounded-2xl divide-y divide-gray-50">
                   {kitchenHighlights.map((kh) => (
                     <div key={kh.label} className="flex items-center justify-between px-4 py-3">
                       <span className="text-sm text-gray-700">{kh.icon} {kh.label}</span>

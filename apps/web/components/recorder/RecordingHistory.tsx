@@ -243,7 +243,7 @@ export function RecordingHistory({
 
   if (recordings.length === 0) {
     return (
-      <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
+      <div className="glass-card rounded-2xl p-6 text-center">
         <p className="text-gray-400 text-sm">暂无录音</p>
       </div>
     );
@@ -262,7 +262,7 @@ export function RecordingHistory({
   });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100">
         <h3 className="text-sm font-medium text-gray-700">
           {title} ({recordings.length})

@@ -66,7 +66,7 @@ export function MeetingTypeSelector({ value, onChange, disabled = false }: Meeti
   }, [value, onChange]);
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm">
+    <div className="glass-card rounded-2xl p-4">
       <h2 className="text-sm font-medium text-gray-700 mb-3">选择会议类型</h2>
       <div className="grid grid-cols-3 gap-2.5">
         {MEETING_TYPES.map(({ type, label, icon, hint, colors }) => {

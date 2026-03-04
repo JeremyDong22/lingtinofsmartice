@@ -99,9 +99,9 @@ export default function ChefDashboardPage() {
   const isLoading = todayLoading || yesterdayLoading;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div className="text-base font-semibold text-gray-800">{dateLabel}</div>
         <UserMenu />
       </header>
@@ -109,11 +109,11 @@ export default function ChefDashboardPage() {
       <main className="px-4 pt-4 pb-4 space-y-5">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
+          <div className="glass-card rounded-2xl p-4 text-center">
             <div className="text-2xl font-bold text-red-600">{pendingCount}</div>
             <div className="text-xs text-gray-500 mt-1">待处理任务</div>
           </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
+          <div className="glass-card rounded-2xl p-4 text-center">
             <div className="text-2xl font-bold text-yellow-600">{yesterdayKitchenCount}</div>
             <div className="text-xs text-gray-500 mt-1">昨日厨房问题</div>
           </div>
@@ -169,7 +169,7 @@ export default function ChefDashboardPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> 其他待办
             </h2>
             {otherTodayActions.length === 0 && priorityItems.length === 0 && otherYesterdayUnresolved.length === 0 ? (
-              <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
+              <div className="glass-card rounded-2xl p-6 text-center">
                 <div className="flex justify-center mb-1"><CheckCircle className="w-5 h-5 text-green-500" /></div>
                 <p className="text-sm text-gray-500">太棒了，暂时没有需要处理的问题！</p>
               </div>
@@ -306,7 +306,7 @@ function ActionCard({
   };
 
   return (
-    <div className={`bg-white rounded-2xl p-4 shadow-sm ${
+    <div className={`glass-card rounded-2xl p-4 ${
       item.status === 'resolved' ? 'border border-green-200 bg-green-50/50' :
       item.status === 'acknowledged' ? 'border border-primary-200 bg-primary-50/30' :
       highlight ? 'border border-red-200 bg-red-50/30' :

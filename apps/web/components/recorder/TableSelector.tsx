@@ -55,7 +55,7 @@ export function TableSelector({ value, onChange, disabled = false }: TableSelect
   }, [onChange]);
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm">
+    <div className="glass-card rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium text-gray-700">选择桌号</h2>
         {value && (

@@ -81,7 +81,7 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
   };
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm">
+    <div className="glass-card rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium text-gray-700">AI 行动建议</h2>
         <button

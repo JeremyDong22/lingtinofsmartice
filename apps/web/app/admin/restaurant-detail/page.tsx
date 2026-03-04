@@ -72,9 +72,9 @@ function RestaurantDetailContent() {
   const visits = data?.visits || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen pb-20">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+      <header className="glass-nav px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button
           onClick={() => router.back()}
           className="p-1 -ml-1 text-gray-600"
@@ -90,25 +90,25 @@ function RestaurantDetailContent() {
 
       <main className="p-4 space-y-4 max-w-7xl mx-auto">
         {!restaurantId && (
-          <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-500">
+          <div className="glass-card rounded-2xl p-8 text-center text-gray-500">
             缺少门店ID参数
           </div>
         )}
 
         {isLoading && (
-          <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-500">
+          <div className="glass-card rounded-2xl p-8 text-center text-gray-500">
             加载中...
           </div>
         )}
 
         {error && (
-          <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-red-500">
+          <div className="glass-card rounded-2xl p-8 text-center text-red-500">
             加载失败，请刷新重试
           </div>
         )}
 
         {!isLoading && !error && restaurantId && visits.length === 0 && (
-          <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
+          <div className="glass-card rounded-2xl p-8 text-center">
             <div className="text-gray-400 mb-2">
               <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -126,7 +126,7 @@ function RestaurantDetailContent() {
             return (
               <div
                 key={visit.id}
-                className={`bg-white rounded-2xl p-4 shadow-sm transition-shadow ${
+                className={`glass-card rounded-2xl p-4 transition-shadow ${
                   visit.corrected_transcript ? 'cursor-pointer hover:shadow-md' : ''
                 }`}
                 onClick={() => {
@@ -230,7 +230,7 @@ function RestaurantDetailContent() {
 export default function RestaurantDetailPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-gray-500">加载中...</div>
       </div>
     }>

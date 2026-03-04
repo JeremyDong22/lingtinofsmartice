@@ -278,9 +278,9 @@ export default function DashboardPage() {
   }, [stopAudio]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">数据看板</h1>
         <div className="flex items-center gap-2">
           <DatePicker
@@ -300,7 +300,7 @@ export default function DashboardPage() {
         )}
 
         {/* Execution Data Card */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="glass-card rounded-2xl p-4">
           <h2 className="text-sm font-medium text-gray-700 mb-3">执行数据</h2>
           <div className="grid grid-cols-3 gap-3">
             {/* Visit counts by period */}
@@ -347,7 +347,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Sentiment Summary with Trend Arrows */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="glass-card rounded-2xl p-4">
           <h2 className="text-sm font-medium text-gray-700 mb-3">满意度概览</h2>
           {sentiment ? (
             <div className="flex items-center justify-around py-4">
@@ -382,7 +382,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Customer Feedback - Multi-dimension (problems first, then highlights) */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="glass-card rounded-2xl p-4">
           <h2 className="text-sm font-medium text-gray-700 mb-3">顾客反馈</h2>
           {sentiment && (sentiment.negative_feedbacks?.length > 0 || sentiment.positive_feedbacks?.length > 0) ? (
             <>
@@ -488,7 +488,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Manager Questions - 话术使用 (split into good/bad) */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="glass-card rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-medium text-gray-700">话术使用</h2>
             <button
@@ -517,7 +517,7 @@ export default function DashboardPage() {
 
         {/* Kitchen Response Section */}
         {kitchenActions.length > 0 && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="glass-card rounded-2xl p-4">
             <h2 className="text-sm font-medium text-gray-700 mb-3">厨房响应</h2>
             <div className="space-y-3">
               {kitchenActions.map((item) => {

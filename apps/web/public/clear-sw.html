@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Clearing cache...</title></head>
+<head><meta charset="utf-8"><title>Clearing SW...</title></head>
 <body>
-<p id="msg">正在清除 Service Worker 缓存...</p>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(regs) {
-    regs.forEach(function(r) { r.unregister(); });
-    document.getElementById('msg').textContent = '✅ 已清除缓存，正在跳转...';
-    setTimeout(function(){ window.location.href = '/'; }, 800);
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    Promise.all(regs.map(r => r.unregister())).then(() => {
+      document.body.innerText = '✅ Done (' + regs.length + ' SW removed). Redirecting...';
+      setTimeout(() => { location.href = '/'; }, 500);
+    });
   });
 } else {
-  window.location.href = '/';
+  location.href = '/';
 }
 </script>
+<p>Clearing service workers...</p>
 </body>
 </html>

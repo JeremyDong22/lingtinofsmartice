@@ -196,7 +196,7 @@ export function FeedbackManagement() {
       {storeGroups.map(([storeId, group]) => {
         const isOpen = expandedStoreId === storeId;
         return (
-          <div key={storeId} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div key={storeId} className="glass-card rounded-2xl overflow-hidden">
             {/* Store header - clickable */}
             <div
               className="px-4 py-3 flex items-center justify-between cursor-pointer active:bg-gray-50"

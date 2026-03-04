@@ -43,7 +43,7 @@ function VersionCard({ note, isLatest }: { note: ReleaseNote; isLatest: boolean 
   const [expanded, setExpanded] = useState(isLatest);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden">
       {/* Header - always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -109,9 +109,9 @@ export default function GuidePage() {
   const roleLabel = ROLE_LABELS[user.roleCode] || user.roleCode;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.history.length > 1 ? router.back() : router.push('/')}

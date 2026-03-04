@@ -175,7 +175,7 @@ function PendingItemsSection({ items, collapsed, onToggleCollapse, updatingItemI
             );
 
             return (
-              <div key={group.date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div key={group.date} className="glass-card rounded-2xl overflow-hidden">
                 {/* Date summary row — tappable */}
                 <div
                   className="px-3.5 py-3 cursor-pointer active:bg-gray-50 transition-colors"
@@ -430,9 +430,9 @@ export default function ChefMeetingsPage() {
   }, [meetings, updateMeeting, showToast, restaurantId]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="glass-nav px-4 py-3 flex items-center justify-between">
         <div>
           <div className="text-base font-semibold text-gray-800">厨房会议</div>
           <div className="text-xs text-gray-400">{dateLabel}</div>
