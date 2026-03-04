@@ -1,5 +1,5 @@
 // Chef Chat Page - AI assistant for head_chef role
-// v1.1 - Added actionLinks for briefing quick-actions
+// v2.0 - Added welcomeMessage config
 
 'use client';
 
@@ -23,6 +23,15 @@ export default function ChefChatPage() {
           { label: '查看厨房待办', path: '/chef/dashboard' },
           { label: '菜品反馈', path: '/chef/dishes' },
         ],
+        welcomeMessage: {
+          title: '我是你的 AI 厨房助手',
+          subtitle: '追踪了顾客对每道菜的真实评价，我能帮你：',
+          capabilities: [
+            { icon: 'AlertTriangle', text: '精准定位哪道菜出了什么问题' },
+            { icon: 'ListTodo', text: '将差评转化为备餐任务，驱动厨房改进' },
+            { icon: 'CheckCircle', text: '追踪菜品改善效果，确认问题是否解决' },
+          ],
+        },
       }}
     />
   );
