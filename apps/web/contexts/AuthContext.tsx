@@ -6,6 +6,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { getApiUrl } from '@/lib/api';
+import { tStatic } from '@/lib/i18n';
 
 interface User {
   id: string;
@@ -85,14 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          let errorMessage = '登录失败';
+          let errorMessage = tStatic('auth.loginFailed');
           try {
             const error = await response.json();
-            errorMessage = error.message || '登录失败';
+            errorMessage = error.message || tStatic('auth.loginFailed');
           } catch {
             errorMessage = response.status === 401
-              ? '用户名或密码错误'
-              : `服务器错误 (${response.status})，请稍后重试`;
+              ? tStatic('auth.wrongCredentials')
+              : `${tStatic('auth.serverError')} (${response.status})`;
           }
           // 401 is a credential error — don't retry
           if (response.status === 401) {
@@ -130,17 +131,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         clearTimeout(timeoutId);
         if (err instanceof DOMException && err.name === 'AbortError') {
-          lastError = new Error('登录超时，请检查网络后重试');
+          lastError = new Error(tStatic('auth.timeout'));
         } else if (err instanceof TypeError && err.message.includes('fetch')) {
-          lastError = new Error('无法连接服务器，请检查网络');
+          lastError = new Error(tStatic('auth.networkError'));
         } else if (err instanceof Error) {
           // Credential errors (401) — don't retry
-          if (err.message === '用户名或密码错误') {
+          if (err.message === tStatic('auth.wrongCredentials')) {
             throw err;
           }
           lastError = err;
         } else {
-          lastError = new Error('登录失败');
+          lastError = new Error(tStatic('auth.loginFailed'));
         }
         // Retry on timeout/network errors
         if (attempt < MAX_RETRIES) {
@@ -150,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     // All retries exhausted
-    throw lastError || new Error('登录失败，请稍后重试');
+    throw lastError || new Error(tStatic('auth.retryFailed'));
   }, [router]);
 
   const logout = useCallback(() => {

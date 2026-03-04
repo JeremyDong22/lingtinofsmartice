@@ -12,8 +12,9 @@ import { UserMenu } from '@/components/layout/UserMenu';
 import { ActionItemsCard } from '@/components/dashboard/ActionItemsCard';
 import { getChinaToday, singleDay, dateRangeParams, isMultiDay, shiftDate } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
-import { DatePicker, storePresets } from '@/components/shared/DatePicker';
+import { DatePicker, useStorePresets } from '@/components/shared/DatePicker';
 import { Timer, Meh, Home, SmilePlus, UtensilsCrossed, CheckCircle } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 
 // Types for API responses
 interface CoveragePeriod {
@@ -125,6 +126,7 @@ function getSpeechReason(text: string, quality: 'good' | 'improve'): string {
 
 // Speech quality split component
 function SpeechQualitySplit({ questions }: { questions: ManagerQuestion[] }) {
+  const { t } = useT();
   const good = questions.filter(q => classifySpeech(q.text) === 'good');
   const improve = questions.filter(q => classifySpeech(q.text) === 'improve');
 
@@ -134,7 +136,7 @@ function SpeechQualitySplit({ questions }: { questions: ManagerQuestion[] }) {
         <div>
           <div className="flex items-center gap-1.5 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-            <span className="text-xs font-semibold text-gray-600">优秀示范</span>
+            <span className="text-xs font-semibold text-gray-600">{t('dashboard.goodExample')}</span>
           </div>
           <div className="space-y-2">
             {good.slice(0, 3).map((q, i) => (
@@ -150,7 +152,7 @@ function SpeechQualitySplit({ questions }: { questions: ManagerQuestion[] }) {
         <div>
           <div className="flex items-center gap-1.5 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            <span className="text-xs font-semibold text-gray-600">可以更好</span>
+            <span className="text-xs font-semibold text-gray-600">{t('dashboard.canImprove')}</span>
           </div>
           <div className="space-y-2">
             {improve.slice(0, 3).map((q, i) => (
@@ -168,6 +170,8 @@ function SpeechQualitySplit({ questions }: { questions: ManagerQuestion[] }) {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { t } = useT();
+  const storePresets = useStorePresets();
   const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaToday()));
   // State for feedback popover
   const [selectedFeedback, setSelectedFeedback] = useState<{
@@ -281,7 +285,7 @@ export default function DashboardPage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-900">数据看板</h1>
+        <h1 className="text-lg font-semibold text-gray-900">{t('dashboard.title')}</h1>
         <div className="flex items-center gap-2">
           <DatePicker
             value={dateRange}
@@ -296,28 +300,28 @@ export default function DashboardPage() {
       <main className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
         {/* Loading indicator */}
         {loading && (
-          <div className="text-center py-8 text-gray-500">加载中...</div>
+          <div className="text-center py-8 text-gray-500">{t('dashboard.loading')}</div>
         )}
 
         {/* Execution Data Card */}
         <div className="glass-card rounded-2xl p-4">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">执行数据</h2>
+          <h2 className="text-sm font-medium text-gray-700 mb-3">{t('dashboard.execution')}</h2>
           <div className="grid grid-cols-3 gap-3">
             {/* Visit counts by period */}
             <div className="text-center">
-              <div className="text-xs text-gray-500 mb-1">桌访</div>
+              <div className="text-xs text-gray-500 mb-1">{t('dashboard.visits')}</div>
               <div className="text-xl font-bold text-gray-900">
                 {coverage.periods.reduce((sum, p) => sum + p.visit_count, 0)}
               </div>
               <div className="text-[10px] text-gray-400 mt-0.5">
                 {coverage.periods.map(p =>
-                  `${p.period === 'lunch' ? '午' : '晚'}${p.visit_count}`
+                  `${p.period === 'lunch' ? t('dashboard.lunch') : t('dashboard.dinner')}${p.visit_count}`
                 ).join(' · ') || '--'}
               </div>
             </div>
             {/* Review completion rate */}
             <div className="text-center">
-              <div className="text-xs text-gray-500 mb-1">复盘</div>
+              <div className="text-xs text-gray-500 mb-1">{t('dashboard.reviewLabel')}</div>
               <div className={`text-xl font-bold ${
                 !reviewCompletion ? 'text-gray-400' :
                 reviewCompletion.completion_rate >= 80 ? 'text-green-600' :
@@ -327,12 +331,12 @@ export default function DashboardPage() {
                 {reviewCompletion ? `${reviewCompletion.completion_rate}%` : '--'}
               </div>
               <div className="text-[10px] text-gray-400 mt-0.5">
-                {reviewCompletion ? `${reviewCompletion.reviewed_days}/${reviewCompletion.total_days}天` : '--'}
+                {reviewCompletion ? t('dashboard.reviewDays', reviewCompletion.reviewed_days, reviewCompletion.total_days) : '--'}
               </div>
             </div>
             {/* Streak */}
             <div className="text-center">
-              <div className="text-xs text-gray-500 mb-1">连续复盘</div>
+              <div className="text-xs text-gray-500 mb-1">{t('dashboard.consecutive')}</div>
               <div className={`text-xl font-bold ${
                 !reviewCompletion ? 'text-gray-400' :
                 reviewCompletion.streak >= 5 ? 'text-green-600' :
@@ -348,13 +352,13 @@ export default function DashboardPage() {
 
         {/* Sentiment Summary with Trend Arrows */}
         <div className="glass-card rounded-2xl p-4">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">满意度概览</h2>
+          <h2 className="text-sm font-medium text-gray-700 mb-3">{t('dashboard.satisfactionOverview')}</h2>
           {sentiment ? (
             <div className="flex items-center justify-around py-4">
               {[
-                { label: '满意', pct: sentiment.positive_percent, prevPct: yesterdaySentiment?.positive_percent, color: 'text-green-600', trendUp: 'text-green-500', trendDown: 'text-red-500' },
-                { label: '一般', pct: sentiment.neutral_percent, prevPct: yesterdaySentiment?.neutral_percent, color: 'text-gray-600', trendUp: 'text-gray-500', trendDown: 'text-gray-500' },
-                { label: '不满意', pct: sentiment.negative_percent, prevPct: yesterdaySentiment?.negative_percent, color: 'text-red-500', trendUp: 'text-red-500', trendDown: 'text-green-500' },
+                { label: t('dashboard.satisfied'), pct: sentiment.positive_percent, prevPct: yesterdaySentiment?.positive_percent, color: 'text-green-600', trendUp: 'text-green-500', trendDown: 'text-red-500' },
+                { label: t('dashboard.neutral'), pct: sentiment.neutral_percent, prevPct: yesterdaySentiment?.neutral_percent, color: 'text-gray-600', trendUp: 'text-gray-500', trendDown: 'text-gray-500' },
+                { label: t('dashboard.unsatisfied'), pct: sentiment.negative_percent, prevPct: yesterdaySentiment?.negative_percent, color: 'text-red-500', trendUp: 'text-red-500', trendDown: 'text-green-500' },
               ].map((item, i) => {
                 const diff = !multiDay && item.prevPct != null ? item.pct - item.prevPct : null;
                 return (
@@ -366,24 +370,24 @@ export default function DashboardPage() {
                         i === 2 ? (diff > 0 ? item.trendUp : item.trendDown) : (diff > 0 ? item.trendUp : item.trendDown)
                       }`}>
                         {diff > 0 ? '↑' : '↓'} {Math.abs(diff)}%
-                        <span className="text-gray-400 font-normal ml-0.5">比昨天</span>
+                        <span className="text-gray-400 font-normal ml-0.5">{t('dashboard.vsPrevDay')}</span>
                       </div>
                     )}
                     {diff === 0 && (
-                      <div className="text-xs mt-0.5 text-gray-400">— 持平</div>
+                      <div className="text-xs mt-0.5 text-gray-400">{t('dashboard.noChange')}</div>
                     )}
                   </div>
                 );
               })}
             </div>
           ) : !loading ? (
-            <div className="text-center py-4 text-gray-400">暂无数据</div>
+            <div className="text-center py-4 text-gray-400">{t('dashboard.noData')}</div>
           ) : null}
         </div>
 
         {/* Customer Feedback - Multi-dimension (problems first, then highlights) */}
         <div className="glass-card rounded-2xl p-4">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">顾客反馈</h2>
+          <h2 className="text-sm font-medium text-gray-700 mb-3">{t('dashboard.customerFeedback')}</h2>
           {sentiment && (sentiment.negative_feedbacks?.length > 0 || sentiment.positive_feedbacks?.length > 0) ? (
             <>
               {/* Problems section */}
@@ -391,7 +395,7 @@ export default function DashboardPage() {
                 <div className="mb-4">
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                    <span className="text-xs font-semibold text-gray-600">需要改进</span>
+                    <span className="text-xs font-semibold text-gray-600">{t('dashboard.needsImprovement')}</span>
                   </div>
                   <div className="space-y-2">
                     {sentiment.negative_feedbacks.map((fb, i) => {
@@ -411,7 +415,7 @@ export default function DashboardPage() {
                             </span>
                             <span className="flex items-center gap-1 text-xs font-semibold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">
                               <span className={`w-1.5 h-1.5 rounded-full ${fb.count >= 3 ? 'bg-red-500' : 'bg-amber-400'}`} />
-                              {fb.count}桌
+                              {t('dashboard.tables', fb.count)}
                             </span>
                           </div>
                         </button>
@@ -426,7 +430,7 @@ export default function DashboardPage() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                    <span className="text-xs font-semibold text-gray-600">值得保持</span>
+                    <span className="text-xs font-semibold text-gray-600">{t('dashboard.keepUp')}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {sentiment.positive_feedbacks.map((fb, i) => {
@@ -440,7 +444,7 @@ export default function DashboardPage() {
                           }}
                           className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
                         >
-                          {icon} {fb.text} {fb.count > 1 && <span className="ml-1 text-green-500">{fb.count}桌</span>}
+                          {icon} {fb.text} {fb.count > 1 && <span className="ml-1 text-green-500">{t('dashboard.tables', fb.count)}</span>}
                         </button>
                       );
                     })}
@@ -452,7 +456,7 @@ export default function DashboardPage() {
               {(!sentiment.negative_feedbacks || sentiment.negative_feedbacks.length === 0) && (
                 <div className="flex items-center gap-2 text-green-600 mb-3 bg-green-50 rounded-lg p-3">
                   <CheckCircle className="w-4 h-4" />
-                  <span className="text-sm font-medium">今日无需特别关注的问题</span>
+                  <span className="text-sm font-medium">{t('dashboard.allClear')}</span>
                 </div>
               )}
 
@@ -461,8 +465,8 @@ export default function DashboardPage() {
                 <div className="mt-4">
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                    <span className="text-xs font-semibold text-gray-600">顾客建议</span>
-                    <span className="text-xs text-gray-400 ml-auto">近 7 天</span>
+                    <span className="text-xs font-semibold text-gray-600">{t('dashboard.suggestions')}</span>
+                    <span className="text-xs text-gray-400 ml-auto">{t('dashboard.last7days')}</span>
                   </div>
                   <div className="space-y-1.5">
                     {suggestions.map((item, i) => (
@@ -483,14 +487,14 @@ export default function DashboardPage() {
               )}
             </>
           ) : !loading ? (
-            <div className="text-center py-4 text-gray-400">暂无反馈数据</div>
+            <div className="text-center py-4 text-gray-400">{t('dashboard.noFeedback')}</div>
           ) : null}
         </div>
 
         {/* Manager Questions - 话术使用 (split into good/bad) */}
         <div className="glass-card rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-gray-700">话术使用</h2>
+            <h2 className="text-sm font-medium text-gray-700">{t('dashboard.speechUsage')}</h2>
             <button
               onClick={() => {
                 const question = '请你获取我们最近的桌台访问的话术并且以专业餐饮经营者的角度，告诉我该如何优化这些话术，以获得更好的效果';
@@ -504,21 +508,21 @@ export default function DashboardPage() {
                   <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" strokeLinecap="round" />
                   <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
                 </svg>
-                <span>AI 优化</span>
+                <span>{t('dashboard.aiOptimize')}</span>
               </span>
             </button>
           </div>
           {managerQuestions.length > 0 ? (
             <SpeechQualitySplit questions={managerQuestions} />
           ) : !loading ? (
-            <div className="text-center py-4 text-gray-400 text-sm">暂无数据</div>
+            <div className="text-center py-4 text-gray-400 text-sm">{t('dashboard.noData')}</div>
           ) : null}
         </div>
 
         {/* Kitchen Response Section */}
         {kitchenActions.length > 0 && (
           <div className="glass-card rounded-2xl p-4">
-            <h2 className="text-sm font-medium text-gray-700 mb-3">厨房响应</h2>
+            <h2 className="text-sm font-medium text-gray-700 mb-3">{t('dashboard.kitchenResponse')}</h2>
             <div className="space-y-3">
               {kitchenActions.map((item) => {
                 const isResolved = item.status === 'resolved';
@@ -540,13 +544,13 @@ export default function DashboardPage() {
                         isDismissed ? 'text-gray-500' :
                         'text-red-700'
                       }`}>
-                        {isResolved ? '已处理' : isDismissed ? '已忽略' : '待处理'}
+                        {isResolved ? t('dashboard.processed') : isDismissed ? t('dashboard.ignored') : t('dashboard.pending')}
                       </span>
                     </div>
                     <p className="text-sm text-gray-700">{item.suggestion_text}</p>
                     {item.response_note && (
                       <div className="mt-1.5 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
-                        厨师长: {item.response_note}
+                        {t('dashboard.chefLabel')}{item.response_note}
                       </div>
                     )}
                   </div>
@@ -555,7 +559,7 @@ export default function DashboardPage() {
             </div>
             {kitchenActions.filter(a => a.status === 'pending' || a.status === 'acknowledged').length > 0 && (
               <div className="mt-2 text-xs text-gray-400 text-center">
-                {kitchenActions.filter(a => a.status === 'pending' || a.status === 'acknowledged').length} 个菜品问题待厨师长处理
+                {t('dashboard.pendingDishes', kitchenActions.filter(a => a.status === 'pending' || a.status === 'acknowledged').length)}
               </div>
             )}
           </div>
@@ -621,7 +625,7 @@ export default function DashboardPage() {
               {selectedFeedback.feedback.contexts.map((ctx, idx) => (
                 <div key={idx} className="border-l-2 border-primary-200 pl-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{ctx.tableId}桌</span>
+                    <span className="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{t('dashboard.tableId', ctx.tableId)}</span>
                     {ctx.audioUrl && (
                       <button
                         onClick={() => handleAudioToggle(ctx.visitId, ctx.audioUrl!)}
@@ -639,13 +643,13 @@ export default function DashboardPage() {
                   {/* Q&A conversation */}
                   {ctx.managerQuestions.length > 0 && (
                     <div className="flex gap-2 mb-1">
-                      <span className="w-7 text-right text-[10px] text-gray-400 pt-0.5 flex-shrink-0">店长</span>
+                      <span className="w-7 text-right text-[10px] text-gray-400 pt-0.5 flex-shrink-0">{t('dashboard.managerRole')}</span>
                       <p className="text-sm text-gray-600">{ctx.managerQuestions.join(' ')}</p>
                     </div>
                   )}
                   {ctx.customerAnswers.length > 0 && (
                     <div className="flex gap-2">
-                      <span className="w-7 text-right text-[10px] text-gray-400 pt-0.5 flex-shrink-0">顾客</span>
+                      <span className="w-7 text-right text-[10px] text-gray-400 pt-0.5 flex-shrink-0">{t('dashboard.customerRole')}</span>
                       <p className="text-sm text-gray-800">
                         {ctx.customerAnswers.map((answer, ansIdx) => {
                           const keyword = selectedFeedback.feedback.text;
@@ -680,7 +684,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="text-sm text-gray-400 text-center py-2">
-              暂无对话详情
+              {t('dashboard.noDialogue')}
             </div>
           )}
         </div>

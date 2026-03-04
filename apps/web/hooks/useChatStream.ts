@@ -8,6 +8,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { getAuthHeaders, useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
+import { tStatic, getLocale } from '@/lib/i18n';
 
 export interface Message {
   id: string;
@@ -256,14 +257,15 @@ export function useChatStream(): UseChatStreamReturn {
           user_name: userName,
           employee_id: employeeId,
           managed_restaurant_ids: user?.managedRestaurantIds || null,
+          locale: getLocale(),
         }),
         signal: ctrl.signal,
       });
 
-      if (!response.ok) throw new Error('请求失败，请稍后重试');
+      if (!response.ok) throw new Error(tStatic('chat.error.requestFailed'));
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error('无法读取响应');
+      if (!reader) throw new Error(tStatic('chat.error.cannotRead'));
 
       const decoder = new TextDecoder();
       const TIMEOUT_MS = 60_000;
@@ -303,9 +305,9 @@ export function useChatStream(): UseChatStreamReturn {
                 m.id === asstMsgId ? { ...m, thinkingStatus: parsed.content } : m
               ));
             } else if (parsed.type === 'tool_use') {
-              const name = parsed.tool === 'query_database' ? '查询数据库' : parsed.tool;
+              const name = parsed.tool === 'query_database' ? tStatic('chat.tool.queryDb') : parsed.tool;
               patchMessages(storageKey, p => p.map(m =>
-                m.id === asstMsgId ? { ...m, thinkingStatus: `正在${name}...` } : m
+                m.id === asstMsgId ? { ...m, thinkingStatus: `${tStatic('chat.tool.thinking')}${name}...` } : m
               ));
             } else if (parsed.type === 'text') {
               fullContent += parsed.content;
@@ -325,21 +327,21 @@ export function useChatStream(): UseChatStreamReturn {
         // User pressed stop (abortController set to null by stopRequest)
         if (getStore(storageKey).abortController === null) return;
         // Timeout
-        const timeoutMsg = '当前访问人数较多，请稍后重试';
+        const timeoutMsg = tStatic('chat.error.busy');
         patchError(storageKey, timeoutMsg);
         patchMessages(storageKey, p => p.map(m =>
           m.id === asstMsgId
-            ? { ...m, content: `抱歉，${timeoutMsg}`, isStreaming: false, isError: true, thinkingStatus: undefined, originalQuestion: content }
+            ? { ...m, content: `${tStatic('chat.error.sorry')}${timeoutMsg}`, isStreaming: false, isError: true, thinkingStatus: undefined, originalQuestion: content }
             : m
         ));
         return;
       }
 
-      const errMsg = err instanceof Error ? err.message : '发生未知错误';
+      const errMsg = err instanceof Error ? err.message : tStatic('chat.error.unknown');
       patchError(storageKey, errMsg);
       patchMessages(storageKey, p => p.map(m =>
         m.id === asstMsgId
-          ? { ...m, content: `抱歉，${errMsg}`, isStreaming: false, isError: true, thinkingStatus: undefined, originalQuestion: content }
+          ? { ...m, content: `${tStatic('chat.error.sorry')}${errMsg}`, isStreaming: false, isError: true, thinkingStatus: undefined, originalQuestion: content }
           : m
       ));
     } finally {
@@ -363,7 +365,7 @@ export function useChatStream(): UseChatStreamReturn {
     if (s.abortController) { s.abortController.abort(); s.abortController = null; }
     patchMessages(storageKey, p => p.map(m =>
       m.isStreaming
-        ? { ...m, isStreaming: false, thinkingStatus: undefined, isStopped: true, content: m.content || '停止了思考。' }
+        ? { ...m, isStreaming: false, thinkingStatus: undefined, isStopped: true, content: m.content || tStatic('chat.stoppedThinking') }
         : m
     ));
     patchLoading(storageKey, false);

@@ -6,6 +6,7 @@
 import { useRef, useState, useCallback, Fragment } from 'react';
 import useSWR from 'swr';
 import { Lightbulb } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 
 // --- Types ---
 interface SuggestionEvidence {
@@ -83,6 +84,7 @@ interface MergedStoreData {
 
 // --- Inline Q&A conversation renderer ---
 function QAConversation({ questions, answers }: { questions: string[]; answers: string[] }) {
+  const { t } = useT();
   const maxLen = Math.max(questions.length, answers.length);
   if (maxLen === 0) return null;
   return (
@@ -91,13 +93,13 @@ function QAConversation({ questions, answers }: { questions: string[]; answers: 
         <Fragment key={j}>
           {questions[j] && (
             <div className="flex gap-2">
-              <span className="text-[10px] text-gray-400 mt-0.5 flex-shrink-0 w-7 text-right">店长</span>
+              <span className="text-[10px] text-gray-400 mt-0.5 flex-shrink-0 w-7 text-right">{t('insights.manager')}</span>
               <p className="text-xs text-gray-500 flex-1">{questions[j]}</p>
             </div>
           )}
           {answers[j] && (
             <div className="flex gap-2">
-              <span className="text-[10px] text-primary-500 mt-0.5 flex-shrink-0 w-7 text-right">顾客</span>
+              <span className="text-[10px] text-primary-500 mt-0.5 flex-shrink-0 w-7 text-right">{t('insights.customer')}</span>
               <p className="text-xs text-gray-800 flex-1">{answers[j]}</p>
             </div>
           )}
@@ -146,6 +148,7 @@ interface CustomerInsightsProps {
 }
 
 export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: CustomerInsightsProps) {
+  const { t } = useT();
   // Audio playback
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
@@ -267,7 +270,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                 <div key={ei} className="bg-white rounded-xl p-3 border border-gray-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                      {ev.tableId}桌
+                      {t('insights.table', ev.tableId)}
                     </span>
                     {ev.audioUrl && (
                       <AudioButton audioKey={audioKey} audioUrl={ev.audioUrl} playingKey={playingKey} onToggle={handleAudioToggle} />
@@ -299,7 +302,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
           <span className={`w-1.5 h-1.5 rounded-full ${dotColor} flex-shrink-0`} />
           <span className="text-sm text-gray-800 flex-1 leading-relaxed">&ldquo;{fb.text}&rdquo;</span>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <span className="text-xs text-gray-300">{fb.count} 桌</span>
+            <span className="text-xs text-gray-300">{t('insights.tableCount', fb.count)}</span>
             {hasCtx && <ChevronDown expanded={isExp} />}
           </div>
         </div>
@@ -310,7 +313,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
               return (
                 <div key={ci} className="bg-white rounded-xl p-3 border border-gray-100">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{ctx.tableId}桌</span>
+                    <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{t('insights.table', ctx.tableId)}</span>
                     {ctx.audioUrl && (
                       <AudioButton audioKey={audioKey} audioUrl={ctx.audioUrl} playingKey={playingKey} onToggle={handleAudioToggle} />
                     )}
@@ -359,13 +362,13 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
               <span className="text-sm font-semibold text-gray-900">{store.restaurant_name}</span>
               <div className="flex items-center gap-2">
                 {sugCount > 0 && (
-                  <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">{sugCount} 建议</span>
+                  <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">{sugCount} {t('insights.suggestion')}</span>
                 )}
                 {store.negative_count > 0 && (
-                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">{store.negative_count} 差</span>
+                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">{store.negative_count} {t('insights.negative')}</span>
                 )}
                 {store.positive_count > 0 && (
-                  <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{store.positive_count} 好</span>
+                  <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{store.positive_count} {t('insights.positive')}</span>
                 )}
                 <ChevronDown expanded={isOpen} />
               </div>
@@ -378,7 +381,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                 {sugCount > 0 && (
                   <div>
                     <div className="px-4 pt-2.5 pb-1">
-                      <span className="text-xs text-purple-500 font-medium">建议</span>
+                      <span className="text-xs text-purple-500 font-medium">{t('insights.suggestion')}</span>
                     </div>
                     {store.suggestions.map((sug, idx) => renderSuggestionRow(sug, store.restaurant_id, idx))}
                   </div>
@@ -390,7 +393,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                     {sugCount > 0 && <div className="mx-4 border-t border-gray-100" />}
                     <div>
                       <div className="px-4 pt-2.5 pb-1">
-                        <span className="text-xs text-amber-500 font-medium">不满意</span>
+                        <span className="text-xs text-amber-500 font-medium">{t('insights.dissatisfied')}</span>
                       </div>
                       {store.negative_feedbacks.map((fb, idx) => renderFeedbackRow(fb, 'neg', store.restaurant_id, idx))}
                     </div>
@@ -403,7 +406,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                     {(sugCount > 0 || hasNeg) && <div className="mx-4 border-t border-gray-100" />}
                     <div>
                       <div className="px-4 pt-2.5 pb-1">
-                        <span className="text-xs text-green-500 font-medium">满意</span>
+                        <span className="text-xs text-green-500 font-medium">{t('insights.satisfied')}</span>
                       </div>
                       {store.positive_feedbacks.map((fb, idx) => renderFeedbackRow(fb, 'pos', store.restaurant_id, idx))}
                     </div>
@@ -421,9 +424,9 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
       {!isLoading && mergedStores.length === 0 && (
         <div className="glass-card rounded-xl p-8 text-center">
           <div className="flex justify-center mb-3"><Lightbulb className="w-10 h-10 text-gray-300" /></div>
-          <h3 className="text-base font-medium text-gray-700 mb-1">暂无顾客洞察</h3>
+          <h3 className="text-base font-medium text-gray-700 mb-1">{t('insights.emptyTitle')}</h3>
           <p className="text-sm text-gray-400">
-            店长完成桌访录音后，顾客建议和反馈将显示在这里
+            {t('insights.emptyCustomer')}
           </p>
         </div>
       )}

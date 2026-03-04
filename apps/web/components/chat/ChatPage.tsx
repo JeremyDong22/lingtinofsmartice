@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback, memo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useT } from '@/lib/i18n';
 import { useChatStream } from '@/hooks/useChatStream';
 import type { Message } from '@/hooks/useChatStream';
 import { useDailyBriefing } from '@/hooks/useDailyBriefing';
@@ -50,6 +51,7 @@ interface ChatPageProps {
 
 // --- Copy button for assistant messages ---
 function CopyButton({ content }: { content: string }) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -71,7 +73,7 @@ function CopyButton({ content }: { content: string }) {
     <button
       onClick={handleCopy}
       className="mt-1 p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-      title="复制"
+      title={t('chat.copy')}
     >
       {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
     </button>
@@ -98,6 +100,7 @@ const MessageBubble = memo(function MessageBubble({
   actionLinks,
   onNavigate,
 }: MessageBubbleProps) {
+  const { t } = useT();
   const showCopy = msg.role === 'assistant' && !msg.isError && !msg.isStreaming && !msg.thinkingStatus && !msg.isStopped && msg.content;
 
   return (
@@ -119,7 +122,7 @@ const MessageBubble = memo(function MessageBubble({
               disabled={retryDisabled}
               className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
             >
-              重试
+              {t('chat.retry')}
             </button>
           </div>
         ) : msg.thinkingStatus ? (
@@ -152,7 +155,7 @@ const MessageBubble = memo(function MessageBubble({
             )}
           </>
         ) : msg.isStreaming ? (
-          <ThinkingIndicator status="思考中" />
+          <ThinkingIndicator status={t('chat.thinking')} />
         ) : null}
 
         {showCopy && (
@@ -176,13 +179,14 @@ const MessageBubble = memo(function MessageBubble({
 });
 
 function ChatLoadingFallback({ title }: { title: string }) {
+  const { t } = useT();
   return (
     <div className="flex flex-col island-chat-height">
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
       </header>
       <div className="flex-1 flex items-center justify-center island-page-top">
-        <div className="text-gray-500">加载中...</div>
+        <div className="text-gray-500">{t('chat.loading')}</div>
       </div>
     </div>
   );
@@ -199,6 +203,7 @@ export default function ChatPage({ config }: ChatPageProps) {
 function ChatContent({ config }: ChatPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { t } = useT();
   const { messages, isLoading, isInitialized, sendMessage, retryMessage, stopRequest } = useChatStream();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -345,14 +350,14 @@ function ChatContent({ config }: ChatPageProps) {
 
             {/* Quick actions */}
             <div className="w-full max-w-sm">
-              <p className="text-center text-xs text-gray-400 mb-2.5 tracking-wider">试试问我</p>
+              <p className="text-center text-xs text-gray-400 mb-2.5 tracking-wider">{t('chat.tryAsk')}</p>
               <button
                 onClick={handleBriefingClick}
                 disabled={isLoading}
                 className="w-full px-4 py-3 bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200 rounded-xl text-[13px] text-primary-600 text-left font-medium hover:from-primary-100 hover:to-primary-100 disabled:opacity-50 transition-colors flex items-center gap-2 mb-2.5"
               >
                 <Sparkles className="w-4 h-4 flex-shrink-0" />
-                查看今日运营简报
+                {t('chat.viewBriefing')}
               </button>
               <div className="grid grid-cols-2 gap-2">
                 {config.fallbackQuickQuestions.map((q) => (
@@ -425,7 +430,7 @@ function ChatContent({ config }: ChatPageProps) {
               onClick={stopRequest}
               className="px-6 py-3 bg-gray-500 text-white rounded-xl font-medium hover:bg-gray-600 transition-colors flex-shrink-0"
             >
-              停止
+              {t('chat.stop')}
             </button>
           ) : (
             <button
@@ -433,7 +438,7 @@ function ChatContent({ config }: ChatPageProps) {
               disabled={!input.trim()}
               className="px-6 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
-              发送
+              {t('chat.send')}
             </button>
           )}
         </div>

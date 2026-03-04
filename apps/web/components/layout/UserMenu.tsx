@@ -1,21 +1,23 @@
 // User Menu Component - Display user avatar with dropdown menu
-// v1.5 - Replaced emoji icons with lucide-react SVG icons
+// v1.6 - Added i18n support with language switch for admin
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/lib/i18n';
 import { APP_VERSION } from './UpdatePrompt';
 import {
   ClipboardList, Map, BarChart3, Settings,
-  MessageSquare, FileText, BookOpen,
+  MessageSquare, FileText, BookOpen, Languages,
 } from 'lucide-react';
 
 const GUIDE_SEEN_KEY = 'lingtin_guide_seen_version';
 
 export function UserMenu() {
   const { user, logout } = useAuth();
+  const { t, locale, setLocale } = useT();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
@@ -85,6 +87,20 @@ export function UserMenu() {
             </p>
           </div>
 
+          {/* Language Switch (admin only) */}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                setLocale(locale === 'zh-CN' ? 'en' : 'zh-CN');
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <Languages className="w-4 h-4 text-gray-400" />
+              {t('menu.switchLang')}
+            </button>
+          )}
+
           {/* Question Templates Management (admin only) */}
           {isAdmin && (
             <button
@@ -95,7 +111,7 @@ export function UserMenu() {
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <ClipboardList className="w-4 h-4 text-gray-400" />
-              问卷管理
+              {t('menu.questionTemplates')}
             </button>
           )}
 
@@ -109,7 +125,7 @@ export function UserMenu() {
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <Map className="w-4 h-4 text-gray-400" />
-              区域管理
+              {t('menu.regions')}
             </button>
           )}
 
@@ -123,7 +139,7 @@ export function UserMenu() {
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <BarChart3 className="w-4 h-4 text-gray-400" />
-              产品洞察
+              {t('menu.productInsights')}
             </button>
           )}
 
@@ -137,7 +153,7 @@ export function UserMenu() {
               className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               <Settings className="w-4 h-4 text-gray-400" />
-              热词管理
+              {t('menu.hotwords')}
             </button>
           )}
 
@@ -150,7 +166,7 @@ export function UserMenu() {
             className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
             <MessageSquare className="w-4 h-4 text-gray-400" />
-            提交反馈
+            {t('menu.submitFeedback')}
           </button>
 
           {/* My Feedback History (all roles) */}
@@ -162,7 +178,7 @@ export function UserMenu() {
             className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
             <FileText className="w-4 h-4 text-gray-400" />
-            我的反馈
+            {t('menu.myFeedback')}
           </button>
 
           {/* Guide */}
@@ -174,7 +190,7 @@ export function UserMenu() {
             className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
             <BookOpen className="w-4 h-4 text-gray-400" />
-            <span className="flex-1">使用指南</span>
+            <span className="flex-1">{t('menu.guide')}</span>
             {hasUnread && (
               <span className="w-2 h-2 bg-red-500 rounded-full" />
             )}
@@ -188,7 +204,7 @@ export function UserMenu() {
             }}
             className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
           >
-            退出登录
+            {t('menu.logout')}
           </button>
         </div>
       )}

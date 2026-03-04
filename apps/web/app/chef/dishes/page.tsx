@@ -15,7 +15,7 @@ import {
 import { UserMenu } from '@/components/layout/UserMenu';
 import { getChinaToday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
-import { DatePicker, storePresets } from '@/components/shared/DatePicker';
+import { DatePicker, useStorePresets } from '@/components/shared/DatePicker';
 
 interface FeedbackContext {
   visitId: string;
@@ -136,6 +136,7 @@ function QAConversation({ questions, answers }: { questions: string[]; answers: 
 export default function ChefDishesPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const storePresets = useStorePresets();
   const restaurantId = user?.restaurantId;
   const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaToday()));
   const [expandedDish, setExpandedDish] = useState<string | null>(null);

@@ -7,11 +7,13 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { APP_VERSION } from './UpdatePrompt';
 import { getLatestNoteForRole, type ReleaseNoteItem } from '@/lib/release-notes';
+import { useT } from '@/lib/i18n';
 
 const LS_KEY = 'lingtin_whats_new_seen';
 
 export function WhatsNewModal() {
   const { user } = useAuth();
+  const { t } = useT();
   const [visible, setVisible] = useState(false);
   const [animating, setAnimating] = useState(false);
   const [note, setNote] = useState<{ title: string; date: string; items: ReleaseNoteItem[] } | null>(null);
@@ -112,7 +114,7 @@ export function WhatsNewModal() {
             onClick={handleClose}
             className="w-full bg-primary-600 text-white rounded-xl py-3 text-sm font-semibold hover:bg-primary-700 transition-colors active:scale-[0.98]"
           >
-            知道了
+            {t('whatsNew.gotIt')}
           </button>
         </div>
 

@@ -24,6 +24,7 @@ import { MotivationBanner } from '@/components/recorder/MotivationBanner';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
 import { BarChart3, CloudUpload } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 import {
   processRecordingInBackground,
   processMeetingInBackground,
@@ -61,6 +62,7 @@ function getDateString(selection: string): string | undefined {
 }
 
 export default function RecorderPage() {
+  const { t } = useT();
   // Shared state
   const [mode, setMode] = useState<RecorderMode>('visit');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -125,7 +127,7 @@ export default function RecorderPage() {
         showToast(message, 'info');
       });
       if (processed > 0) {
-        showToast(`已恢复处理 ${processed} 条录音`, 'success');
+        showToast(t('recorder.recoveredProcessing', processed), 'success');
       }
     };
     retryPending();
@@ -141,7 +143,7 @@ export default function RecorderPage() {
       const visitRetry = getRecordingsNeedingRetry();
       const visitToRetry = visitRetry.filter(r => !processingIdsRef.current.has(r.id));
       if (visitToRetry.length > 0) {
-        showToast(`正在重试 ${visitToRetry.length} 条录音上传`, 'info');
+        showToast(t('recorder.retryingUploads', visitToRetry.length), 'info');
         for (const recording of visitToRetry) {
           processingIdsRef.current.add(recording.id);
           processRecordingInBackground(recording, {
@@ -149,7 +151,7 @@ export default function RecorderPage() {
               updateRecording(id, { status, ...data });
               if (status === 'completed') {
                 processingIdsRef.current.delete(id);
-                showToast(`${recording.tableId} 桌录音恢复完成`, 'success');
+                showToast(t('recorder.visitRecoveryComplete', recording.tableId), 'success');
               }
             },
             onError: (id, errorMsg) => {
@@ -171,7 +173,7 @@ export default function RecorderPage() {
               updateMeeting(id, { status, ...data });
               if (status === 'completed') {
                 processingIdsRef.current.delete(id);
-                showToast('例会录音恢复完成', 'success');
+                showToast(t('recorder.meetingRecoveryComplete'), 'success');
               }
             },
             onError: (id, errorMsg) => {
@@ -218,7 +220,7 @@ export default function RecorderPage() {
   // --- Visit mode handlers ---
   const handleVisitStart = useCallback(async () => {
     if (!tableId) {
-      showToast('请先选择桌号', 'error');
+      showToast(t('recorder.selectTable'), 'error');
       return;
     }
     await startRecording();
@@ -235,7 +237,7 @@ export default function RecorderPage() {
   // --- Meeting mode handlers ---
   const handleMeetingStart = useCallback(async () => {
     if (!meetingType) {
-      showToast('请先选择会议类型', 'error');
+      showToast(t('recorder.selectMeetingType'), 'error');
       return;
     }
     await startRecording();
@@ -266,7 +268,7 @@ export default function RecorderPage() {
 
       const processAsync = async () => {
         const recording = await saveRecording(savedTableId, duration, audioBlob);
-        showToast(`${savedTableId} 桌录音已保存`, 'success');
+        showToast(t('recorder.savedRecording', savedTableId), 'success');
         processingIdsRef.current.add(recording.id);
         resetRecording();
 
@@ -275,7 +277,7 @@ export default function RecorderPage() {
             updateRecording(id, { status, ...data });
             if (status === 'completed') {
               processingIdsRef.current.delete(id);
-              showToast(`${savedTableId} 桌分析完成`, 'success');
+              showToast(t('recorder.analysisComplete', savedTableId), 'success');
             }
           },
           onError: (id, errorMsg) => {
@@ -293,18 +295,18 @@ export default function RecorderPage() {
       pendingMeetingTypeRef.current = '';
 
       const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
-        pre_meal: '餐前会',
-        daily_review: '每日复盘',
-        weekly: '周例会',
-        kitchen_meeting: '厨房会议',
-        cross_store_review: '经营会',
-        one_on_one: '店长沟通',
+        pre_meal: t('recorder.meetingType.pre_meal'),
+        daily_review: t('recorder.meetingType.daily_review'),
+        weekly: t('recorder.meetingType.weekly'),
+        kitchen_meeting: t('recorder.meetingType.kitchen_meeting'),
+        cross_store_review: t('recorder.meetingType.cross_store_review'),
+        one_on_one: t('recorder.meetingType.one_on_one'),
       };
       const label = MEETING_TYPE_LABELS[savedMeetingType];
 
       const processAsync = async () => {
         const meeting = await saveMeeting(savedMeetingType, duration, audioBlob);
-        showToast(`${label}录音已保存`, 'success');
+        showToast(t('recorder.savedMeetingRecording', label), 'success');
         processingIdsRef.current.add(meeting.id);
         resetRecording();
 
@@ -313,7 +315,7 @@ export default function RecorderPage() {
             updateMeeting(id, { status, ...data });
             if (status === 'completed') {
               processingIdsRef.current.delete(id);
-              showToast(`${label}分析完成`, 'success');
+              showToast(t('recorder.meetingAnalysisComplete', label), 'success');
             }
           },
           onError: (id, errorMsg) => {
@@ -329,34 +331,34 @@ export default function RecorderPage() {
   const handleVisitRetry = useCallback((id: string) => {
     const recording = recordings.find(r => r.id === id);
     if (recording) {
-      showToast('正在重试...', 'info');
+      showToast(t('recorder.retrying'), 'info');
       processRecordingInBackground(recording, {
         onStatusChange: (recId, status, data) => {
           updateRecording(recId, { status, ...data });
-          if (status === 'completed') showToast('重试成功', 'success');
+          if (status === 'completed') showToast(t('recorder.retrySuccess'), 'success');
         },
         onError: (recId, errorMsg) => {
-          showToast('重试失败', 'error');
+          showToast(t('recorder.retryFailed'), 'error');
         },
       }, restaurantId);
     }
-  }, [recordings, updateRecording, showToast, restaurantId]);
+  }, [recordings, updateRecording, showToast, restaurantId, t]);
 
   const handleMeetingRetry = useCallback((id: string) => {
     const meeting = meetings.find(m => m.id === id);
     if (meeting) {
-      showToast('正在重试...', 'info');
+      showToast(t('recorder.retrying'), 'info');
       processMeetingInBackground(meeting, {
         onStatusChange: (recId, status, data) => {
           updateMeeting(recId, { status, ...data });
-          if (status === 'completed') showToast('重试成功', 'success');
+          if (status === 'completed') showToast(t('recorder.retrySuccess'), 'success');
         },
         onError: (recId, errorMsg) => {
-          showToast('重试失败', 'error');
+          showToast(t('recorder.retryFailed'), 'error');
         },
       }, restaurantId);
     }
-  }, [meetings, updateMeeting, showToast, restaurantId]);
+  }, [meetings, updateMeeting, showToast, restaurantId, t]);
 
   // Count stuck uploads (saved with audioData = not yet uploaded to cloud)
   const stuckCount = useMemo(() => {
@@ -378,7 +380,7 @@ export default function RecorderPage() {
         <div className="flex items-center gap-2">
           {/* Mode Switcher */}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {([['visit', '桌访'], ['meeting', '例会']] as const).map(([m, label]) => (
+            {([['visit', t('recorder.visit')], ['meeting', t('recorder.meeting')]] as const).map(([m, label]) => (
               <button
                 key={m}
                 onClick={() => !isRecording && setMode(m)}
@@ -393,7 +395,7 @@ export default function RecorderPage() {
               </button>
             ))}
           </div>
-          <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">v{APP_VERSION}</span>
+          <span className="text-[9px] text-gray-300 tracking-wide font-light ml-0.5 self-end mb-0.5">v{APP_VERSION}</span>
         </div>
         <div className="flex items-center gap-3">
           {/* Date Tabs */}
@@ -408,7 +410,7 @@ export default function RecorderPage() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {option}
+                {option === '今日' ? t('date.today') : t('date.yesterday')}
               </button>
             ))}
           </div>
@@ -421,13 +423,13 @@ export default function RecorderPage() {
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-amber-700">
             <CloudUpload className="w-4 h-4 flex-shrink-0" />
-            <span className="text-sm">{stuckCount} 条录音待上传，网络恢复后将自动重试</span>
+            <span className="text-sm">{t('recorder.stuckUploads', stuckCount)}</span>
           </div>
           <button
             onClick={runRetry}
             className="text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-lg transition-colors"
           >
-            立即重试
+            {t('recorder.retryNow')}
           </button>
         </div>
       )}
@@ -503,7 +505,7 @@ export default function RecorderPage() {
                   <button
                     onClick={() => setStealthMode(true)}
                     className="w-12 h-12 rounded-full bg-green-500 text-white flex items-center justify-center shadow-lg hover:bg-green-600 transition-colors"
-                    title="隐蔽模式"
+                    title={t('recorder.stealthMode')}
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
@@ -526,7 +528,7 @@ export default function RecorderPage() {
                 recordings={recordings}
                 onRetry={handleVisitRetry}
                 onDelete={deleteRecording}
-                title={selectedDate === '今日' ? '今日录音' : '昨日录音'}
+                title={selectedDate === '今日' ? t('recorder.todayRecordings') : t('recorder.yesterdayRecordings')}
               />
             </div>
           </>
@@ -553,8 +555,8 @@ export default function RecorderPage() {
                   <div className="flex items-start gap-3">
                     <BarChart3 className="w-5 h-5 text-gray-500" />
                     <div>
-                      <p className="text-sm font-medium text-gray-800">周例会录音</p>
-                      <p className="text-xs text-gray-500 mt-1">将综合本周桌访数据生成周度分析，包括菜品趋势、服务改善点和下周重点</p>
+                      <p className="text-sm font-medium text-gray-800">{t('recorder.weeklyMeeting')}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('recorder.weeklyDesc')}</p>
                     </div>
                   </div>
                 </div>
@@ -565,7 +567,7 @@ export default function RecorderPage() {
                 <RecordButton
                   isRecording={isRecording}
                   disabled={!meetingType && !isRecording}
-                  disabledHint="请先选择会议类型"
+                  disabledHint={t('recorder.selectMeetingHint')}
                   onStart={handleStart}
                   onStop={handleStop}
                 />
@@ -580,7 +582,7 @@ export default function RecorderPage() {
                 onRetry={handleMeetingRetry}
                 onDelete={deleteMeeting}
                 onViewDetail={setDetailMeeting}
-                title={selectedDate === '今日' ? '今日例会' : '昨日例会'}
+                title={selectedDate === '今日' ? t('recorder.todayMeetings') : t('recorder.yesterdayMeetings')}
               />
             </div>
           </>
