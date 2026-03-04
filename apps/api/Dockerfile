@@ -1,9 +1,9 @@
-# Dockerfile for Lingtin API - v1.5
+# Dockerfile for Lingtin API - v1.6
 # NestJS backend with FFmpeg support for audio processing
 # Build from monorepo root: docker build -f apps/api/Dockerfile -t <image> .
-# v1.5 - Move build tools to dependencies for reliable Docker builds
+# v1.6 - Upgrade to Node 20 (crypto.randomUUID global required by @nestjs/schedule@6.1.1)
 
-FROM node:18-slim AS base
+FROM node:20-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable

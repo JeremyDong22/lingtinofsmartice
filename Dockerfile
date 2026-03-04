@@ -1,8 +1,9 @@
-# Dockerfile for Lingtin API - v1.1
+# Dockerfile for Lingtin API - v1.2
 # NestJS backend with FFmpeg support for audio processing
 # Build from monorepo root: docker build -f apps/api/Dockerfile -t <image> .
+# v1.2 - Upgrade to Node 20 (crypto.randomUUID global required by @nestjs/schedule@6.1.1)
 
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Install FFmpeg for audio conversion (WebM -> PCM)
 RUN apk add --no-cache ffmpeg
