@@ -1,3 +1,8 @@
+---
+paths:
+  - "apps/api/src/modules/audio/**"
+  - "apps/api/src/modules/chat/**"
+---
 # 外部服务文档
 
 ## API 文档
