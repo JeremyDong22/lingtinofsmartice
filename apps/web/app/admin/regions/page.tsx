@@ -226,7 +226,7 @@ export default function RegionManagePage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -241,7 +241,7 @@ export default function RegionManagePage() {
         <UserMenu />
       </header>
 
-      <main className="p-4 space-y-4">
+      <main className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
         {/* Action bar */}
         <div className="flex justify-between items-center">
           <p className="text-sm text-gray-500">

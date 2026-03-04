@@ -101,12 +101,12 @@ export default function ChefDashboardPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="text-base font-semibold text-gray-800">{dateLabel}</div>
         <UserMenu />
       </header>
 
-      <main className="px-4 pt-4 pb-4 space-y-5">
+      <main className="px-4 space-y-5 island-page-top island-page-bottom">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-3">
           <div className="glass-card rounded-2xl p-4 text-center">

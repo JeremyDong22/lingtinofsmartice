@@ -177,11 +177,11 @@ const MessageBubble = memo(function MessageBubble({
 
 function ChatLoadingFallback({ title }: { title: string }) {
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+    <div className="flex flex-col island-chat-height">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
       </header>
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center island-page-top">
         <div className="text-gray-500">加载中...</div>
       </div>
     </div>
@@ -304,15 +304,15 @@ function ChatContent({ config }: ChatPageProps) {
   const firstAssistantIndex = messages.findIndex(m => m.role === 'assistant');
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col island-chat-height">
       {/* Header — #3: removed clear button */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">{config.headerTitle}</h1>
         <UserMenu />
       </header>
 
       {/* Messages area — centered empty state (Design A) or scrollable messages */}
-      <div className={`flex-1 overflow-y-auto min-h-0 ${
+      <div className={`flex-1 overflow-y-auto min-h-0 island-page-top ${
         messages.length === 0 && !isLoading
           ? 'flex flex-col items-center justify-center px-5 py-6'
           : 'p-4 space-y-4'

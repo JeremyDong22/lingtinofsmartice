@@ -111,7 +111,7 @@ export default function GuidePage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.history.length > 1 ? router.back() : router.push('/')}
@@ -127,14 +127,14 @@ export default function GuidePage() {
       </header>
 
       {/* Banner */}
-      <div className="bg-gradient-to-b from-primary-50 to-transparent px-4 pt-4 pb-2">
+      <div className="bg-gradient-to-b from-primary-50 to-transparent px-4 pt-4 pb-2 island-page-top">
         <p className="text-xs text-gray-500">
           {roleLabel}版 · 共 {notes.length} 个版本更新
         </p>
       </div>
 
       {/* Version cards */}
-      <div className="px-4 pb-8 space-y-3">
+      <div className="px-4 space-y-3 island-page-bottom">
         {notes.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">
             暂无与你角色相关的更新记录

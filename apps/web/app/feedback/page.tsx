@@ -254,7 +254,7 @@ export default function FeedbackPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -269,7 +269,7 @@ export default function FeedbackPage() {
         <UserMenu />
       </header>
 
-      <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
+      <div className="px-4 py-4 space-y-4 max-w-lg mx-auto island-page-top island-page-bottom">
         {/* Result card (shown after submission) */}
         {result && (
           <div className="glass-card rounded-xl p-4 space-y-3">

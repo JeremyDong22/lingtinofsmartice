@@ -72,9 +72,9 @@ function RestaurantDetailContent() {
   const visits = data?.visits || [];
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center gap-3">
         <button
           onClick={() => router.back()}
           className="p-1 -ml-1 text-gray-600"
@@ -88,7 +88,7 @@ function RestaurantDetailContent() {
         </h1>
       </header>
 
-      <main className="p-4 space-y-4 max-w-7xl mx-auto">
+      <main className="px-4 py-4 space-y-4 max-w-7xl mx-auto island-page-top island-page-bottom">
         {!restaurantId && (
           <div className="glass-card rounded-2xl p-8 text-center text-gray-500">
             缺少门店ID参数

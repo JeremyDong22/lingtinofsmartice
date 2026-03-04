@@ -13,7 +13,7 @@ export default function AdminSettingsPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-30 glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.back()}
@@ -29,7 +29,7 @@ export default function AdminSettingsPage() {
       </header>
 
       {/* Content */}
-      <div className="px-4 py-4">
+      <div className="px-4 py-4 island-page-top island-page-bottom">
         <HotwordManager />
       </div>
     </div>

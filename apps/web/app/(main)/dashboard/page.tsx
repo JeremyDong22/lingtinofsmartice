@@ -280,7 +280,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">数据看板</h1>
         <div className="flex items-center gap-2">
           <DatePicker
@@ -293,7 +293,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="p-4 space-y-4">
+      <main className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
         {/* Loading indicator */}
         {loading && (
           <div className="text-center py-8 text-gray-500">加载中...</div>
@@ -590,7 +590,7 @@ export default function DashboardPage() {
         return (
           <div
             ref={popoverRef}
-            className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 w-80 animate-in fade-in zoom-in-95 duration-200"
+            className="fixed z-50 glass-card rounded-2xl p-4 w-80 animate-in fade-in zoom-in-95 duration-200"
             style={{
               top: Math.min(selectedFeedback.rect.bottom + 8, window.innerHeight - 300),
               left,

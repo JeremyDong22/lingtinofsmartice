@@ -172,7 +172,7 @@ export default function AdminBriefingPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold text-gray-900">总览</h1>
           {isScoped && (
@@ -192,7 +192,7 @@ export default function AdminBriefingPage() {
         </div>
       </header>
 
-      <div className="px-4 py-4 space-y-4">
+      <div className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
         {/* Greeting banner */}
         <div>
           <h2 className="text-xl font-bold text-gray-900">
