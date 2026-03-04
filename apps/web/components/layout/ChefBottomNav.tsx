@@ -49,8 +49,8 @@ export function ChefBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 glass-nav safe-area-bottom">
-      <div className="flex items-center justify-around h-16">
+    <nav className="island-bottom-nav glass-nav">
+      <div className="flex items-center justify-around h-14">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href;
           return (

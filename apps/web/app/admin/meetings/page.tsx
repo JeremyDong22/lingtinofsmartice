@@ -232,9 +232,9 @@ export default function AdminMeetingsPage() {
   );
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">会议</h1>
         <div className="flex items-center gap-2">
           <DatePicker
@@ -256,7 +256,7 @@ export default function AdminMeetingsPage() {
         </div>
       </header>
 
-      <div className="px-4 space-y-3">
+      <div className="px-4 space-y-3 island-page-top island-page-bottom">
         {/* Loading */}
         {isLoading && (
           <div className="space-y-3">

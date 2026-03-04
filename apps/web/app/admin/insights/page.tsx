@@ -45,7 +45,7 @@ function InsightsContent() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">
           {activeTab === 'product' ? '产品洞察' : '洞察'}
         </h1>
@@ -64,7 +64,7 @@ function InsightsContent() {
 
       {/* Segmented Control — hide when showing product (URL-only) */}
       {activeTab !== 'product' && (
-        <div className="px-4 pt-3 pb-1">
+        <div className="px-4 pt-3 pb-1 island-page-top">
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button
               onClick={() => setActiveTab('customer')}
@@ -101,7 +101,7 @@ function InsightsContent() {
       )}
 
       {/* Content */}
-      <div className="px-4 py-3">
+      <div className={`px-4 py-3${activeTab === 'product' ? ' island-page-top' : ''} island-page-bottom`}>
         {activeTab === 'customer' && <CustomerInsights startDate={dateRange.startDate} endDate={dateRange.endDate} managedIdsParam={managedIdsParam} />}
         {activeTab === 'profile' && <CustomerProfile startDate={dateRange.startDate} endDate={dateRange.endDate} managedIdsParam={managedIdsParam} />}
         {activeTab === 'product' && <ProductInsights />}

@@ -248,7 +248,7 @@ export default function ChefDishesPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="text-base font-semibold text-gray-800">厨房反馈</div>
         <div className="flex items-center gap-2">
           <DatePicker
@@ -261,7 +261,7 @@ export default function ChefDishesPage() {
         </div>
       </header>
 
-      <main className="px-4 pt-4 pb-24">
+      <main className="px-4 island-page-top island-page-bottom">
         {isLoading && (
           <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
         )}

@@ -83,6 +83,37 @@ body::before {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+/* Floating Island Layout */
+.island-header {
+  position: fixed;
+  top: max(env(safe-area-inset-top), 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 2rem);
+  border-radius: 1.25rem;
+  z-index: 50;
+}
+.island-bottom-nav {
+  position: fixed;
+  bottom: calc(max(env(safe-area-inset-bottom), 12px) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 2rem);
+  border-radius: 9999px;
+  z-index: 50;
+}
+/* Page content offset utilities */
+.island-page-top {
+  padding-top: calc(max(env(safe-area-inset-top), 12px) + 64px);
+}
+.island-page-bottom {
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 12px) + 72px);
+}
+/* Chat page: full height minus island nav footprint */
+.island-chat-height {
+  height: calc(100vh - max(env(safe-area-inset-bottom), 12px) - 60px);
+}
+
 /* Hide scrollbar but keep functionality */
 .scrollbar-hide {
   -ms-overflow-style: none;

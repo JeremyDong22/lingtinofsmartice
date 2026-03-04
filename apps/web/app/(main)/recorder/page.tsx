@@ -366,7 +366,7 @@ export default function RecorderPage() {
   }, [recordings, meetings]);
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen">
       {/* Stealth Mode Overlay - fake WeChat interface */}
       <StealthOverlay visible={stealthMode} onDismiss={() => setStealthMode(false)} />
 
@@ -374,7 +374,7 @@ export default function RecorderPage() {
       <MeetingDetail meeting={detailMeeting} onClose={() => setDetailMeeting(null)} />
 
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {/* Mode Switcher */}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
@@ -432,7 +432,7 @@ export default function RecorderPage() {
         </div>
       )}
 
-      <main className="px-4 pt-4 pb-20">
+      <main className="px-4 island-page-top island-page-bottom">
         {/* Toast */}
         {toast && (
           <div

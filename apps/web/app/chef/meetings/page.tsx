@@ -432,7 +432,7 @@ export default function ChefMeetingsPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex items-center justify-between">
+      <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div>
           <div className="text-base font-semibold text-gray-800">厨房会议</div>
           <div className="text-xs text-gray-400">{dateLabel}</div>
@@ -440,7 +440,7 @@ export default function ChefMeetingsPage() {
         <UserMenu />
       </header>
 
-      <main className="px-4 pt-4 pb-24 space-y-5">
+      <main className="px-4 space-y-5 island-page-top island-page-bottom">
         {/* Pending action items (cross-day unfinished kitchen items) */}
         {!pendingLoading && (
           <PendingItemsSection
