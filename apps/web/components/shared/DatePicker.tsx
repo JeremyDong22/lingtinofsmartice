@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   getChinaToday,
   getChinaDaysAgo,
@@ -190,8 +191,8 @@ export function DatePicker({
         </svg>
       </button>
 
-      {/* Backdrop + Bottom Sheet */}
-      {open && (
+      {/* Backdrop + Bottom Sheet — portal to body to escape parent transform */}
+      {open && createPortal(
         <div className="fixed inset-0 z-50">
           {/* Backdrop */}
           <div
@@ -333,7 +334,8 @@ export function DatePicker({
             {/* Safe area for iPhone home indicator */}
             <div className="h-safe-bottom" />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
