@@ -1,5 +1,5 @@
-// Update Prompt Component - Detects SW updates and prompts user to refresh
-// v2.0 - Added force cache clear for Safari, proactive SW update check, long-press force update
+// Update Prompt Component - Detects SW updates and auto-reloads
+// v3.0 - Auto-reload on update detection + foreground check + periodic polling
 
 'use client';
 
@@ -9,94 +9,118 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 export const APP_VERSION = '2.1.4';
 export const BUILD_DATE = '2026-03-04';
 
+const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
 // Force clear all caches, unregister SW, and hard reload
 async function forceUpdateApp() {
   console.log('[Lingtin] Force updating app...');
   try {
-    // 1. Unregister all service workers
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       await Promise.all(registrations.map(r => r.unregister()));
       console.log(`[Lingtin] Unregistered ${registrations.length} service worker(s)`);
     }
-    // 2. Clear all caches (Workbox runtime caches, precache, etc.)
     if ('caches' in window) {
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map(name => caches.delete(name)));
-      console.log(`[Lingtin] Cleared ${cacheNames.length} cache(s): ${cacheNames.join(', ')}`);
+      console.log(`[Lingtin] Cleared ${cacheNames.length} cache(s)`);
     }
-    // 3. Clear chat & SWR localStorage caches (prevents PWA stuck on stale data)
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
       if (key?.startsWith('lingtin_chat_') || key === 'lingtin-swr-cache' || key === 'lingtin-swr-cache-date') {
         localStorage.removeItem(key);
       }
     }
-    console.log('[Lingtin] Cleared localStorage chat caches');
   } catch (err) {
     console.error('[Lingtin] Error during force update:', err);
   }
-  // 4. Hard reload (bypass browser cache)
   window.location.reload();
 }
 
 export function UpdatePrompt() {
-  const [showUpdate, setShowUpdate] = useState(false);
-  const [showVersion, setShowVersion] = useState(false);
   const [updating, setUpdating] = useState(false);
-  // Long-press on version badge triggers force update
+  const [showVersion, setShowVersion] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
-      return;
-    }
+  // Auto-reload: brief delay so user sees "正在更新..."
+  const triggerAutoUpdate = useCallback((reason: string) => {
+    console.log(`[Lingtin] Auto-update triggered: ${reason}`);
+    setUpdating(true);
+    setTimeout(() => forceUpdateApp(), 1000);
+  }, []);
 
-    const handleControllerChange = () => {
-      setShowUpdate(true);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    let updateCheckInterval: ReturnType<typeof setInterval>;
+    let isUpdating = false;
+
+    const doAutoUpdate = (reason: string) => {
+      if (isUpdating) return;
+      isUpdating = true;
+      triggerAutoUpdate(reason);
     };
 
+    // 1. controllerchange → new SW took over, page needs reload
+    const handleControllerChange = () => doAutoUpdate('controllerchange');
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
     navigator.serviceWorker.ready.then((registration) => {
+      // 2. Already a waiting worker → update now
       if (registration.waiting) {
-        setShowUpdate(true);
+        doAutoUpdate('waiting worker found');
+        return;
       }
 
+      // 3. New worker installed → update when ready
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              setShowUpdate(true);
-            }
-          });
-        }
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            doAutoUpdate('new worker installed');
+          }
+        });
       });
 
-      // Proactively check for SW updates on page load (Safari may not do this automatically)
+      // 4. Check for updates on page load (Safari workaround)
       registration.update().catch(() => {});
+
+      // 5. Periodic check every 30 minutes
+      updateCheckInterval = setInterval(() => {
+        console.log('[Lingtin] Periodic SW update check');
+        registration.update().catch(() => {});
+      }, UPDATE_CHECK_INTERVAL);
+
+      // 6. Check on foreground resume (critical for mobile PWA)
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('[Lingtin] App foregrounded, checking for updates');
+          registration.update().catch(() => {});
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      // Store cleanup ref
+      (registration as unknown as Record<string, () => void>).__cleanupVisibility = () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     });
 
     console.log(`[Lingtin] Version: ${APP_VERSION} (${BUILD_DATE})`);
 
     return () => {
       navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+      clearInterval(updateCheckInterval);
+      // Clean up visibilitychange if registration was resolved
+      navigator.serviceWorker.ready.then((reg) => {
+        const cleanup = (reg as unknown as Record<string, () => void>).__cleanupVisibility;
+        cleanup?.();
+      });
     };
-  }, []);
+  }, [triggerAutoUpdate]);
 
-  const handleRefresh = useCallback(async () => {
-    setUpdating(true);
-    await forceUpdateApp();
-  }, []);
-
-  const handleDismiss = () => {
-    setShowUpdate(false);
-  };
-
-  const toggleVersion = () => {
-    setShowVersion(prev => !prev);
-  };
+  const toggleVersion = () => setShowVersion(prev => !prev);
 
   // Long-press (1.5s) on version badge = force update (debug shortcut)
   const handleVersionTouchStart = () => {
@@ -117,34 +141,12 @@ export function UpdatePrompt() {
 
   return (
     <>
-      {/* Update notification banner */}
-      {showUpdate && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-primary-600 text-white px-4 py-3 shadow-lg animate-slide-down">
-          <div className="flex items-center justify-between max-w-lg mx-auto">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span className="text-sm font-medium">有新版本可用</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleRefresh}
-                disabled={updating}
-                className="px-3 py-1 bg-white text-primary-600 rounded-full text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50"
-              >
-                {updating ? '更新中...' : '刷新'}
-              </button>
-              <button
-                onClick={handleDismiss}
-                className="p-1 hover:bg-primary-500 rounded-full transition-colors"
-                aria-label="关闭"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+      {/* Auto-update overlay - shown briefly before reload */}
+      {updating && (
+        <div className="fixed inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-sm text-gray-600 font-medium">正在更新...</p>
           </div>
         </div>
       )}
