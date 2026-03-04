@@ -1,29 +1,14 @@
 // Background Processor - Handles async upload and AI pipeline
-// v2.4 - Send duration_seconds in upload FormData for database persistence
-//
-// NOTE: Current architecture uploads via backend proxy (frontend → backend → Supabase).
-// If upload reliability becomes a problem, consider switching to frontend direct upload
-// with TUS resumable protocol:
-//
-// 1. Supabase Storage natively supports TUS: https://supabase.com/docs/guides/storage/uploads/resumable-uploads
-// 2. Use tus-js-client for resumable uploads with automatic retry
-// 3. Endpoint: https://{projectId}.storage.supabase.co/storage/v1/upload/resumable
-// 4. Chunk size must be 6MB, supports findPreviousUploads() for resume after refresh
-// 5. After upload, call backend /api/audio/process to trigger AI pipeline
-//
-// Example:
-//   const upload = new tus.Upload(audioBlob, {
-//     endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
-//     retryDelays: [0, 3000, 5000, 10000, 20000],
-//     headers: { authorization: `Bearer ${token}` },
-//     metadata: { bucketName: 'lingtin', objectName: `recordings/${path}` },
-//   });
-//   upload.findPreviousUploads().then(prev => { if (prev.length) upload.resumeFromPreviousUpload(prev[0]); upload.start(); });
+// v3.0 - Parallel dual-write: Supabase direct upload + backend upload run simultaneously
+//        If backend fails but direct upload succeeds, frontend creates DB record (status=pending)
+//        and backend polling service picks it up later for AI processing
 
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
 import { MeetingRecord, MeetingStatus } from '@/hooks/useMeetingStore';
 import { getAuthHeaders } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
+import { buildRecordingPath, buildMeetingPath, getChinaDateString, getChinaHour } from '@/lib/storage-path';
 
 interface ProcessingCallbacks {
   onStatusChange: (id: string, status: RecordingStatus, data?: Partial<Recording>) => void;
@@ -35,7 +20,6 @@ const UPLOAD_TIMEOUT_MS = 60000;   // 60 seconds for upload (mobile files are la
 const PROCESS_TIMEOUT_MS = 120000; // 2 minutes for AI processing
 const MAX_RETRY_ATTEMPTS = 3;      // Maximum retry attempts
 const RETRY_DELAY_MS = 2000;       // Delay between retries
-const UPLOAD_RETRY_DELAYS = [3000, 6000]; // Exponential backoff for upload retries
 
 // Logger prefix for easy filtering
 const LOG_PREFIX = '[Lingtin Pipeline]';
@@ -148,8 +132,8 @@ export async function processRecordingInBackground(
       audioUrl = existingAudioUrl;
       callbacks.onStatusChange(id, 'processing', { audioUrl });
     } else {
-      // Step 1: Upload to cloud storage (with retry + exponential backoff)
-      log(`[Step 1/3] Uploading audio to cloud storage...`);
+      // Step 1: Upload to cloud storage (parallel dual-write)
+      log(`[Step 1/3] Uploading audio (dual-write: direct + backend)...`);
       callbacks.onStatusChange(id, 'uploading');
 
       const audioBlob = base64ToBlob(audioData!);
@@ -158,69 +142,104 @@ export async function processRecordingInBackground(
       // Use correct file extension based on actual MIME type (mobile Safari uses mp4)
       const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
 
-      let uploadResult: { audioUrl: string; visit_id: string } | null = null;
-      let uploadLastError: Error | null = null;
-      const maxUploadAttempts = 1 + UPLOAD_RETRY_DELAYS.length; // 1 initial + retries
-
-      for (let attempt = 1; attempt <= maxUploadAttempts; attempt++) {
-        if (abortController.signal.aborted) {
-          log(`Processing cancelled during upload: ${id}`);
-          return;
-        }
-
-        try {
-          const formData = new FormData();
-          formData.append('file', audioBlob, `${tableId}_${Date.now()}.${ext}`);
-          formData.append('table_id', tableId);
-          formData.append('recording_id', id);
-          if (restaurantId) {
-            formData.append('restaurant_id', restaurantId);
-          }
-          if (duration > 0) {
-            formData.append('duration_seconds', String(Math.round(duration)));
-          }
-
-          const uploadStartTime = Date.now();
-          const uploadResponse = await fetchWithTimeout(getApiUrl('api/audio/upload'), {
-            method: 'POST',
-            headers: authHeaders,
-            body: formData,
-          }, UPLOAD_TIMEOUT_MS, abortController);
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            logError(`Upload failed (attempt ${attempt}): ${uploadResponse.status}`, errorText);
-            // 401 = auth expired, don't retry
-            if (uploadResponse.status === 401) {
-              handleAuthExpired();
-              throw new Error('登录已过期，请重新登录');
-            }
-            throw new Error(`上传失败: ${uploadResponse.status}`);
-          }
-
-          uploadResult = await uploadResponse.json();
-          log(`[Step 1/3] Upload complete in ${Date.now() - uploadStartTime}ms`, uploadResult);
-          break; // Success
-        } catch (error) {
-          uploadLastError = error instanceof Error ? error : new Error(String(error));
-          if (uploadLastError.name === 'AbortError') throw uploadLastError;
-          // Don't retry auth errors
-          if (uploadLastError.message.includes('登录已过期')) throw uploadLastError;
-
-          if (attempt < maxUploadAttempts) {
-            const delay = UPLOAD_RETRY_DELAYS[attempt - 1];
-            log(`[Step 1/3] Upload attempt ${attempt} failed, retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          } else {
-            log(`[Step 1/3] All ${maxUploadAttempts} upload attempts failed`);
-          }
-        }
+      const formData = new FormData();
+      formData.append('file', audioBlob, `${tableId}_${Date.now()}.${ext}`);
+      formData.append('table_id', tableId);
+      formData.append('recording_id', id);
+      if (restaurantId) {
+        formData.append('restaurant_id', restaurantId);
+      }
+      if (duration > 0) {
+        formData.append('duration_seconds', String(Math.round(duration)));
       }
 
-      if (!uploadResult && uploadLastError) throw uploadLastError;
+      const uploadStartTime = Date.now();
 
-      audioUrl = uploadResult!.audioUrl;
-      visitId = uploadResult!.visit_id;
+      // Path A: Direct upload to Supabase Storage (safety net)
+      const supabase = createClient();
+      const directPath = buildRecordingPath(restaurantId || 'unknown', tableId, audioBlob.type);
+      const directUpload = supabase.storage.from('lingtin').upload(directPath, audioBlob, {
+        contentType: audioBlob.type,
+        upsert: true,
+      });
+
+      // Path B: Existing backend upload (handles DB record + triggers AI)
+      const backendUpload = fetchWithTimeout(getApiUrl('api/audio/upload'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+      }, UPLOAD_TIMEOUT_MS, abortController);
+
+      // Run both in parallel
+      const [directResult, backendResult] = await Promise.allSettled([directUpload, backendUpload]);
+
+      log(`[Step 1/3] Dual-write results: direct=${directResult.status}, backend=${backendResult.status}`);
+
+      if (backendResult.status === 'fulfilled') {
+        // Backend succeeded — normal flow
+        const backendResponse = backendResult.value;
+        if (!backendResponse.ok) {
+          // Backend HTTP error — check if direct upload can save us
+          if (backendResponse.status === 401) {
+            handleAuthExpired();
+            throw new Error('登录已过期，请重新登录');
+          }
+          if (directResult.status === 'fulfilled' && !directResult.value.error) {
+            // Direct upload succeeded, create DB record as fallback
+            log(`[Step 1/3] Backend returned ${backendResponse.status}, using direct upload fallback`);
+            const { data: urlData } = supabase.storage.from('lingtin').getPublicUrl(directPath);
+            audioUrl = urlData.publicUrl;
+            visitId = id;
+            const fallbackRecord = {
+              id,
+              restaurant_id: restaurantId!,
+              table_id: tableId,
+              audio_url: audioUrl,
+              status: 'pending',
+              duration_seconds: duration > 0 ? Math.round(duration) : null,
+              visit_date: getChinaDateString(),
+              visit_period: getChinaHour() < 15 ? 'lunch' : 'dinner',
+            };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- manual Insert type doesn't match auto-generated schema
+            await supabase.from('lingtin_visit_records').upsert(fallbackRecord as any, { onConflict: 'id' });
+            log(`[Step 1/3] Fallback DB record created for ${id}`);
+          } else {
+            throw new Error(`上传失败: ${backendResponse.status}`);
+          }
+        } else {
+          const uploadResult = await backendResponse.json();
+          log(`[Step 1/3] Backend upload complete in ${Date.now() - uploadStartTime}ms`, uploadResult);
+          audioUrl = uploadResult.audioUrl;
+          visitId = uploadResult.visit_id;
+        }
+      } else if (directResult.status === 'fulfilled' && !directResult.value.error) {
+        // Backend failed, but direct upload succeeded — create DB record as fallback
+        log(`[Step 1/3] Backend failed, using direct upload fallback`, backendResult.reason);
+        const { data: urlData } = supabase.storage.from('lingtin').getPublicUrl(directPath);
+        audioUrl = urlData.publicUrl;
+        visitId = id;
+
+        const fallbackRecord = {
+          id,
+          restaurant_id: restaurantId!,
+          table_id: tableId,
+          audio_url: audioUrl,
+          status: 'pending',
+          duration_seconds: duration > 0 ? Math.round(duration) : null,
+          visit_date: getChinaDateString(),
+          visit_period: getChinaHour() < 15 ? 'lunch' : 'dinner',
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- manual Insert type doesn't match auto-generated schema
+        await supabase.from('lingtin_visit_records').upsert(fallbackRecord as any, { onConflict: 'id' });
+        log(`[Step 1/3] Fallback DB record created for ${id}`);
+      } else {
+        // Both failed
+        logError(`[Step 1/3] Both upload paths failed`, {
+          direct: directResult.status === 'rejected' ? directResult.reason : directResult.value.error,
+          backend: backendResult.reason,
+        });
+        throw new Error('上传失败，请检查网络');
+      }
 
       // Check if cancelled after upload
       if (abortController.signal.aborted) {
@@ -424,7 +443,8 @@ export async function processMeetingInBackground(
       audioUrl = existingAudioUrl;
       callbacks.onStatusChange(id, 'processing', { audioUrl });
     } else {
-      log(`[Step 1/3] Uploading meeting audio...`);
+      // Step 1: Upload meeting audio (parallel dual-write)
+      log(`[Step 1/3] Uploading meeting audio (dual-write: direct + backend)...`);
       callbacks.onStatusChange(id, 'uploading');
 
       const audioBlob = base64ToBlob(audioData!);
@@ -432,61 +452,94 @@ export async function processMeetingInBackground(
 
       const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
 
-      let uploadResult: { audioUrl: string; meeting_id: string } | null = null;
-      let uploadLastError: Error | null = null;
-      const maxUploadAttempts = 1 + UPLOAD_RETRY_DELAYS.length;
-
-      for (let attempt = 1; attempt <= maxUploadAttempts; attempt++) {
-        if (abortController.signal.aborted) return;
-
-        try {
-          const formData = new FormData();
-          formData.append('file', audioBlob, `meeting_${meetingType}_${Date.now()}.${ext}`);
-          formData.append('meeting_type', meetingType);
-          formData.append('recording_id', id);
-          if (restaurantId) {
-            formData.append('restaurant_id', restaurantId);
-          }
-          if (duration > 0) {
-            formData.append('duration_seconds', String(Math.round(duration)));
-          }
-
-          const uploadResponse = await fetchWithTimeout(getApiUrl('api/meeting/upload'), {
-            method: 'POST',
-            headers: authHeaders,
-            body: formData,
-          }, MEETING_UPLOAD_TIMEOUT_MS, abortController);
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            logError(`Meeting upload failed (attempt ${attempt}): ${uploadResponse.status}`, errorText);
-            if (uploadResponse.status === 401) {
-              handleAuthExpired();
-              throw new Error('登录已过期，请重新登录');
-            }
-            throw new Error(`上传失败: ${uploadResponse.status}`);
-          }
-
-          uploadResult = await uploadResponse.json();
-          log(`[Step 1/3] Upload complete`, uploadResult);
-          break;
-        } catch (error) {
-          uploadLastError = error instanceof Error ? error : new Error(String(error));
-          if (uploadLastError.name === 'AbortError') throw uploadLastError;
-          if (uploadLastError.message.includes('登录已过期')) throw uploadLastError;
-
-          if (attempt < maxUploadAttempts) {
-            const delay = UPLOAD_RETRY_DELAYS[attempt - 1];
-            log(`[Step 1/3] Meeting upload attempt ${attempt} failed, retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        }
+      const formData = new FormData();
+      formData.append('file', audioBlob, `meeting_${meetingType}_${Date.now()}.${ext}`);
+      formData.append('meeting_type', meetingType);
+      formData.append('recording_id', id);
+      if (restaurantId) {
+        formData.append('restaurant_id', restaurantId);
+      }
+      if (duration > 0) {
+        formData.append('duration_seconds', String(Math.round(duration)));
       }
 
-      if (!uploadResult && uploadLastError) throw uploadLastError;
+      // Path A: Direct upload to Supabase Storage (safety net)
+      const supabase = createClient();
+      const directPath = buildMeetingPath(restaurantId || 'unknown', meetingType, audioBlob.type);
+      const directUpload = supabase.storage.from('lingtin').upload(directPath, audioBlob, {
+        contentType: audioBlob.type,
+        upsert: true,
+      });
 
-      audioUrl = uploadResult!.audioUrl;
-      meetingId = uploadResult!.meeting_id;
+      // Path B: Existing backend upload
+      const backendUpload = fetchWithTimeout(getApiUrl('api/meeting/upload'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+      }, MEETING_UPLOAD_TIMEOUT_MS, abortController);
+
+      // Run both in parallel
+      const [directResult, backendResult] = await Promise.allSettled([directUpload, backendUpload]);
+      log(`[Step 1/3] Meeting dual-write results: direct=${directResult.status}, backend=${backendResult.status}`);
+
+      if (backendResult.status === 'fulfilled') {
+        const backendResponse = backendResult.value;
+        if (!backendResponse.ok) {
+          if (backendResponse.status === 401) {
+            handleAuthExpired();
+            throw new Error('登录已过期，请重新登录');
+          }
+          if (directResult.status === 'fulfilled' && !directResult.value.error) {
+            // Direct upload succeeded, create DB record as fallback
+            log(`[Step 1/3] Meeting backend returned ${backendResponse.status}, using direct fallback`);
+            const { data: urlData } = supabase.storage.from('lingtin').getPublicUrl(directPath);
+            audioUrl = urlData.publicUrl;
+            meetingId = id;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lingtin_meeting_records not in generated types
+            await (supabase.from('lingtin_meeting_records') as any).upsert({
+              id,
+              restaurant_id: restaurantId,
+              meeting_type: meetingType,
+              audio_url: audioUrl,
+              status: 'pending',
+              duration_seconds: duration > 0 ? Math.round(duration) : null,
+              meeting_date: getChinaDateString(),
+            }, { onConflict: 'id' });
+            log(`[Step 1/3] Meeting fallback DB record created for ${id}`);
+          } else {
+            throw new Error(`上传失败: ${backendResponse.status}`);
+          }
+        } else {
+          const uploadResult = await backendResponse.json();
+          log(`[Step 1/3] Meeting upload complete`, uploadResult);
+          audioUrl = uploadResult.audioUrl;
+          meetingId = uploadResult.meeting_id;
+        }
+      } else if (directResult.status === 'fulfilled' && !directResult.value.error) {
+        // Backend failed, direct upload succeeded — create DB record
+        log(`[Step 1/3] Meeting backend failed, using direct fallback`, backendResult.reason);
+        const { data: urlData } = supabase.storage.from('lingtin').getPublicUrl(directPath);
+        audioUrl = urlData.publicUrl;
+        meetingId = id;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lingtin_meeting_records not in generated types
+        await (supabase.from('lingtin_meeting_records') as any).upsert({
+          id,
+          restaurant_id: restaurantId,
+          meeting_type: meetingType,
+          audio_url: audioUrl,
+          status: 'pending',
+          duration_seconds: duration > 0 ? Math.round(duration) : null,
+          meeting_date: getChinaDateString(),
+        }, { onConflict: 'id' });
+        log(`[Step 1/3] Meeting fallback DB record created for ${id}`);
+      } else {
+        // Both failed
+        logError(`[Step 1/3] Both meeting upload paths failed`, {
+          direct: directResult.status === 'rejected' ? directResult.reason : directResult.value.error,
+          backend: backendResult.reason,
+        });
+        throw new Error('上传失败，请检查网络');
+      }
 
       if (abortController.signal.aborted) return;
       callbacks.onStatusChange(id, 'processing', { audioUrl });
