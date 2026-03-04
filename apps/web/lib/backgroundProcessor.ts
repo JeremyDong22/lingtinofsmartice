@@ -35,6 +35,7 @@ const UPLOAD_TIMEOUT_MS = 60000;   // 60 seconds for upload (mobile files are la
 const PROCESS_TIMEOUT_MS = 120000; // 2 minutes for AI processing
 const MAX_RETRY_ATTEMPTS = 3;      // Maximum retry attempts
 const RETRY_DELAY_MS = 2000;       // Delay between retries
+const UPLOAD_RETRY_DELAYS = [3000, 6000]; // Exponential backoff for upload retries
 
 // Logger prefix for easy filtering
 const LOG_PREFIX = '[Lingtin Pipeline]';
@@ -147,7 +148,7 @@ export async function processRecordingInBackground(
       audioUrl = existingAudioUrl;
       callbacks.onStatusChange(id, 'processing', { audioUrl });
     } else {
-      // Step 1: Upload to cloud storage
+      // Step 1: Upload to cloud storage (with retry + exponential backoff)
       log(`[Step 1/3] Uploading audio to cloud storage...`);
       callbacks.onStatusChange(id, 'uploading');
 
@@ -156,39 +157,70 @@ export async function processRecordingInBackground(
 
       // Use correct file extension based on actual MIME type (mobile Safari uses mp4)
       const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
-      const formData = new FormData();
-      formData.append('file', audioBlob, `${tableId}_${Date.now()}.${ext}`);
-      formData.append('table_id', tableId);
-      formData.append('recording_id', id);
-      if (restaurantId) {
-        formData.append('restaurant_id', restaurantId);
-      }
-      if (duration > 0) {
-        formData.append('duration_seconds', String(Math.round(duration)));
-      }
 
-      const uploadStartTime = Date.now();
-      const uploadResponse = await fetchWithTimeout(getApiUrl('api/audio/upload'), {
-        method: 'POST',
-        headers: authHeaders,
-        body: formData,
-      }, UPLOAD_TIMEOUT_MS, abortController);
+      let uploadResult: { audioUrl: string; visit_id: string } | null = null;
+      let uploadLastError: Error | null = null;
+      const maxUploadAttempts = 1 + UPLOAD_RETRY_DELAYS.length; // 1 initial + retries
 
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        logError(`Upload failed: ${uploadResponse.status}`, errorText);
-        // 401 = token expired/invalid, redirect to login
-        if (uploadResponse.status === 401) {
-          handleAuthExpired();
-          throw new Error('登录已过期，请重新登录');
+      for (let attempt = 1; attempt <= maxUploadAttempts; attempt++) {
+        if (abortController.signal.aborted) {
+          log(`Processing cancelled during upload: ${id}`);
+          return;
         }
-        throw new Error(`上传失败: ${uploadResponse.status}`);
+
+        try {
+          const formData = new FormData();
+          formData.append('file', audioBlob, `${tableId}_${Date.now()}.${ext}`);
+          formData.append('table_id', tableId);
+          formData.append('recording_id', id);
+          if (restaurantId) {
+            formData.append('restaurant_id', restaurantId);
+          }
+          if (duration > 0) {
+            formData.append('duration_seconds', String(Math.round(duration)));
+          }
+
+          const uploadStartTime = Date.now();
+          const uploadResponse = await fetchWithTimeout(getApiUrl('api/audio/upload'), {
+            method: 'POST',
+            headers: authHeaders,
+            body: formData,
+          }, UPLOAD_TIMEOUT_MS, abortController);
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            logError(`Upload failed (attempt ${attempt}): ${uploadResponse.status}`, errorText);
+            // 401 = auth expired, don't retry
+            if (uploadResponse.status === 401) {
+              handleAuthExpired();
+              throw new Error('登录已过期，请重新登录');
+            }
+            throw new Error(`上传失败: ${uploadResponse.status}`);
+          }
+
+          uploadResult = await uploadResponse.json();
+          log(`[Step 1/3] Upload complete in ${Date.now() - uploadStartTime}ms`, uploadResult);
+          break; // Success
+        } catch (error) {
+          uploadLastError = error instanceof Error ? error : new Error(String(error));
+          if (uploadLastError.name === 'AbortError') throw uploadLastError;
+          // Don't retry auth errors
+          if (uploadLastError.message.includes('登录已过期')) throw uploadLastError;
+
+          if (attempt < maxUploadAttempts) {
+            const delay = UPLOAD_RETRY_DELAYS[attempt - 1];
+            log(`[Step 1/3] Upload attempt ${attempt} failed, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            log(`[Step 1/3] All ${maxUploadAttempts} upload attempts failed`);
+          }
+        }
       }
 
-      const uploadResult = await uploadResponse.json();
-      log(`[Step 1/3] Upload complete in ${Date.now() - uploadStartTime}ms`, uploadResult);
-      audioUrl = uploadResult.audioUrl;
-      visitId = uploadResult.visit_id;
+      if (!uploadResult && uploadLastError) throw uploadLastError;
+
+      audioUrl = uploadResult!.audioUrl;
+      visitId = uploadResult!.visit_id;
 
       // Check if cancelled after upload
       if (abortController.signal.aborted) {
@@ -399,37 +431,62 @@ export async function processMeetingInBackground(
       log(`Audio blob: ${(audioBlob.size / 1024).toFixed(1)} KB`);
 
       const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
-      const formData = new FormData();
-      formData.append('file', audioBlob, `meeting_${meetingType}_${Date.now()}.${ext}`);
-      formData.append('meeting_type', meetingType);
-      formData.append('recording_id', id);
-      if (restaurantId) {
-        formData.append('restaurant_id', restaurantId);
-      }
-      if (duration > 0) {
-        formData.append('duration_seconds', String(Math.round(duration)));
-      }
 
-      const uploadResponse = await fetchWithTimeout(getApiUrl('api/meeting/upload'), {
-        method: 'POST',
-        headers: authHeaders,
-        body: formData,
-      }, MEETING_UPLOAD_TIMEOUT_MS, abortController);
+      let uploadResult: { audioUrl: string; meeting_id: string } | null = null;
+      let uploadLastError: Error | null = null;
+      const maxUploadAttempts = 1 + UPLOAD_RETRY_DELAYS.length;
 
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        logError(`Meeting upload failed: ${uploadResponse.status}`, errorText);
-        if (uploadResponse.status === 401) {
-          handleAuthExpired();
-          throw new Error('登录已过期，请重新登录');
+      for (let attempt = 1; attempt <= maxUploadAttempts; attempt++) {
+        if (abortController.signal.aborted) return;
+
+        try {
+          const formData = new FormData();
+          formData.append('file', audioBlob, `meeting_${meetingType}_${Date.now()}.${ext}`);
+          formData.append('meeting_type', meetingType);
+          formData.append('recording_id', id);
+          if (restaurantId) {
+            formData.append('restaurant_id', restaurantId);
+          }
+          if (duration > 0) {
+            formData.append('duration_seconds', String(Math.round(duration)));
+          }
+
+          const uploadResponse = await fetchWithTimeout(getApiUrl('api/meeting/upload'), {
+            method: 'POST',
+            headers: authHeaders,
+            body: formData,
+          }, MEETING_UPLOAD_TIMEOUT_MS, abortController);
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            logError(`Meeting upload failed (attempt ${attempt}): ${uploadResponse.status}`, errorText);
+            if (uploadResponse.status === 401) {
+              handleAuthExpired();
+              throw new Error('登录已过期，请重新登录');
+            }
+            throw new Error(`上传失败: ${uploadResponse.status}`);
+          }
+
+          uploadResult = await uploadResponse.json();
+          log(`[Step 1/3] Upload complete`, uploadResult);
+          break;
+        } catch (error) {
+          uploadLastError = error instanceof Error ? error : new Error(String(error));
+          if (uploadLastError.name === 'AbortError') throw uploadLastError;
+          if (uploadLastError.message.includes('登录已过期')) throw uploadLastError;
+
+          if (attempt < maxUploadAttempts) {
+            const delay = UPLOAD_RETRY_DELAYS[attempt - 1];
+            log(`[Step 1/3] Meeting upload attempt ${attempt} failed, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
         }
-        throw new Error(`上传失败: ${uploadResponse.status}`);
       }
 
-      const uploadResult = await uploadResponse.json();
-      log(`[Step 1/3] Upload complete`, uploadResult);
-      audioUrl = uploadResult.audioUrl;
-      meetingId = uploadResult.meeting_id;
+      if (!uploadResult && uploadLastError) throw uploadLastError;
+
+      audioUrl = uploadResult!.audioUrl;
+      meetingId = uploadResult!.meeting_id;
 
       if (abortController.signal.aborted) return;
       callbacks.onStatusChange(id, 'processing', { audioUrl });

@@ -34,7 +34,7 @@ export interface MeetingRecord {
 }
 
 const LOCAL_STORAGE_KEY = 'lingtin_meetings_local';
-const MAX_LOCAL_MEETINGS = 20;
+const MAX_LOCAL_MEETINGS = 5;
 
 function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -85,15 +85,28 @@ function saveLocalMeetings(meetings: MeetingRecord[]): void {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
   } catch (error) {
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn('[MeetingStore] localStorage quota exceeded, protecting un-uploaded meetings');
       try {
-        const minimal = meetings.slice(0, 5).map(m => {
-          const { audioData, ...rest } = m;
-          return rest;
+        // First pass: strip audioData only from already-uploaded meetings (have audioUrl)
+        const preserved = meetings.slice(0, MAX_LOCAL_MEETINGS).map(m => {
+          if (m.audioUrl) {
+            const { audioData, ...rest } = m;
+            return rest;
+          }
+          return m;
         });
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(minimal));
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(preserved));
       } catch {
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        try {
+          // Second pass: keep only un-uploaded meetings
+          const unUploaded = meetings.filter(m => m.audioData && !m.audioUrl);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unUploaded));
+        } catch {
+          console.error('[MeetingStore] Cannot save even un-uploaded meetings, localStorage full');
+        }
       }
+    } else {
+      console.error('[MeetingStore] Failed to save local meetings:', error);
     }
   }
 }

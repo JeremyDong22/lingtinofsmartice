@@ -34,7 +34,7 @@ export interface Recording {
 }
 
 const LOCAL_STORAGE_KEY = 'lingtin_recordings_local';
-const MAX_LOCAL_RECORDINGS = 20;
+const MAX_LOCAL_RECORDINGS = 5;
 
 // Generate UUID v4 format ID for database compatibility
 function generateUUID(): string {
@@ -93,19 +93,28 @@ function saveLocalRecordings(recordings: Recording[]): void {
     });
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
   } catch (error) {
-    // Handle QuotaExceededError by clearing old data
+    // Handle QuotaExceededError — protect un-uploaded recordings
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      console.warn('[RecordingStore] localStorage quota exceeded, clearing old data');
+      console.warn('[RecordingStore] localStorage quota exceeded, protecting un-uploaded recordings');
       try {
-        // Keep only the most recent 5 recordings without audioData
-        const minimal = recordings.slice(0, 5).map(r => {
-          const { audioData, ...rest } = r;
-          return rest;
+        // First pass: strip audioData only from already-uploaded recordings (have audioUrl)
+        const preserved = recordings.slice(0, MAX_LOCAL_RECORDINGS).map(r => {
+          if (r.audioUrl) {
+            const { audioData, ...rest } = r;
+            return rest;
+          }
+          return r;
         });
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(minimal));
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(preserved));
       } catch {
-        // Last resort: clear all recordings
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        try {
+          // Second pass: keep only un-uploaded recordings (have audioData, no audioUrl)
+          const unUploaded = recordings.filter(r => r.audioData && !r.audioUrl);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unUploaded));
+        } catch {
+          // Final fallback: log but never removeItem — losing un-uploaded audio is worse
+          console.error('[RecordingStore] Cannot save even un-uploaded recordings, localStorage full');
+        }
       }
     } else {
       console.error('[RecordingStore] Failed to save local recordings:', error);
