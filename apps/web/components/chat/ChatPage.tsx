@@ -311,73 +311,83 @@ function ChatContent({ config }: ChatPageProps) {
         <UserMenu />
       </header>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-        {messages.map((msg, msgIndex) => (
-          <MessageBubble
-            key={msg.id}
-            msg={msg}
-            onQuickQuestion={handleQuickQuestion}
-            onRetry={retryMessage}
-            retryDisabled={isLoading}
-            isBriefing={msg.role === 'assistant' && msgIndex === firstAssistantIndex}
-            actionLinks={config.actionLinks}
-            onNavigate={handleNavigate}
-          />
-        ))}
+      {/* Messages area — centered empty state (Design A) or scrollable messages */}
+      <div className={`flex-1 overflow-y-auto min-h-0 ${
+        messages.length === 0 && !isLoading
+          ? 'flex flex-col items-center justify-center px-5 py-6'
+          : 'p-4 space-y-4'
+      }`}>
+        {messages.length === 0 && !isLoading ? (
+          <>
+            {/* Welcome card */}
+            {config.welcomeMessage && (
+              <div className="bg-white rounded-2xl px-6 pt-7 pb-5 shadow-sm w-full max-w-sm mb-6">
+                <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-4">
+                  <Bot className="w-6 h-6 text-primary-600" />
+                </div>
+                <p className="text-[17px] font-semibold text-gray-800 text-center">{config.welcomeMessage.title}</p>
+                <p className="text-sm text-gray-500 text-center mt-1 mb-5">{config.welcomeMessage.subtitle}</p>
+                <div className="divide-y divide-gray-100">
+                  {config.welcomeMessage.capabilities.map((cap) => {
+                    const Icon = iconMap[cap.icon];
+                    return (
+                      <div key={cap.text} className="flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0">
+                        <div className="w-7 h-7 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Icon className="w-3.5 h-3.5 text-primary-500" />
+                        </div>
+                        <span className="text-[13px] text-gray-600 leading-relaxed">{cap.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Quick actions */}
+            <div className="w-full max-w-sm">
+              <p className="text-center text-xs text-gray-400 mb-2.5 tracking-wider">试试问我</p>
+              <button
+                onClick={handleBriefingClick}
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200 rounded-xl text-[13px] text-primary-600 text-left font-medium hover:from-primary-100 hover:to-primary-100 disabled:opacity-50 transition-colors flex items-center gap-2 mb-2.5"
+              >
+                <Sparkles className="w-4 h-4 flex-shrink-0" />
+                查看今日运营简报
+              </button>
+              <div className="grid grid-cols-2 gap-2">
+                {config.fallbackQuickQuestions.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => handleQuickQuestion(q)}
+                    disabled={isLoading}
+                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-600 text-left hover:border-primary-400 hover:bg-primary-50 disabled:opacity-50 transition-colors leading-snug"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          messages.map((msg, msgIndex) => (
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              onQuickQuestion={handleQuickQuestion}
+              onRetry={retryMessage}
+              retryDisabled={isLoading}
+              isBriefing={msg.role === 'assistant' && msgIndex === firstAssistantIndex}
+              actionLinks={config.actionLinks}
+              onNavigate={handleNavigate}
+            />
+          ))
+        )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Empty state: welcome message + briefing entry + quick questions */}
-      {messages.length === 0 && !isLoading ? (
-        <div className="px-4 py-6 flex-shrink-0">
-          {/* #5: Welcome message */}
-          {config.welcomeMessage && (
-            <div className="text-center mb-5 max-w-sm mx-auto">
-              <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-3">
-                <Bot className="w-6 h-6 text-primary-600" />
-              </div>
-              <p className="text-lg font-semibold text-gray-800">{config.welcomeMessage.title}</p>
-              <p className="text-sm text-gray-500 mt-1 mb-3">{config.welcomeMessage.subtitle}</p>
-              <div className="space-y-2 text-left">
-                {config.welcomeMessage.capabilities.map((cap) => {
-                  const Icon = iconMap[cap.icon];
-                  return (
-                    <div key={cap.text} className="flex items-start gap-2.5">
-                      <Icon className="w-4 h-4 text-primary-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-gray-600">{cap.text}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <p className="text-center text-sm text-gray-400 mb-3">可以问我</p>
-          <div className="space-y-2 max-w-sm mx-auto">
-            {/* #4: Manual briefing entry */}
-            <button
-              onClick={handleBriefingClick}
-              disabled={isLoading}
-              className="w-full px-4 py-3 bg-primary-50 border border-primary-200 rounded-xl text-sm text-primary-700 text-left hover:bg-primary-100 disabled:opacity-50 transition-colors flex items-center gap-2"
-            >
-              <Sparkles className="w-4 h-4 flex-shrink-0" />
-              查看今日运营简报
-            </button>
-            {config.fallbackQuickQuestions.map((q) => (
-              <button
-                key={q}
-                onClick={() => handleQuickQuestion(q)}
-                disabled={isLoading}
-                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 text-left hover:border-primary-500 hover:bg-primary-50 disabled:opacity-50 transition-colors"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : messages.length > 0 ? (
+      {/* Quick questions bar (visible after first message) */}
+      {messages.length > 0 && (
         <div className="px-4 py-2 flex gap-2 overflow-x-auto flex-shrink-0 scrollbar-hide">
           {config.fallbackQuickQuestions.map((q) => (
             <button
@@ -390,7 +400,7 @@ function ChatContent({ config }: ChatPageProps) {
             </button>
           ))}
         </div>
-      ) : null}
+      )}
 
       {/* Input — #1: textarea auto-resize */}
       <form onSubmit={handleSubmit} className="p-4 bg-white border-t flex-shrink-0">
