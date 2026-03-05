@@ -1,7 +1,7 @@
 // Action Items Controller - API endpoints for AI action suggestions
-// v1.1 - Added: response_note support for resolve/dismiss actions
+// v2.0 - Removed generate endpoint; action items now come from meeting processing only
 
-import { Controller, Get, Post, Patch, Query, Param, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Patch, Query, Param, Body, BadRequestException } from '@nestjs/common';
 import { ActionItemsService } from './action-items.service';
 import { getChinaDateString } from '../../common/utils/date';
 
@@ -28,18 +28,6 @@ export class ActionItemsController {
     @Query('date') date?: string,
   ) {
     return this.actionItemsService.getActionItems(
-      restaurantId,
-      date || getChinaDateString(),
-    );
-  }
-
-  // POST /api/action-items/generate — trigger AI generation
-  @Post('generate')
-  async generateActionItems(
-    @Query('restaurant_id') restaurantId: string,
-    @Query('date') date?: string,
-  ) {
-    return this.actionItemsService.generateActionItems(
       restaurantId,
       date || getChinaDateString(),
     );

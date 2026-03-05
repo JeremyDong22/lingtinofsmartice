@@ -1,10 +1,11 @@
 // Meeting AI Processing Service - STT + AI minutes generation
-// v2.2 - STT model provenance: stt_model column tracks which engine processed each recording
+// v3.0 - Added daily summary context for review meetings + standardized role assignment
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { XunfeiSttService } from '../audio/xunfei-stt.service';
 import { DashScopeSttService } from '../audio/dashscope-stt.service';
+import { DailySummaryService } from '../daily-summary/daily-summary.service';
 import { getChinaDateString } from '../../common/utils/date';
 import { SttModel } from '../../common/types/stt';
 
@@ -12,6 +13,9 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // 35 minutes timeout for STT (covers 30-min meetings + buffer)
 const MEETING_STT_TIMEOUT_MS = 2100000;
+
+const VALID_ROLES = ['manager', 'head_chef', 'front_of_house', 'all'] as const;
+type AssignedRole = typeof VALID_ROLES[number];
 
 interface MeetingProcessingResult {
   transcript: string;
@@ -29,6 +33,7 @@ export class MeetingAiProcessingService {
     private readonly supabase: SupabaseService,
     private readonly xunfeiStt: XunfeiSttService,
     private readonly dashScopeStt: DashScopeSttService,
+    private readonly dailySummaryService: DailySummaryService,
   ) {}
 
   async processMeeting(
@@ -92,8 +97,46 @@ export class MeetingAiProcessingService {
       const cleanedTranscript = rawTranscript.replace(/(.{1,6})\1{2,}/g, '$1');
       this.logger.log(`清洗完成: ${rawTranscript.length}字 → ${cleanedTranscript.length}字`);
 
+      // Step 1.6: Fetch daily summary context for daily_review meetings
+      let dailySummaryContext = '';
+      if (meetingType === 'daily_review') {
+        try {
+          const today = getChinaDateString();
+          const { summary } = await this.dailySummaryService.getDailySummary(restaurantId, today);
+          if (summary?.agenda_items && Array.isArray(summary.agenda_items) && summary.agenda_items.length > 0) {
+            const lines = summary.agenda_items.map((item: { severity?: string; title?: string; detail?: string; suggestedAction?: string; feedbacks?: Array<{ tableId?: string; text?: string }> }, i: number) => {
+              let line = `${i + 1}. [${item.severity || '?'}] ${item.title}: ${item.detail}`;
+              if (item.suggestedAction) line += ` → 建议: ${item.suggestedAction}`;
+              if (item.feedbacks?.length) {
+                const fbTexts = item.feedbacks.map((f: { tableId?: string; text?: string }) => `${f.tableId || '?'}桌:"${f.text || ''}"`).join('; ');
+                line += ` (${fbTexts})`;
+              }
+              return line;
+            });
+            dailySummaryContext = `【今日桌访数据汇总】\n总桌访数: ${summary.total_visits || '?'}, 平均满意度: ${summary.avg_sentiment ?? '?'}\n${summary.ai_overview || ''}\n\n议题:\n${lines.join('\n')}\n\n---\n`;
+            this.logger.log(`已加载今日桌访汇总上下文 (${summary.agenda_items.length}条议题)`);
+          } else {
+            // Try to generate summary on the fly
+            try {
+              const generated = await this.dailySummaryService.generateDailySummary(restaurantId, today);
+              if (generated?.summary?.agenda_items?.length) {
+                const items = generated.summary.agenda_items;
+                const lines = items.map((item: { severity?: string; title?: string; detail?: string }, i: number) =>
+                  `${i + 1}. [${item.severity || '?'}] ${item.title}: ${item.detail}`);
+                dailySummaryContext = `【今日桌访数据汇总】\n总桌访数: ${generated.summary.total_visits || '?'}\n${generated.summary.ai_overview || ''}\n\n议题:\n${lines.join('\n')}\n\n---\n`;
+                this.logger.log(`按需生成桌访汇总上下文 (${items.length}条议题)`);
+              }
+            } catch (genErr) {
+              this.logger.warn(`按需生成 daily summary 失败: ${genErr instanceof Error ? genErr.message : String(genErr)}`);
+            }
+          }
+        } catch (err) {
+          this.logger.warn(`获取 daily summary 上下文失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
       // Step 2: AI minutes generation
-      const aiResult = await this.generateMinutes(cleanedTranscript, meetingType);
+      const aiResult = await this.generateMinutes(cleanedTranscript, meetingType, dailySummaryContext);
       this.logger.log(`AI完成: ${aiResult.actionItems.length} action items`);
 
       // Step 3: Save results
@@ -121,6 +164,7 @@ export class MeetingAiProcessingService {
   private async generateMinutes(
     transcript: string,
     meetingType: string,
+    dailySummaryContext = '',
   ): Promise<MeetingProcessingResult> {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) {
@@ -135,13 +179,13 @@ export class MeetingAiProcessingService {
       meetingType === 'cross_store_review' ? '跨门店经营分析会' :
       meetingType === 'one_on_one' ? '与店长一对一沟通' : '会议';
 
-    const systemPrompt = `你是餐饮门店会议记录助手。分析${meetingTypeLabel}的录音转写文本，生成结构化会议纪要。
+    const systemPrompt = `你是餐饮门店会议记录助手。分析${meetingTypeLabel}的录音转写文本，生成结构化会议纪要。${dailySummaryContext ? '\n\n请结合今日桌访数据汇总，关注高频问题和与桌访反馈相关的讨论。' : ''}
 
 输出JSON格式（只输出JSON，无其他内容）：
 {
   "aiSummary": "150字以内会议摘要，包含主要议题和结论",
   "actionItems": [
-    {"who": "负责人姓名", "what": "具体待办事项", "deadline": "截止时间，如本周五、明天午市前"}
+    {"who": "manager", "what": "具体待办事项", "deadline": "截止时间，如本周五、明天午市前"}
   ],
   "keyDecisions": [
     {"decision": "决定的内容", "context": "做出决定的原因或背景"}
@@ -151,7 +195,11 @@ export class MeetingAiProcessingService {
 规则：
 1. aiSummary: 概括会议核心内容，包括讨论的主要议题和最终结论，不超过150字
 2. actionItems: 提取会议中明确分配的任务
-   - who: 从原文提取负责人姓名，如未明确指定则填"待定"
+   - who: 必须是以下角色之一：manager（店长）、head_chef（厨师长/后厨）、front_of_house（前厅）、all（全员）。根据任务内容和会议中提到的负责人判断最合适的角色：
+     * 涉及菜品质量、出品、食材、备餐 → head_chef
+     * 涉及服务、接待、环境、前厅 → front_of_house
+     * 涉及管理、排班、成本、数据 → manager
+     * 涉及全员执行的通知或要求 → all
    - what: 具体、可执行的描述，如"检查冷库温度记录"而非"注意冷库"
    - deadline: 从原文提取截止时间，如未明确则根据会议类型推断（餐前会→当日，复盘→次日，周例会→本周内）
 3. keyDecisions: 提取会议中做出的重要决定
@@ -176,7 +224,7 @@ export class MeetingAiProcessingService {
         model: 'deepseek/deepseek-chat-v3-0324',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `会议转写文本：\n${transcript}` },
+          { role: 'user', content: `${dailySummaryContext}会议转写文本：\n${transcript}` },
         ],
         temperature: 0.3,
         max_tokens: 4000,
@@ -241,20 +289,27 @@ export class MeetingAiProcessingService {
         : meetingType === 'one_on_one' ? 'one_on_one_meeting'
         : 'meeting';
 
-      const rows = actionItems.map(item => ({
-        restaurant_id: restaurantId,
-        action_date: today,
-        source_type: sourceType,
-        category: 'other',
-        suggestion_text: item.what,
-        priority: 'medium',
-        evidence: [],
-        visit_ids: [],
-        status: 'pending',
-        assignee: item.who !== '待定' ? item.who : null,
-        deadline: item.deadline || null,
-        meeting_id: meetingId,
-      }));
+      const rows = actionItems.map(item => {
+        const role: AssignedRole = VALID_ROLES.includes(item.who as AssignedRole)
+          ? (item.who as AssignedRole)
+          : 'manager';
+
+        return {
+          restaurant_id: restaurantId,
+          action_date: today,
+          source_type: sourceType,
+          category: 'other',
+          suggestion_text: item.what,
+          priority: 'medium',
+          evidence: [],
+          visit_ids: [],
+          status: 'pending',
+          assignee: null,
+          assigned_role: role,
+          deadline: item.deadline || null,
+          meeting_id: meetingId,
+        };
+      });
 
       const { error } = await client
         .from('lingtin_action_items')

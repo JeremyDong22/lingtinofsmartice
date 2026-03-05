@@ -14,8 +14,12 @@ import { getDateForSelection } from '@/lib/date-utils';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
 import { CATEGORY_LABELS, PRIORITY_CONFIG, STATUS_CONFIG } from '@/lib/action-item-constants';
 
-// Filter: kitchen-relevant items
+// Filter: kitchen-relevant items — prefer assigned_role, fallback to keyword matching for legacy data
 function isKitchenRelevant(item: ActionItem): boolean {
+  if (item.assigned_role) {
+    return item.assigned_role === 'head_chef' || item.assigned_role === 'all';
+  }
+  // Fallback for legacy items without assigned_role
   if (item.category === 'dish_quality') return true;
   if (item.category === 'service_speed') return true;
   if (/厨师|厨房|后厨|菜品|出品|出菜|上菜|温度|摆盘|食材|新鲜/.test(item.suggestion_text)) return true;

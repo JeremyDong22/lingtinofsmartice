@@ -17,6 +17,7 @@ export interface ActionItem {
   evidence: EvidenceItem[];
   status: 'pending' | 'acknowledged' | 'resolved' | 'dismissed';
   assignee?: string;
+  assigned_role?: string;
   due_date?: string;
   acknowledged_at?: string;
   resolved_at?: string;
@@ -47,4 +48,11 @@ export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending: { label: '待处理', color: 'text-yellow-700' },
   acknowledged: { label: '已知悉', color: 'text-primary-600' },
   resolved: { label: '已解决', color: 'text-green-600' },
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  manager: '店长',
+  head_chef: '厨师长',
+  front_of_house: '前厅',
+  all: '全员',
 };
