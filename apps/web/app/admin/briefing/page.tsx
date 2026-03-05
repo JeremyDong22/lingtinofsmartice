@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useManagedScope } from '@/hooks/useManagedScope';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { BenchmarkPanel } from '@/components/admin/BenchmarkPanel';
+import { ExecutionStatus } from '@/components/admin/ExecutionStatus';
 import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, useAdminPresets } from '@/components/shared/DatePicker';
@@ -86,8 +87,10 @@ export default function AdminBriefingPage() {
   const { t, locale } = useT();
   const adminPresets = useAdminPresets();
 
+  const yesterday = getChinaYesterday();
+
   // Date navigation
-  const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaYesterday()));
+  const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(yesterday));
 
   // Audio playback
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -143,6 +146,12 @@ export default function AdminBriefingPage() {
     summary: { repeat_ratio: number | null; data_coverage: number };
   }>(`/api/dashboard/customer-profile?${dateRangeParams(dateRange)}${managedIdsParam}`);
 
+  // Fetch execution overview (always yesterday, independent of date picker)
+  const { data: executionData } = useSWR<{
+    restaurants: Array<{ id: string; name: string; review_done: boolean; pending_actions: number }>;
+    summary: { reviewed_count: number; total_count: number; total_pending: number };
+  }>(`/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`);
+
   const userName = user?.employeeName || user?.username || (locale === 'en' ? 'there' : '您');
   const greetingMap: Record<string, string> = {
     '早安': t('briefing.greetingMorning'),
@@ -193,7 +202,7 @@ export default function AdminBriefingPage() {
           <DatePicker
             value={dateRange}
             onChange={setDateRange}
-            maxDate={getChinaYesterday()}
+            maxDate={yesterday}
             presets={adminPresets}
           />
           <UserMenu />
@@ -201,6 +210,9 @@ export default function AdminBriefingPage() {
       </header>
 
       <div className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
+        {/* Execution Status (always yesterday) */}
+        <ExecutionStatus data={executionData} />
+
         {/* Greeting banner */}
         <div>
           <h2 className="text-xl font-bold text-gray-900">

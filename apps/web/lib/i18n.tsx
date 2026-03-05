@@ -283,6 +283,17 @@ const dict: Record<Locale, Record<string, string>> = {
     'insights.emptyTitle': '暂无顾客洞察',
     'insights.table': '{0}桌',
     'insights.tableCount': '{0} 桌',
+    // Execution Panel
+    'execution.todayReview': '今日复盘',
+    'execution.yesterdayExecution': '昨日执行状态',
+    'execution.notDone': '未完成',
+    'execution.done': '已完成',
+    'execution.goRecord': '未完成 · 去录制 ›',
+    'execution.pendingActions': '条行动建议 ›',
+    'execution.allDone': '全部完成',
+    'execution.reviewCount': '复盘 {0}/{1}',
+    'execution.pendingCount': '待处理 {0}条',
+    'execution.pending': '待处理',
   },
   'en': {
     // BottomNav (manager)
@@ -555,6 +566,17 @@ const dict: Record<Locale, Record<string, string>> = {
     'insights.emptyTitle': 'No Customer Insights',
     'insights.table': 'Table {0}',
     'insights.tableCount': '{0} tables',
+    // Execution Panel
+    'execution.todayReview': 'Today\'s Review',
+    'execution.yesterdayExecution': 'Yesterday\'s Execution',
+    'execution.notDone': 'Not done',
+    'execution.done': 'Done',
+    'execution.goRecord': 'Not done · Record ›',
+    'execution.pendingActions': ' actions ›',
+    'execution.allDone': 'All done',
+    'execution.reviewCount': 'Review {0}/{1}',
+    'execution.pendingCount': '{0} pending',
+    'execution.pending': 'Pending',
   },
 };
 

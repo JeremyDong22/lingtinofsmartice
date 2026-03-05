@@ -210,4 +210,29 @@ export class DashboardController {
       date || getChinaDateString(),
     );
   }
+
+  // GET /api/dashboard/execution-summary - Single restaurant execution status
+  @Get('execution-summary')
+  async getExecutionSummary(
+    @Query('restaurant_id') restaurantId: string,
+    @Query('date') date?: string,
+  ) {
+    return this.dashboardService.getExecutionSummary(
+      restaurantId,
+      date || getChinaDateString(),
+    );
+  }
+
+  // GET /api/dashboard/execution-overview - Multi-restaurant execution overview
+  @Get('execution-overview')
+  async getExecutionOverview(
+    @Query('date') date?: string,
+    @Query('managed_ids') managedIdsStr?: string,
+  ) {
+    const managedIds = DashboardService.parseManagedIds(managedIdsStr);
+    return this.dashboardService.getMultiExecutionSummary(
+      date || getYesterdayChinaDateString(),
+      managedIds,
+    );
+  }
 }

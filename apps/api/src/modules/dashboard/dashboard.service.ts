@@ -1715,4 +1715,75 @@ export class DashboardService {
 
     return { summary, by_restaurant };
   }
+
+  // Execution summary for a single restaurant on a given date
+  async getExecutionSummary(restaurantId: string, date: string) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
+    const safeId = UUID_REGEX.test(restaurantId) ? restaurantId : DEFAULT_RESTAURANT_ID;
+
+    const client = this.supabase.getClient();
+    const [reviewResult, pendingResult] = await Promise.all([
+      client.from('lingtin_meeting_records')
+        .select('id')
+        .eq('restaurant_id', safeId)
+        .eq('meeting_type', 'daily_review')
+        .eq('meeting_date', date)
+        .limit(1),
+      client.from('lingtin_action_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('restaurant_id', safeId)
+        .eq('status', 'pending'),
+    ]);
+
+    return {
+      review_done: (reviewResult.data?.length ?? 0) > 0,
+      pending_actions: pendingResult.count ?? 0,
+    };
+  }
+
+  // Execution overview for multiple restaurants (admin/regional manager)
+  async getMultiExecutionSummary(date: string, managedIds: string[] | null) {
+    const restaurants = await this.getVisibleRestaurants(managedIds);
+    if (restaurants.length === 0) {
+      return { restaurants: [], summary: { reviewed_count: 0, total_count: 0, total_pending: 0 } };
+    }
+
+    const ids = restaurants.map(r => r.id);
+    const client = this.supabase.getClient();
+
+    const [reviewResult, pendingResult] = await Promise.all([
+      client.from('lingtin_meeting_records')
+        .select('restaurant_id')
+        .in('restaurant_id', ids)
+        .eq('meeting_type', 'daily_review')
+        .eq('meeting_date', date),
+      client.from('lingtin_action_items')
+        .select('restaurant_id')
+        .in('restaurant_id', ids)
+        .eq('status', 'pending'),
+    ]);
+
+    const reviewedSet = new Set((reviewResult.data || []).map(r => r.restaurant_id));
+    const pendingByRestaurant = new Map<string, number>();
+    for (const item of (pendingResult.data || [])) {
+      pendingByRestaurant.set(item.restaurant_id, (pendingByRestaurant.get(item.restaurant_id) || 0) + 1);
+    }
+
+    const result = restaurants.map(r => ({
+      id: r.id,
+      name: r.restaurant_name,
+      review_done: reviewedSet.has(r.id),
+      pending_actions: pendingByRestaurant.get(r.id) || 0,
+    }));
+
+    return {
+      restaurants: result,
+      summary: {
+        reviewed_count: result.filter(r => r.review_done).length,
+        total_count: result.length,
+        total_pending: result.reduce((sum, r) => sum + r.pending_actions, 0),
+      },
+    };
+  }
 }

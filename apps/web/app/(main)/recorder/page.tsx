@@ -21,6 +21,7 @@ import { MeetingHistory } from '@/components/recorder/MeetingHistory';
 import { StealthOverlay } from '@/components/recorder/StealthOverlay';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
 import { MotivationBanner } from '@/components/recorder/MotivationBanner';
+import { ExecutionPanel } from '@/components/recorder/ExecutionPanel';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
 import { BarChart3, CloudUpload } from 'lucide-react';
@@ -455,6 +456,14 @@ export default function RecorderPage() {
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm mb-4">
             {error}
           </div>
+        )}
+
+        {/* Execution Panel - visible when not recording */}
+        {!isRecording && (
+          <ExecutionPanel
+            restaurantId={restaurantId}
+            onGoReview={() => { setMode('meeting'); setMeetingType('daily_review' as MeetingType); }}
+          />
         )}
 
         {/* Motivation Banner - visible when not recording */}

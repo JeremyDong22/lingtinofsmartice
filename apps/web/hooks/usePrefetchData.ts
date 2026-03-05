@@ -25,6 +25,7 @@ function getPrefetchKeys(role: Role, restaurantId: string, managedIdsParam: stri
       `/api/dashboard/speech-highlights?${params}`,
       `/api/dashboard/suggestions?restaurant_id=${restaurantId}&days=7`,
       `/api/action-items?restaurant_id=${restaurantId}&date=${today}`,
+      `/api/dashboard/execution-summary?restaurant_id=${restaurantId}&date=${today}`,
     ];
   }
 
@@ -34,6 +35,7 @@ function getPrefetchKeys(role: Role, restaurantId: string, managedIdsParam: stri
       `/api/dashboard/briefing?${rangeParams}${managedIdsParam}`,
       `/api/dashboard/restaurants-overview?${rangeParams}${managedIdsParam}`,
       `/api/dashboard/customer-profile?${rangeParams}${managedIdsParam}`,
+      `/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`,
     ];
   }
 
