@@ -1,5 +1,5 @@
 // QuestionPrompt - Read-only questionnaire prompt card for recorder page
-// v2.0 - 3-question framework with follow-up prompts + collapsible closing tips
+// v3.0 - 4-question framework with follow-up prompts + collapsible closing tips
 
 'use client';
 
@@ -18,18 +18,18 @@ interface QuestionPromptProps {
 
 // Follow-up prompts keyed by question id
 const FOLLOW_UP_PROMPTS: Record<string, string> = {
-  q1: '如果顾客只说"都不错" → 那哪道最合您口味？',
-  q2: '如果顾客说"没有" → 那上菜速度、服务这些呢？',
-  q3: '如果"第一次" → 什么机缘来的？ 如果"经常来" → 最早怎么发现的？ 如果"朋友推荐" → 朋友推荐了什么菜？',
-  q4: '如果顾客说"挺好的" → 那某位服务员有没有特别贴心的？',
+  q1: '如果顾客只说"还行" → 有没有哪道下次还想点的？',
+  q2: '如果顾客说"挺好的" → 比如上菜速度、口味咸淡这些呢？',
+  q3: '如果"第一次" → 感觉怎么样，下次还会来吗？ 如果"来过好几次了" → 那您是我们老粉丝了！',
+  q4: '如果"朋友推荐" → 朋友推荐了什么菜？ 如果"路过/外卖平台" → 那今天堂食感觉怎么样？',
 };
 
 // Why explanations keyed by question id — brief benefit for store manager
 const QUESTION_WHY: Record<string, string> = {
-  q1: '好处：引导顾客说出具体菜品，比"挺好"更有价值，也能发现爆款和改进点',
-  q2: '好处："小遗憾"语气轻，顾客更愿意说真话，是发现服务盲点的最佳时机',
-  q3: '好处：了解新老顾客比例和来源，帮你找到忠实粉丝和口碑传播渠道',
-  q4: '好处：主动问服务细节让顾客感受到被重视，也能发现团队可表扬的亮点',
+  q1: '好处：引出具体菜品名，发现爆款和改进点',
+  q2: '好处：正面开场降低心理门槛，顾客更愿意说真话',
+  q3: '好处：了解新老客比例，老客重点维护',
+  q4: '好处：找到有效获客渠道，知道哪个引流方式在起作用',
 };
 
 const CLOSING_TIPS = [
