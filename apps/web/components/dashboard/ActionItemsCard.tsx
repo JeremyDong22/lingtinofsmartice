@@ -64,13 +64,27 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
 
       {/* Loading state */}
       {isLoading && (
-        <div className="text-center py-6 text-gray-400 text-sm">加载中...</div>
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="glass-card rounded-2xl p-4 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-2/3 mb-3" />
+              <div className="h-3 bg-gray-100 rounded w-full mb-2" />
+              <div className="h-3 bg-gray-100 rounded w-4/5" />
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Empty state */}
       {!isLoading && actions.length === 0 && (
-        <div className="text-center py-6">
-          <div className="text-gray-400 text-sm">暂无行动建议，复盘会后自动生成</div>
+        <div className="glass-card rounded-xl p-6 text-center">
+          <div className="flex justify-center mb-2">
+            <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-700 mb-1">暂无行动建议</h3>
+          <p className="text-sm text-gray-500">复盘会后自动生成</p>
         </div>
       )}
 
@@ -111,7 +125,7 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
 
               {/* Resolved note */}
               {item.status === 'resolved' && item.resolved_note && (
-                <div className="mt-2 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                <div className="mt-2 text-xs text-green-700 bg-green-50 rounded-lg px-2 py-1">
                   备注: {item.resolved_note}
                 </div>
               )}

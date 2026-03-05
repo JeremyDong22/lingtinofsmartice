@@ -38,7 +38,7 @@ export function ExecutionPanel({ restaurantId, onGoReview }: ExecutionPanelProps
 
   return (
     <div className="mb-4">
-      <div className="rounded-2xl border bg-white border-gray-200 overflow-hidden">
+      <div className="glass-card rounded-2xl overflow-hidden">
         <div className="grid grid-cols-2 divide-x divide-gray-200">
           {/* Review status */}
           <button

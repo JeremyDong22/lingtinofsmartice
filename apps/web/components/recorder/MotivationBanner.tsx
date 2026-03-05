@@ -92,11 +92,11 @@ export function MotivationBanner({ restaurantId, userName }: MotivationBannerPro
   const displayName = userName || '';
 
   return (
-    <div className="bg-gradient-to-br from-primary-50 via-gray-50 to-gray-100 rounded-2xl px-4 py-3 shadow-sm">
+    <div className="glass-card rounded-2xl px-4 py-3">
       {/* Greeting */}
       <p className="text-sm text-gray-700 leading-relaxed">
         {displayName && (
-          <span className="font-medium text-gray-800">{displayName}，</span>
+          <span className="font-medium text-gray-900">{displayName}，</span>
         )}
         {greeting}
       </p>
@@ -118,7 +118,7 @@ export function MotivationBanner({ restaurantId, userName }: MotivationBannerPro
 function StatItem({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex items-baseline gap-1">
-      <span className="text-lg font-semibold text-gray-800">{value}</span>
+      <span className="text-lg font-semibold text-gray-900">{value}</span>
       <span className="text-xs text-gray-500">{label}</span>
     </div>
   );

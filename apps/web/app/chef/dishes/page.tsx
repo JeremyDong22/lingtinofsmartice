@@ -250,7 +250,7 @@ export default function ChefDishesPage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
-        <div className="text-base font-semibold text-gray-800">厨房反馈</div>
+        <div className="text-lg font-semibold text-gray-900">厨房反馈</div>
         <div className="flex items-center gap-2">
           <DatePicker
             value={dateRange}
@@ -262,7 +262,7 @@ export default function ChefDishesPage() {
         </div>
       </header>
 
-      <main className="px-4 island-page-top island-page-bottom">
+      <main className="px-4 py-4 island-page-top island-page-bottom">
         {isLoading && (
           <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
         )}
@@ -274,7 +274,7 @@ export default function ChefDishesPage() {
         )}
 
         {!isLoading && (dishes.length > 0 || kitchenProblems.length > 0) && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* ── Kitchen Dimension Problems (speed, temp, etc.) ── */}
             {kitchenProblems.length > 0 && (
               <section>
@@ -295,10 +295,10 @@ export default function ChefDishesPage() {
                             if (isExpanded) stopAudio();
                             setExpandedKitchen(isExpanded ? null : kp.label);
                           }}
-                          className="w-full px-4 py-3.5 text-left active:bg-gray-50/50"
+                          className="w-full px-4 py-3.5 text-left hover:bg-gray-50/50 active:bg-gray-50/50"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-[15px] font-semibold text-gray-800">
+                            <span className="text-sm font-semibold text-gray-800">
                               {kp.icon} {kp.label}
                             </span>
                             <div className="flex items-center gap-2">
@@ -317,7 +317,7 @@ export default function ChefDishesPage() {
                           </div>
                           <div className="flex flex-wrap gap-2 mt-2">
                             {kp.feedbacks.map(fb => (
-                              <span key={fb.text} className="text-[13px] text-red-700/80 bg-red-50/80 rounded-lg px-2.5 py-1">
+                              <span key={fb.text} className="text-xs text-red-700/80 bg-red-50/80 rounded-lg px-2.5 py-1">
                                 &ldquo;{fb.text}&rdquo;{fb.count > 1 && <span className="ml-1 text-red-500/60">&times;{fb.count}</span>}
                               </span>
                             ))}
@@ -343,7 +343,7 @@ export default function ChefDishesPage() {
                                   )}
                                 </div>
                                 {ctx.customerAnswers.length > 0 && (
-                                  <div className="text-[13px] text-gray-700 bg-white rounded-lg px-3 py-2 border border-gray-100">
+                                  <div className="text-xs text-gray-700 bg-white rounded-lg px-3 py-2 border border-gray-100">
                                     <span className="text-gray-400 font-medium">顾客：</span>{ctx.customerAnswers.join(' ')}
                                   </div>
                                 )}
@@ -412,10 +412,10 @@ export default function ChefDishesPage() {
                             if (isExpanded) stopAudio();
                             setExpandedDish(isExpanded ? null : dish.dish_name);
                           }}
-                          className="w-full px-4 py-3.5 text-left active:bg-gray-50/50"
+                          className="w-full px-4 py-3.5 text-left hover:bg-gray-50/50 active:bg-gray-50/50"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-[15px] font-semibold text-gray-800">
+                            <span className="text-sm font-semibold text-gray-800">
                               {dish.dish_name}
                             </span>
                             <div className="flex items-center gap-2">
@@ -437,7 +437,7 @@ export default function ChefDishesPage() {
                               {dish.negative_feedbacks.map((fb) => (
                                 <span
                                   key={fb.text}
-                                  className="inline-flex items-center text-[13px] text-red-700/80 bg-red-50/80 rounded-lg px-2.5 py-1"
+                                  className="inline-flex items-center text-xs text-red-700/80 bg-red-50/80 rounded-lg px-2.5 py-1"
                                 >
                                   &ldquo;{fb.text}&rdquo;
                                   {fb.count > 1 && (

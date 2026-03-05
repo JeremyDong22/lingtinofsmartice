@@ -272,14 +272,14 @@ export default function FeedbackPage() {
       <div className="px-4 py-4 space-y-4 max-w-lg mx-auto island-page-top island-page-bottom">
         {/* Result card (shown after submission) */}
         {result && (
-          <div className="glass-card rounded-xl p-4 space-y-3">
+          <div className="glass-card rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                 <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span className="text-base font-medium text-gray-900">提交成功</span>
+              <span className="text-base font-semibold text-gray-900">提交成功</span>
             </div>
 
             {result.ai_summary && (
@@ -307,13 +307,13 @@ export default function FeedbackPage() {
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleNewFeedback}
-                className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700"
+                className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors"
               >
                 继续反馈
               </button>
               <button
                 onClick={() => router.push('/feedback/history')}
-                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
+                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
               >
                 查看历史
               </button>
@@ -329,7 +329,7 @@ export default function FeedbackPage() {
               <button
                 onClick={() => setMode('text')}
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                  mode === 'text' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  mode === 'text' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 文字
@@ -337,7 +337,7 @@ export default function FeedbackPage() {
               <button
                 onClick={() => setMode('voice')}
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                  mode === 'voice' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  mode === 'voice' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 语音
@@ -364,7 +364,7 @@ export default function FeedbackPage() {
                 <button
                   onClick={handleSubmitText}
                   disabled={!text.trim() || submitting}
-                  className="w-full py-3 bg-primary-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-700 transition-colors"
+                  className="w-full py-3 bg-primary-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-700 transition-colors"
                 >
                   {submitting ? (uploadingImages ? '上传图片...' : '提交中...') : '提交反馈'}
                 </button>
@@ -374,7 +374,7 @@ export default function FeedbackPage() {
             {/* Voice mode */}
             {mode === 'voice' && (
               <div className="space-y-4">
-                <div className="bg-white rounded-xl p-6 flex flex-col items-center space-y-4">
+                <div className="bg-white rounded-xl p-4 flex flex-col items-center space-y-4">
                   {/* Recording state */}
                   {recorderState.isRecording && (
                     <>
@@ -436,7 +436,7 @@ export default function FeedbackPage() {
                       <div className="flex gap-2 w-full">
                         <button
                           onClick={recorderActions.resetRecording}
-                          className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
+                          className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
                         >
                           重录
                         </button>

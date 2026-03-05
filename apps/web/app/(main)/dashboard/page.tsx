@@ -300,7 +300,15 @@ export default function DashboardPage() {
       <main className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
         {/* Loading indicator */}
         {loading && (
-          <div className="text-center py-8 text-gray-500">{t('dashboard.loading')}</div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="glass-card rounded-2xl p-4 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-2/3 mb-3" />
+                <div className="h-3 bg-gray-100 rounded w-full mb-2" />
+                <div className="h-3 bg-gray-100 rounded w-4/5" />
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Execution Data Card */}
@@ -528,7 +536,7 @@ export default function DashboardPage() {
                 const isResolved = item.status === 'resolved';
                 const isDismissed = item.status === 'dismissed';
                 return (
-                  <div key={item.id} className={`rounded-xl p-3 ${
+                  <div key={item.id} className={`rounded-2xl p-4 ${
                     isResolved ? 'bg-green-50 border border-green-100' :
                     isDismissed ? 'bg-gray-50 border border-gray-100' :
                     'bg-red-50/50 border border-red-100'
@@ -549,7 +557,7 @@ export default function DashboardPage() {
                     </div>
                     <p className="text-sm text-gray-700">{item.suggestion_text}</p>
                     {item.response_note && (
-                      <div className="mt-1.5 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                      <div className="mt-1.5 text-xs text-green-700 bg-green-50 rounded-lg px-2 py-1">
                         {t('dashboard.chefLabel')}{item.response_note}
                       </div>
                     )}
@@ -594,7 +602,7 @@ export default function DashboardPage() {
         return (
           <div
             ref={popoverRef}
-            className="fixed z-50 glass-card rounded-2xl p-4 w-80 animate-in fade-in zoom-in-95 duration-200"
+            className="fixed z-50 glass-card rounded-2xl p-4 w-80 shadow-xl animate-in fade-in zoom-in-95 duration-200"
             style={{
               top: Math.min(selectedFeedback.rect.bottom + 8, window.innerHeight - 300),
               left,
