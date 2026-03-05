@@ -16,6 +16,7 @@ import { UserMenu } from '@/components/layout/UserMenu';
 import { processMeetingInBackground } from '@/lib/backgroundProcessor';
 import { getApiUrl } from '@/lib/api';
 import { getAuthHeaders } from '@/contexts/AuthContext';
+import { CheckCircle, User, Clock } from 'lucide-react';
 import type { MeetingRecord } from '@/hooks/useMeetingStore';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
 import { PRIORITY_CONFIG } from '@/lib/action-item-constants';
@@ -122,7 +123,7 @@ function PendingItemsSection({ items, collapsed, onToggleCollapse, updatingItemI
     return (
       <section>
         <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-2.5">
-          <span className="text-lg">&#x2705;</span>
+          <CheckCircle className="w-5 h-5 text-green-500" />
           <span className="text-sm font-medium text-green-700">所有事项已处理完毕</span>
         </div>
       </section>
@@ -146,7 +147,7 @@ function PendingItemsSection({ items, collapsed, onToggleCollapse, updatingItemI
           </span>
         </h2>
         <svg
-          className={`w-4 h-4 text-gray-400 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+          className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -178,7 +179,7 @@ function PendingItemsSection({ items, collapsed, onToggleCollapse, updatingItemI
               <div key={group.date} className="glass-card rounded-2xl overflow-hidden">
                 {/* Date summary row — tappable */}
                 <div
-                  className="px-3.5 py-3 cursor-pointer active:bg-gray-50 transition-colors"
+                  className="px-3.5 py-3 cursor-pointer hover:bg-gray-50/50 active:bg-gray-50 transition-colors"
                   onClick={() => toggleDate(group.date)}
                 >
                   <div className="flex items-center justify-between">
@@ -193,7 +194,7 @@ function PendingItemsSection({ items, collapsed, onToggleCollapse, updatingItemI
                       </svg>
                     </div>
                   </div>
-                  <div className="text-[11px] text-gray-400 mt-0.5">{catSummary}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{catSummary}</div>
                 </div>
 
                 {/* Expanded items */}
@@ -221,15 +222,15 @@ function PendingItemsSection({ items, collapsed, onToggleCollapse, updatingItemI
 
                           {/* Assignee & due date (if available) */}
                           {(item.assignee || item.due_date) && (
-                            <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
                               {item.assignee && (
                                 <span className="flex items-center gap-0.5">
-                                  <span>&#x1F464;</span> {item.assignee}
+                                  <User className="w-3 h-3" /> {item.assignee}
                                 </span>
                               )}
                               {item.due_date && (
                                 <span className="flex items-center gap-0.5">
-                                  <span>&#x23F0;</span> {item.due_date}
+                                  <Clock className="w-3 h-3" /> {item.due_date}
                                 </span>
                               )}
                             </div>
@@ -434,13 +435,13 @@ export default function ChefMeetingsPage() {
       {/* Header */}
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">
         <div>
-          <div className="text-base font-semibold text-gray-800">厨房会议</div>
+          <div className="text-lg font-semibold text-gray-900">厨房会议</div>
           <div className="text-xs text-gray-400">{dateLabel}</div>
         </div>
         <UserMenu />
       </header>
 
-      <main className="px-4 space-y-5 island-page-top island-page-bottom">
+      <main className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
         {/* Pending action items (cross-day unfinished kitchen items) */}
         {!pendingLoading && (
           <PendingItemsSection

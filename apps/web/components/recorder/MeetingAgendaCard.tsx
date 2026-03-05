@@ -78,11 +78,11 @@ export function MeetingAgendaCard({ restaurantId }: MeetingAgendaCardProps) {
       {/* Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-primary-50/60 to-transparent"
+        className="w-full px-4 py-3 flex items-center justify-between"
       >
         <div className="flex items-center gap-2">
           <ClipboardList className="w-4 h-4 text-primary-600" />
-          <span className="text-sm font-semibold text-gray-800">
+          <span className="text-sm font-semibold text-gray-900">
             今日议题
           </span>
           <span className="text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded-full font-medium">
@@ -90,7 +90,7 @@ export function MeetingAgendaCard({ restaurantId }: MeetingAgendaCardProps) {
           </span>
         </div>
         <svg
-          className={`w-4 h-4 text-gray-400 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+          className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -122,7 +122,7 @@ export function MeetingAgendaCard({ restaurantId }: MeetingAgendaCardProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-gray-500 font-medium">{categoryLabel}</span>
-                      <span className="text-sm font-semibold text-gray-800">{item.title}</span>
+                      <span className="text-sm font-semibold text-gray-900">{item.title}</span>
                     </div>
                     <p className="text-xs text-gray-600 mt-0.5">
                       {item.evidenceCount}桌反映 → {item.suggestedAction}

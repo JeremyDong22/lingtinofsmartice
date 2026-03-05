@@ -15,7 +15,7 @@ const LS_KEY = 'lingtin_guide_seen_version';
 
 function NoteItemCard({ item }: { item: ReleaseNoteItem }) {
   return (
-    <div className="border-l-2 border-primary-400 pl-3 space-y-2">
+    <div className="border-l-2 border-primary-200 pl-3 space-y-2">
       <p className="text-sm font-semibold text-gray-900">{item.title}</p>
       <div className="bg-gray-50 rounded-lg p-2.5 flex items-start gap-2">
         <svg className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -42,7 +42,7 @@ function VersionCard({ note, isLatest }: { note: ReleaseNote; isLatest: boolean 
       {/* Header - always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left"
+        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50/50 transition-colors"
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 shrink-0">
@@ -58,7 +58,7 @@ function VersionCard({ note, isLatest }: { note: ReleaseNote; isLatest: boolean 
         <div className="flex items-center gap-2 shrink-0 ml-2">
           <span className="text-xs text-gray-400">{note.date}</span>
           <svg
-            className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -111,7 +111,7 @@ export default function GuidePage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.history.length > 1 ? router.back() : router.push('/')}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -130,7 +130,7 @@ export default function GuidePage() {
       </div>
 
       {/* Version cards */}
-      <div className="px-4 space-y-3 island-page-bottom">
+      <div className="px-4 space-y-4 island-page-bottom">
         {notes.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">
             {t('guide.empty')}

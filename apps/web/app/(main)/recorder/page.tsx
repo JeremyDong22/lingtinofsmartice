@@ -386,7 +386,7 @@ export default function RecorderPage() {
                 key={m}
                 onClick={() => !isRecording && setMode(m)}
                 disabled={isRecording}
-                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                className={`px-3 py-1 text-sm rounded-full transition-colors ${
                   mode === m
                     ? 'bg-white text-gray-900 shadow-sm font-medium'
                     : 'text-gray-500 hover:text-gray-700'
@@ -396,7 +396,7 @@ export default function RecorderPage() {
               </button>
             ))}
           </div>
-          <span className="text-[9px] text-gray-300 tracking-wide font-light ml-0.5 self-end mb-0.5">v{APP_VERSION}</span>
+          <span className="text-xs text-gray-300 tracking-wide font-light ml-0.5 self-end mb-0.5">v{APP_VERSION}</span>
         </div>
         <div className="flex items-center gap-3">
           {/* Date Tabs */}
@@ -435,7 +435,7 @@ export default function RecorderPage() {
         </div>
       )}
 
-      <main className="px-4 island-page-top island-page-bottom">
+      <main className="px-4 py-4 island-page-top island-page-bottom">
         {/* Toast */}
         {toast && (
           <div
@@ -560,7 +560,7 @@ export default function RecorderPage() {
                 <PreMealReminder restaurantId={restaurantId} />
               )}
               {meetingType === 'weekly' && (
-                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
+                <div className="glass-card rounded-2xl p-4">
                   <div className="flex items-start gap-3">
                     <BarChart3 className="w-5 h-5 text-gray-500" />
                     <div>

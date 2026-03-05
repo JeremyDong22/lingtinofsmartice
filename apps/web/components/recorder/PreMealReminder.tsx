@@ -76,11 +76,11 @@ export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
       {/* Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-amber-50/60 to-transparent"
+        className="w-full px-4 py-3 flex items-center justify-between"
       >
         <div className="flex items-center gap-2">
           <Bell className="w-4 h-4 text-amber-600" />
-          <span className="text-sm font-semibold text-gray-800">
+          <span className="text-sm font-semibold text-gray-900">
             昨日复盘待办
           </span>
           <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
@@ -88,7 +88,7 @@ export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
           </span>
         </div>
         <svg
-          className={`w-4 h-4 text-gray-400 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+          className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -110,7 +110,7 @@ export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   {item.assigned_role ? (
-                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
                       {item.assigned_role === 'manager' ? '店长' : item.assigned_role === 'head_chef' ? '厨师长' : item.assigned_role === 'front_of_house' ? '前厅' : item.assigned_role === 'all' ? '全员' : item.assigned_role}
                     </span>
                   ) : item.assignee ? (

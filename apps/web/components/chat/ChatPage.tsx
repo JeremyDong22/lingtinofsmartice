@@ -428,7 +428,7 @@ function ChatContent({ config }: ChatPageProps) {
             <button
               type="button"
               onClick={stopRequest}
-              className="px-6 py-3 bg-gray-500 text-white rounded-xl font-medium hover:bg-gray-600 transition-colors flex-shrink-0"
+              className="px-6 py-3 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors flex-shrink-0"
             >
               {t('chat.stop')}
             </button>
@@ -436,7 +436,7 @@ function ChatContent({ config }: ChatPageProps) {
             <button
               type="submit"
               disabled={!input.trim()}
-              className="px-6 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              className="px-6 py-3 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               {t('chat.send')}
             </button>

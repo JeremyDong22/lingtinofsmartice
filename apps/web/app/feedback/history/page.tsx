@@ -80,7 +80,15 @@ export default function FeedbackHistoryPage() {
 
       <div className="px-4 py-4 max-w-lg mx-auto space-y-3 island-page-top island-page-bottom">
         {isLoading && (
-          <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="glass-card rounded-2xl p-4 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-2/3 mb-3" />
+                <div className="h-3 bg-gray-100 rounded w-full mb-2" />
+                <div className="h-3 bg-gray-100 rounded w-4/5" />
+              </div>
+            ))}
+          </div>
         )}
 
         {!isLoading && feedbacks.length === 0 && (
