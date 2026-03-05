@@ -1,5 +1,5 @@
 // ActionItemsCard - AI-generated improvement suggestions card for dashboard
-// v1.0 - Display, generate, and manage action items
+// v2.0 - Removed manual generate; action items now auto-generated from review meetings
 
 'use client';
 
@@ -8,7 +8,7 @@ import useSWR from 'swr';
 import { getApiUrl } from '@/lib/api';
 import { getAuthHeaders } from '@/contexts/AuthContext';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
-import { CATEGORY_LABELS, PRIORITY_CONFIG, STATUS_CONFIG } from '@/lib/action-item-constants';
+import { CATEGORY_LABELS, PRIORITY_CONFIG, STATUS_CONFIG, ROLE_LABELS } from '@/lib/action-item-constants';
 
 interface ActionItemsCardProps {
   restaurantId: string;
@@ -16,7 +16,6 @@ interface ActionItemsCardProps {
 }
 
 export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
-  const [generating, setGenerating] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolveNote, setResolveNote] = useState('');
@@ -28,29 +27,6 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
   );
 
   const actions = data?.actions ?? [];
-
-  // Generate action items via POST
-  const handleGenerate = async () => {
-    setGenerating(true);
-    try {
-      const res = await fetch(
-        getApiUrl(`api/action-items/generate?${params}`),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-          },
-        },
-      );
-      if (!res.ok) throw new Error('Generate failed');
-      await mutate();
-    } catch (err) {
-      console.error('Failed to generate action items:', err);
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   // Update action item status via PATCH
   const handleUpdateStatus = async (id: string, status: string, note?: string) => {
@@ -84,36 +60,6 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
     <div className="glass-card rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium text-gray-700">AI 行动建议</h2>
-        <button
-          onClick={handleGenerate}
-          disabled={generating}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors disabled:opacity-50"
-        >
-          {generating ? (
-            <>
-              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <span>生成中...</span>
-            </>
-          ) : actions.length > 0 ? (
-            <>
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>重新生成</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" strokeLinecap="round" />
-                <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-              </svg>
-              <span>生成今日建议</span>
-            </>
-          )}
-        </button>
       </div>
 
       {/* Loading state */}
@@ -124,9 +70,7 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
       {/* Empty state */}
       {!isLoading && actions.length === 0 && (
         <div className="text-center py-6">
-          <div className="text-gray-400 text-sm">
-            {generating ? '正在分析今日反馈...' : '暂无行动建议，点击上方按钮生成'}
-          </div>
+          <div className="text-gray-400 text-sm">暂无行动建议，复盘会后自动生成</div>
         </div>
       )}
 
@@ -144,7 +88,7 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
                     : 'border-gray-200'
               }`}
             >
-              {/* Header: priority + category + status */}
+              {/* Header: priority + category + role + status */}
               <div className="flex items-center gap-2 mb-2">
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${PRIORITY_CONFIG[item.priority]?.bg} ${PRIORITY_CONFIG[item.priority]?.color}`}>
                   {PRIORITY_CONFIG[item.priority]?.label || item.priority}
@@ -152,6 +96,11 @@ export function ActionItemsCard({ restaurantId, date }: ActionItemsCardProps) {
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
                   {CATEGORY_LABELS[item.category] || item.category}
                 </span>
+                {item.assigned_role && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
+                    {ROLE_LABELS[item.assigned_role] || item.assigned_role}
+                  </span>
+                )}
                 <span className={`ml-auto text-xs ${STATUS_CONFIG[item.status]?.color || 'text-gray-500'}`}>
                   {STATUS_CONFIG[item.status]?.label || item.status}
                 </span>

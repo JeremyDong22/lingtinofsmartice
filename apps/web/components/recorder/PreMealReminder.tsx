@@ -10,6 +10,7 @@ interface ActionItem {
   id: string;
   suggestion_text: string;
   assignee: string | null;
+  assigned_role?: string | null;
   deadline: string | null;
   category: string;
   priority: string;
@@ -108,9 +109,13 @@ export function PreMealReminder({ restaurantId }: PreMealReminderProps) {
                   {item.suggestion_text}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  {item.assignee && (
+                  {item.assigned_role ? (
+                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                      {item.assigned_role === 'manager' ? '店长' : item.assigned_role === 'head_chef' ? '厨师长' : item.assigned_role === 'front_of_house' ? '前厅' : item.assigned_role === 'all' ? '全员' : item.assigned_role}
+                    </span>
+                  ) : item.assignee ? (
                     <span className="text-xs text-gray-500">@{item.assignee}</span>
-                  )}
+                  ) : null}
                   {item.deadline && (
                     <span className="text-xs text-gray-400">{item.deadline}</span>
                   )}
