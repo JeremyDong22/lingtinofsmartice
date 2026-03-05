@@ -63,11 +63,11 @@ export class DashboardService {
   }
 
   // Get visible restaurants: scoped by managedIds or all active
-  private async getVisibleRestaurants(managedIds: string[] | null): Promise<{ id: string; restaurant_name: string }[]> {
+  private async getVisibleRestaurants(managedIds: string[] | null): Promise<{ id: string; restaurant_name: string; brand_id: number | null; brand_name: string | null }[]> {
     const client = this.supabase.getClient();
     let query = client
       .from('master_restaurant')
-      .select('id, restaurant_name')
+      .select('id, restaurant_name, brand_id, master_brand(name)')
       .eq('is_active', true)
       .order('restaurant_name');
 
@@ -77,7 +77,12 @@ export class DashboardService {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      restaurant_name: r.restaurant_name as string,
+      brand_id: (r.brand_id as number) ?? null,
+      brand_name: (r.master_brand as { name: string } | null)?.name ?? null,
+    }));
   }
 
   // Get all active restaurants (for administrator multi-store view)
@@ -1743,16 +1748,17 @@ export class DashboardService {
   }
 
   // Execution overview for multiple restaurants (admin/regional manager)
+  // Returns brand-grouped data with visit counts and sentiment
   async getMultiExecutionSummary(date: string, managedIds: string[] | null) {
     const restaurants = await this.getVisibleRestaurants(managedIds);
     if (restaurants.length === 0) {
-      return { restaurants: [], summary: { reviewed_count: 0, total_count: 0, total_pending: 0 } };
+      return { brands: [], restaurants: [], summary: { reviewed_count: 0, total_count: 0, total_pending: 0 } };
     }
 
     const ids = restaurants.map(r => r.id);
     const client = this.supabase.getClient();
 
-    const [reviewResult, pendingResult] = await Promise.all([
+    const [reviewResult, pendingResult, visitsResult] = await Promise.all([
       client.from('lingtin_meeting_records')
         .select('restaurant_id')
         .in('restaurant_id', ids)
@@ -1762,6 +1768,12 @@ export class DashboardService {
         .select('restaurant_id')
         .in('restaurant_id', ids)
         .eq('status', 'pending'),
+      client.from('lingtin_visit_records')
+        .select('restaurant_id, sentiment_score')
+        .in('restaurant_id', ids)
+        .gte('visit_date', date)
+        .lte('visit_date', date)
+        .eq('status', 'processed'),
     ]);
 
     const reviewedSet = new Set((reviewResult.data || []).map(r => r.restaurant_id));
@@ -1769,20 +1781,78 @@ export class DashboardService {
     for (const item of (pendingResult.data || [])) {
       pendingByRestaurant.set(item.restaurant_id, (pendingByRestaurant.get(item.restaurant_id) || 0) + 1);
     }
+    // Visit counts and avg sentiment per restaurant
+    const visitsByRestaurant = new Map<string, number>();
+    const sentimentByRestaurant = new Map<string, number[]>();
+    for (const v of (visitsResult.data || [])) {
+      visitsByRestaurant.set(v.restaurant_id, (visitsByRestaurant.get(v.restaurant_id) || 0) + 1);
+      if (v.sentiment_score != null) {
+        const scores = sentimentByRestaurant.get(v.restaurant_id) || [];
+        scores.push(v.sentiment_score);
+        sentimentByRestaurant.set(v.restaurant_id, scores);
+      }
+    }
 
-    const result = restaurants.map(r => ({
+    // Build per-restaurant result with brand info
+    const allRestaurants = restaurants.map(r => {
+      const scores = sentimentByRestaurant.get(r.id) || [];
+      const avgSentiment = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+      // Short name: remove brand prefix from restaurant_name
+      const shortName = r.brand_name && r.restaurant_name.startsWith(r.brand_name)
+        ? r.restaurant_name.slice(r.brand_name.length)
+        : r.restaurant_name;
+      return {
+        id: r.id,
+        name: shortName,
+        full_name: r.restaurant_name,
+        brand_id: r.brand_id,
+        brand_name: r.brand_name,
+        review_done: reviewedSet.has(r.id),
+        pending_actions: pendingByRestaurant.get(r.id) || 0,
+        visit_count: visitsByRestaurant.get(r.id) || 0,
+        avg_sentiment: avgSentiment,
+      };
+    });
+
+    // Group by brand
+    const brandMap = new Map<number | null, typeof allRestaurants>();
+    for (const r of allRestaurants) {
+      const key = r.brand_id;
+      const group = brandMap.get(key) || [];
+      group.push(r);
+      brandMap.set(key, group);
+    }
+
+    const brands = Array.from(brandMap.entries()).map(([brandId, rests]) => {
+      const brandName = rests[0]?.brand_name || '其他';
+      const reviewed = rests.filter(r => r.review_done).length;
+      return {
+        brand_id: brandId,
+        brand_name: brandName,
+        restaurants: rests,
+        summary: {
+          reviewed_count: reviewed,
+          total_count: rests.length,
+          total_pending: rests.reduce((s, r) => s + r.pending_actions, 0),
+        },
+      };
+    });
+
+    // Flat restaurants list for backward compat
+    const flatResult = allRestaurants.map(r => ({
       id: r.id,
-      name: r.restaurant_name,
-      review_done: reviewedSet.has(r.id),
-      pending_actions: pendingByRestaurant.get(r.id) || 0,
+      name: r.full_name,
+      review_done: r.review_done,
+      pending_actions: r.pending_actions,
     }));
 
     return {
-      restaurants: result,
+      brands,
+      restaurants: flatResult,
       summary: {
-        reviewed_count: result.filter(r => r.review_done).length,
-        total_count: result.length,
-        total_pending: result.reduce((sum, r) => sum + r.pending_actions, 0),
+        reviewed_count: allRestaurants.filter(r => r.review_done).length,
+        total_count: allRestaurants.length,
+        total_pending: allRestaurants.reduce((sum, r) => sum + r.pending_actions, 0),
       },
     };
   }
