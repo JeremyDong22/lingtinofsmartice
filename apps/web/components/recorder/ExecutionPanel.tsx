@@ -5,9 +5,9 @@
 
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
-import { Clock, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
+import { Clock, CheckCircle } from 'lucide-react';
 import { useT } from '@/lib/i18n';
-import { getChinaToday } from '@/lib/date-utils';
+import { getChinaYesterday } from '@/lib/date-utils';
 
 interface ExecutionSummary {
   review_done: boolean;
@@ -22,10 +22,10 @@ interface ExecutionPanelProps {
 export function ExecutionPanel({ restaurantId, onGoReview }: ExecutionPanelProps) {
   const { t } = useT();
   const router = useRouter();
-  const today = getChinaToday();
+  const yesterday = getChinaYesterday();
 
   const { data } = useSWR<ExecutionSummary>(
-    restaurantId ? `/api/dashboard/execution-summary?restaurant_id=${restaurantId}&date=${today}` : null,
+    restaurantId ? `/api/dashboard/execution-summary?restaurant_id=${restaurantId}&date=${yesterday}` : null,
   );
 
   if (!data) return null;
@@ -33,11 +33,12 @@ export function ExecutionPanel({ restaurantId, onGoReview }: ExecutionPanelProps
   const { review_done, pending_actions } = data;
   const allDone = review_done && pending_actions === 0;
 
+  // Hide panel when everything is done
+  if (allDone) return null;
+
   return (
     <div className="mb-4">
-      <div className={`rounded-2xl border ${
-        allDone ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
-      } overflow-hidden`}>
+      <div className="rounded-2xl border bg-white border-gray-200 overflow-hidden">
         <div className="grid grid-cols-2 divide-x divide-gray-200">
           {/* Review status */}
           <button
@@ -55,11 +56,11 @@ export function ExecutionPanel({ restaurantId, onGoReview }: ExecutionPanelProps
               <Clock className="w-5 h-5 text-amber-500 flex-shrink-0" />
             )}
             <div className="min-w-0">
-              <div className="text-xs text-gray-500">{t('execution.todayReview')}</div>
+              <div className="text-xs text-gray-500">{t('execution.yesterdayReview')}</div>
               <div className={`text-sm font-medium ${
                 review_done ? 'text-green-600' : 'text-amber-600'
               }`}>
-                {review_done ? t('execution.done') : t('execution.goRecord')}
+                {review_done ? t('execution.done') : t('execution.goReview')}
               </div>
             </div>
           </button>

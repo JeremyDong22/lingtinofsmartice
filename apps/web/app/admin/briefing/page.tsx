@@ -1,11 +1,10 @@
-// Admin Overview Page - Collapsible store list with embedded problems + review data
-// v3.0 - Redesign: fold problem cards into per-store collapsible rows, coverage → review completion
+// Admin Overview Page - Greeting + 3-level ExecutionStatus + Metrics + Benchmark
+// v4.0 - Redesign: unified brand→store→problem expandable replaces old store list
 
 'use client';
 
-import { useRef, useState, useCallback, Fragment } from 'react';
-import { Check, X, CheckCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRef, useState, useCallback } from 'react';
+import { CheckCircle } from 'lucide-react';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { useManagedScope } from '@/hooks/useManagedScope';
@@ -73,6 +72,27 @@ interface OverviewResponse {
   recent_keywords: string[];
 }
 
+interface ExecutionOverview {
+  brands: Array<{
+    brand_id: number | null;
+    brand_name: string;
+    restaurants: Array<{
+      id: string;
+      name: string;
+      full_name: string;
+      brand_id: number | null;
+      brand_name: string | null;
+      review_done: boolean;
+      pending_actions: number;
+      visit_count: number;
+      avg_sentiment: number | null;
+    }>;
+    summary: { reviewed_count: number; total_count: number; total_pending: number };
+  }>;
+  restaurants: Array<{ id: string; name: string; review_done: boolean; pending_actions: number }>;
+  summary: { reviewed_count: number; total_count: number; total_pending: number };
+}
+
 function getSatisfactionDisplay(score: number | null): { color: string; bg: string; label: string } {
   if (score === null) return { color: 'text-gray-400', bg: 'bg-gray-100', label: 'none' };
   if (score >= 70) return { color: 'text-green-600', bg: 'bg-green-100', label: 'positive' };
@@ -83,7 +103,6 @@ function getSatisfactionDisplay(score: number | null): { color: string; bg: stri
 export default function AdminBriefingPage() {
   const { user } = useAuth();
   const { isScoped, managedIdsParam, storeCount } = useManagedScope();
-  const router = useRouter();
   const { t, locale } = useT();
   const adminPresets = useAdminPresets();
 
@@ -121,22 +140,6 @@ export default function AdminBriefingPage() {
     [playingKey, stopAudio],
   );
 
-  // Expanded store IDs
-  const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set());
-  const toggleStore = (id: string) => {
-    setExpandedStores(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        // Stop audio when collapsing a store row
-        stopAudio();
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
   // Fetch briefing data (scoped by managed restaurants)
   const { data, isLoading } = useSWR<BriefingResponse>(`/api/dashboard/briefing?${dateRangeParams(dateRange)}${managedIdsParam}`);
   // Fetch overview data (keywords + store grid)
@@ -147,10 +150,9 @@ export default function AdminBriefingPage() {
   }>(`/api/dashboard/customer-profile?${dateRangeParams(dateRange)}${managedIdsParam}`);
 
   // Fetch execution overview (always yesterday, independent of date picker)
-  const { data: executionData } = useSWR<{
-    restaurants: Array<{ id: string; name: string; review_done: boolean; pending_actions: number }>;
-    summary: { reviewed_count: number; total_count: number; total_pending: number };
-  }>(`/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`);
+  const { data: executionData } = useSWR<ExecutionOverview>(
+    `/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`
+  );
 
   const userName = user?.employeeName || user?.username || (locale === 'en' ? 'there' : '您');
   const greetingMap: Record<string, string> = {
@@ -165,26 +167,6 @@ export default function AdminBriefingPage() {
   const avgReviewCompletion = data?.avg_review_completion ?? 0;
 
   const summary = overviewData?.summary;
-  const restaurants = overviewData?.restaurants || [];
-
-  // Group problems by restaurant
-  const problemsByRestaurant = new Map<string, BriefingProblem[]>();
-  for (const p of problems) {
-    const existing = problemsByRestaurant.get(p.restaurantId) || [];
-    existing.push(p);
-    problemsByRestaurant.set(p.restaurantId, existing);
-  }
-
-  // Build sorted store list: by problem severity + count, then sentiment
-  const sortedRestaurants = [...restaurants].sort((a, b) => {
-    const aProblems = problemsByRestaurant.get(a.id) || [];
-    const bProblems = problemsByRestaurant.get(b.id) || [];
-    const aRedCount = aProblems.filter(p => p.severity === 'red').length;
-    const bRedCount = bProblems.filter(p => p.severity === 'red').length;
-    if (aRedCount !== bRedCount) return bRedCount - aRedCount;
-    if (aProblems.length !== bProblems.length) return bProblems.length - aProblems.length;
-    return (a.avg_sentiment ?? 100) - (b.avg_sentiment ?? 100);
-  });
 
   return (
     <div className="min-h-screen">
@@ -210,9 +192,6 @@ export default function AdminBriefingPage() {
       </header>
 
       <div className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
-        {/* Execution Status (always yesterday) */}
-        <ExecutionStatus data={executionData} />
-
         {/* Greeting banner */}
         <div>
           <h2 className="text-xl font-bold text-gray-900">
@@ -229,6 +208,15 @@ export default function AdminBriefingPage() {
             </p>
           )}
         </div>
+
+        {/* 3-level ExecutionStatus (brand → store → problems) */}
+        <ExecutionStatus
+          executionData={executionData}
+          problems={problems}
+          overviewData={overviewData}
+          onAudioToggle={handleAudioToggle}
+          playingKey={playingKey}
+        />
 
         {/* Compact metrics grid (2×2) */}
         {!isLoading && (
@@ -304,147 +292,8 @@ export default function AdminBriefingPage() {
           </div>
         )}
 
-        {/* Collapsible store list */}
-        {!isLoading && sortedRestaurants.length > 0 && (
-          <div className="space-y-2">
-            {sortedRestaurants.map((rest) => {
-              const restProblems = problemsByRestaurant.get(rest.id) || [];
-              const hasRed = restProblems.some(p => p.severity === 'red');
-              const hasYellow = restProblems.some(p => p.severity === 'yellow');
-              const isExpanded = expandedStores.has(rest.id);
-              const sentiment = getSatisfactionDisplay(rest.avg_sentiment);
-              const hasReviewed = rest.review_completion != null && rest.review_completion > 0;
-              const ReviewIcon = hasReviewed ? Check : X;
-
-              return (
-                <div key={rest.id} className="glass-card rounded-2xl overflow-hidden">
-                  {/* Store summary row — tappable */}
-                  <div
-                    className="px-4 py-3 flex items-center gap-3 cursor-pointer active:bg-gray-50 transition-colors"
-                    onClick={() => toggleStore(rest.id)}
-                  >
-                    {/* Status dot */}
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      hasRed ? 'bg-red-500' : hasYellow ? 'bg-amber-400' : 'bg-green-500'
-                    }`} />
-
-                    {/* Store info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-900 truncate">{rest.name}</span>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                        <span>{t('briefing.visits', rest.visit_count)}</span>
-                        <span>·</span>
-                        <span className={sentiment.color}>{rest.avg_sentiment != null ? t('briefing.score', Math.round(rest.avg_sentiment)) : '--'}</span>
-                        <span>·</span>
-                        <span className={`flex items-center gap-0.5 ${hasReviewed ? 'text-green-600' : 'text-red-500'}`}>{t('briefing.review')}<ReviewIcon className="w-3 h-3" /></span>
-                        {restProblems.length > 0 && (
-                          <>
-                            <span>·</span>
-                            <span className="text-red-600">{t('briefing.problems', restProblems.length)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Expand chevron */}
-                    <svg
-                      className={`w-5 h-5 text-gray-300 transition-transform duration-200 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-
-                  {/* Expanded content */}
-                  {isExpanded && (
-                    <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
-                      {/* Problems section */}
-                      {restProblems.length > 0 && (
-                        <div className="space-y-3">
-                          {restProblems.map((problem, idx) => (
-                            <ProblemCard
-                              key={`${problem.category}-${idx}`}
-                              problem={problem}
-                              playingKey={playingKey}
-                              onAudioToggle={handleAudioToggle}
-                              compact
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Review record section */}
-                      {rest.latest_review ? (
-                        <div className="bg-primary-50/50 border border-primary-100 rounded-xl p-3">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-                            <span className="text-xs font-medium text-primary-700">{t('briefing.recentReview')}</span>
-                          </div>
-                          {rest.latest_review.ai_summary && (
-                            <p className="text-sm text-gray-700 leading-relaxed">{rest.latest_review.ai_summary}</p>
-                          )}
-                          {Array.isArray(rest.latest_review.action_items) && rest.latest_review.action_items.length > 0 && (
-                            <div className="mt-2">
-                              <div className="text-[10px] text-gray-400 mb-1">{t('briefing.actionItems')}</div>
-                              <ul className="space-y-1">
-                                {rest.latest_review.action_items.map((item: unknown, i: number) => {
-                                  const text = typeof item === 'string' ? item
-                                    : item && typeof item === 'object' ? (item as Record<string, string>).what || (item as Record<string, string>).text || JSON.stringify(item)
-                                    : String(item);
-                                  return (
-                                    <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
-                                      <span className="text-primary-400 mt-0.5">·</span>
-                                      <span>{text}</span>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          )}
-                          {Array.isArray(rest.latest_review.key_decisions) && rest.latest_review.key_decisions.length > 0 && (
-                            <div className="mt-2">
-                              <div className="text-[10px] text-gray-400 mb-1">{t('briefing.keyDecisions')}</div>
-                              <ul className="space-y-1">
-                                {rest.latest_review.key_decisions.map((d: unknown, i: number) => {
-                                  const text = typeof d === 'string' ? d
-                                    : d && typeof d === 'object' ? (d as Record<string, string>).decision || (d as Record<string, string>).text || JSON.stringify(d)
-                                    : String(d);
-                                  return (
-                                    <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
-                                      <span className="text-green-400 mt-0.5">·</span>
-                                      <span>{text}</span>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-center py-2 text-xs text-gray-400">
-                          {t('briefing.noMeeting')}
-                        </div>
-                      )}
-
-                      {/* Navigate to detail */}
-                      <button
-                        onClick={() => router.push(`/admin/restaurant-detail?id=${rest.id}`)}
-                        className="w-full text-center text-xs text-primary-600 hover:text-primary-700 py-3 transition-colors"
-                      >
-                        {t('briefing.viewDetail')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Empty state - all healthy */}
-        {!isLoading && sortedRestaurants.length === 0 && restaurantCount > 0 && (
+        {/* Empty state - all healthy (only when no execution data either) */}
+        {!isLoading && !executionData && restaurantCount > 0 && (
           <div className="glass-card rounded-xl p-6 text-center">
             <div className="flex justify-center mb-3"><CheckCircle className="w-10 h-10 text-green-400" /></div>
             <h3 className="text-lg font-semibold text-gray-900 mb-1">{t('briefing.allGood')}</h3>
@@ -462,135 +311,6 @@ export default function AdminBriefingPage() {
         {/* Bottom spacing for nav */}
         <div className="h-4" />
       </div>
-    </div>
-  );
-}
-
-// --- Inline Q&A conversation renderer ---
-function QAConversation({ questions, answers }: { questions: string[]; answers: string[] }) {
-  const { t } = useT();
-  const maxLen = Math.max(questions.length, answers.length);
-  if (maxLen === 0) return null;
-  return (
-    <div className="space-y-1.5">
-      {Array.from({ length: maxLen }).map((_, j) => (
-        <Fragment key={j}>
-          {questions[j] && (
-            <div className="flex gap-2">
-              <span className="text-[10px] text-gray-400 mt-0.5 flex-shrink-0 w-7 text-right">{t('briefing.manager')}</span>
-              <p className="text-xs text-gray-500 flex-1">{questions[j]}</p>
-            </div>
-          )}
-          {answers[j] && (
-            <div className="flex gap-2">
-              <span className="text-[10px] text-primary-500 mt-0.5 flex-shrink-0 w-7 text-right">{t('briefing.customer')}</span>
-              <p className="text-xs text-gray-800 flex-1">{answers[j]}</p>
-            </div>
-          )}
-        </Fragment>
-      ))}
-    </div>
-  );
-}
-
-// --- Problem Card Component (also used in-line within store rows) ---
-function ProblemCard({
-  problem,
-  playingKey,
-  onAudioToggle,
-  compact,
-}: {
-  problem: BriefingProblem;
-  playingKey: string | null;
-  onAudioToggle: (key: string, url: string) => void;
-  compact?: boolean;
-}) {
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const severityColor = problem.severity === 'red' ? 'bg-red-500' : 'bg-amber-400';
-  const severityBg = problem.severity === 'red' ? 'bg-red-50/50 border-red-100' : 'bg-amber-50/50 border-amber-100';
-
-  return (
-    <div className={`rounded-xl overflow-hidden ${compact ? `border ${severityBg}` : 'bg-white shadow-sm'}`}>
-      {/* Header */}
-      <div className={`px-3 pt-3 pb-1.5`}>
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className={`w-1.5 h-1.5 rounded-full ${severityColor} flex-shrink-0`} />
-          <h3 className="text-sm font-semibold text-gray-900 leading-snug">
-            {problem.title}
-          </h3>
-        </div>
-        {problem.metric && (
-          <p className="text-xs text-gray-400 ml-3.5">{problem.metric}</p>
-        )}
-      </div>
-
-      {/* Evidence list */}
-      {problem.evidence.length > 0 && (
-        <div className="px-1.5 pb-2">
-          {problem.evidence.map((ev, i) => {
-            const isExpanded = expandedIdx === i;
-            const hasQA = (ev.managerQuestions?.length ?? 0) > 0 || (ev.customerAnswers?.length ?? 0) > 0;
-            const audioKey = `${problem.restaurantId}-${problem.category}-${i}`;
-            return (
-              <div
-                key={i}
-                className={`mx-0 rounded-lg transition-colors ${isExpanded ? 'bg-white/60' : ''}`}
-              >
-                {/* Evidence row */}
-                <div
-                  className={`flex items-center gap-2 px-2.5 py-2 ${hasQA ? 'cursor-pointer' : ''}`}
-                  onClick={() => hasQA && setExpandedIdx(isExpanded ? null : i)}
-                >
-                  <p className="text-sm text-gray-700 flex-1 leading-relaxed">
-                    &ldquo;{ev.text}&rdquo;
-                  </p>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                      {ev.tableId}
-                    </span>
-                    {ev.audioUrl && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onAudioToggle(audioKey, ev.audioUrl!); }}
-                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                          playingKey === audioKey
-                            ? 'bg-primary-100 text-primary-600'
-                            : 'bg-gray-100 text-gray-600 hover:text-primary-600 hover:bg-primary-50'
-                        }`}
-                      >
-                        {playingKey === audioKey ? (
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
-                        ) : (
-                          <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                        )}
-                      </button>
-                    )}
-                    {hasQA && (
-                      <svg
-                        className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    )}
-                  </div>
-                </div>
-
-                {/* Expanded Q&A */}
-                {isExpanded && (
-                  <div className="px-2.5 pb-2.5 pt-0">
-                    <div className="border-l-2 border-primary-200 pl-3 py-1.5">
-                      <QAConversation
-                        questions={ev.managerQuestions ?? []}
-                        answers={ev.customerAnswers ?? []}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
