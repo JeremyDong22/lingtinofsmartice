@@ -391,15 +391,15 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                       </div>
                     );
                   })}
-                  {sugTotal > INITIAL_SHOW && !sugExpanded && (
+                  {sugTotal > INITIAL_SHOW && (
                     <>
                       <div className="mx-4 border-t border-gray-100" />
                       <button
                         className="w-full py-2.5 text-xs text-purple-500 font-medium flex items-center justify-center gap-1"
                         onClick={() => toggleCategory(sugCatKey)}
                       >
-                        {t('insights.showAllSuggestions', sugTotal)}
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        {sugExpanded ? t('insights.collapse') : t('insights.showAllSuggestions', sugTotal)}
+                        <ChevronDown expanded={sugExpanded} />
                       </button>
                     </>
                   )}
@@ -452,15 +452,15 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                       </div>
                     );
                   })}
-                  {negTotal > INITIAL_SHOW && !negExpanded && (
+                  {negTotal > INITIAL_SHOW && (
                     <>
                       <div className="mx-4 border-t border-gray-100" />
                       <button
                         className="w-full py-2.5 text-xs text-amber-500 font-medium flex items-center justify-center gap-1"
                         onClick={() => toggleCategory(negCatKey)}
                       >
-                        {t('insights.showAll', negTotal)}
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        {negExpanded ? t('insights.collapse') : t('insights.showAll', negTotal)}
+                        <ChevronDown expanded={negExpanded} />
                       </button>
                     </>
                   )}
@@ -508,15 +508,15 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
                           </div>
                         );
                       })}
-                      {posTotal > INITIAL_SHOW && !posShowAll && (
+                      {posTotal > INITIAL_SHOW && (
                         <>
                           <div className="mx-4 border-t border-gray-100" />
                           <button
                             className="w-full py-2.5 text-xs text-green-500 font-medium flex items-center justify-center gap-1"
                             onClick={(e) => { e.stopPropagation(); toggleCategory(posShowAllKey); }}
                           >
-                            {t('insights.showAll', posTotal)}
-                            <ChevronRight className="w-3.5 h-3.5" />
+                            {posShowAll ? t('insights.collapse') : t('insights.showAll', posTotal)}
+                            <ChevronDown expanded={posShowAll} />
                           </button>
                         </>
                       )}
