@@ -286,6 +286,7 @@ const dict: Record<Locale, Record<string, string>> = {
     'insights.tableCount': '{0} 桌',
     'insights.showAll': '查看全部 {0} 条',
     'insights.showAllSuggestions': '查看全部 {0} 条建议',
+    'insights.collapse': '收起',
     // Execution Panel
     'execution.todayReview': '今日复盘',
     'execution.yesterdayReview': '昨日复盘',
@@ -577,6 +578,7 @@ const dict: Record<Locale, Record<string, string>> = {
     'insights.tableCount': '{0} tables',
     'insights.showAll': 'Show all {0}',
     'insights.showAllSuggestions': 'Show all {0} suggestions',
+    'insights.collapse': 'Collapse',
     // Execution Panel
     'execution.todayReview': 'Today\'s Review',
     'execution.yesterdayReview': 'Yesterday\'s Review',
