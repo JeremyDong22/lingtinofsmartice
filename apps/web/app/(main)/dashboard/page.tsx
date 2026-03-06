@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +13,7 @@ import { ActionItemsCard } from '@/components/dashboard/ActionItemsCard';
 import { getChinaToday, singleDay, dateRangeParams, isMultiDay, shiftDate } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, useStorePresets } from '@/components/shared/DatePicker';
-import { Timer, Meh, Home, SmilePlus, UtensilsCrossed, CheckCircle } from 'lucide-react';
+import { FeedbackSection } from '@/components/dashboard/FeedbackSection';
 import { useT } from '@/lib/i18n';
 
 // Types for API responses
@@ -89,17 +89,6 @@ interface HighlightsResponse {
   questions: ManagerQuestion[];
 }
 
-// Detect feedback category icon from text
-function DetectCategoryIcon({ text }: { text: string }) {
-  const lower = text.toLowerCase();
-  const cls = "w-4 h-4 inline-block align-text-bottom mr-0.5";
-  if (/慢|等了|催|久|速度|出菜/.test(lower)) return <Timer className={cls} />;
-  if (/态度|不耐烦|冷淡|不理|脸色/.test(lower)) return <Meh className={cls} />;
-  if (/环境|吵|脏|热|冷|味道大|苍蝇/.test(lower)) return <Home className={cls} />;
-  if (/服务/.test(lower)) return <SmilePlus className={cls} />;
-  return <UtensilsCrossed className={cls} />;
-}
-
 // Classify speech questions as good or needs-improvement
 function classifySpeech(text: string): 'good' | 'improve' {
   // Too vague or open-ended → needs improvement
@@ -173,48 +162,6 @@ export default function DashboardPage() {
   const { t } = useT();
   const storePresets = useStorePresets();
   const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaToday()));
-  // State for feedback popover
-  const [selectedFeedback, setSelectedFeedback] = useState<{
-    feedback: SentimentFeedback;
-    type: 'positive' | 'negative';
-    rect: DOMRect;
-  } | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  // Audio playback state for feedback popover
-  const [playingVisitId, setPlayingVisitId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const stopAudio = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    setPlayingVisitId(null);
-  }, []);
-
-  const handleAudioToggle = useCallback((visitId: string, audioUrl: string) => {
-    // If same audio is playing, pause it
-    if (playingVisitId === visitId) {
-      stopAudio();
-      return;
-    }
-    // Stop any currently playing audio
-    stopAudio();
-    // Play new audio
-    const audio = new Audio(audioUrl);
-    audio.onended = () => {
-      setPlayingVisitId(null);
-      audioRef.current = null;
-    };
-    audio.onerror = () => {
-      setPlayingVisitId(null);
-      audioRef.current = null;
-    };
-    audio.play();
-    audioRef.current = audio;
-    setPlayingVisitId(visitId);
-  }, [playingVisitId, stopAudio]);
-
   // Get user's restaurant ID from auth context
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
@@ -268,18 +215,6 @@ export default function DashboardPage() {
   const suggestions = suggestionsData?.suggestions ?? [];
   const kitchenActions = (kitchenActionsData?.actions ?? []).filter(a => a.category === 'dish_quality');
   const loading = coverageLoading || sentimentLoading || highlightsLoading;
-
-  // Close popover when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        stopAudio();
-        setSelectedFeedback(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [stopAudio]);
 
   return (
     <div className="min-h-screen">
@@ -393,111 +328,13 @@ export default function DashboardPage() {
           ) : null}
         </div>
 
-        {/* Customer Feedback - Multi-dimension (problems first, then highlights) */}
-        <div className="glass-card rounded-2xl p-4">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">{t('dashboard.customerFeedback')}</h2>
-          {sentiment && (sentiment.negative_feedbacks?.length > 0 || sentiment.positive_feedbacks?.length > 0) ? (
-            <>
-              {/* Problems section */}
-              {sentiment.negative_feedbacks?.length > 0 && (
-                <div className="mb-4">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                    <span className="text-xs font-semibold text-gray-600">{t('dashboard.needsImprovement')}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {sentiment.negative_feedbacks.map((fb, i) => {
-                      const icon = <DetectCategoryIcon text={fb.text} />;
-                      return (
-                        <button
-                          key={i}
-                          onClick={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setSelectedFeedback({ feedback: fb, type: 'negative', rect });
-                          }}
-                          className="w-full text-left bg-red-50/60 rounded-lg p-3 hover:bg-red-50 transition-colors"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-800">
-                              {icon} {fb.text}
-                            </span>
-                            <span className="flex items-center gap-1 text-xs font-semibold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">
-                              <span className={`w-1.5 h-1.5 rounded-full ${fb.count >= 3 ? 'bg-red-500' : 'bg-amber-400'}`} />
-                              {t('dashboard.tables', fb.count)}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Positive highlights */}
-              {sentiment.positive_feedbacks?.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                    <span className="text-xs font-semibold text-gray-600">{t('dashboard.keepUp')}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {sentiment.positive_feedbacks.map((fb, i) => {
-                      const icon = <DetectCategoryIcon text={fb.text} />;
-                      return (
-                        <button
-                          key={i}
-                          onClick={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setSelectedFeedback({ feedback: fb, type: 'positive', rect });
-                          }}
-                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
-                        >
-                          {icon} {fb.text} {fb.count > 1 && <span className="ml-1 text-green-500">{t('dashboard.tables', fb.count)}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* No negative feedbacks but has positive */}
-              {(!sentiment.negative_feedbacks || sentiment.negative_feedbacks.length === 0) && (
-                <div className="flex items-center gap-2 text-green-600 mb-3 bg-green-50 rounded-lg p-3">
-                  <CheckCircle className="w-4 h-4" />
-                  <span className="text-sm font-medium">{t('dashboard.allClear')}</span>
-                </div>
-              )}
-
-              {/* Customer suggestions */}
-              {suggestions.length > 0 && (
-                <div className="mt-4">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                    <span className="text-xs font-semibold text-gray-600">{t('dashboard.suggestions')}</span>
-                    <span className="text-xs text-gray-400 ml-auto">{t('dashboard.last7days')}</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {suggestions.map((item, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between bg-purple-50/60 rounded-lg px-3 py-2"
-                      >
-                        <span className="text-sm text-gray-800">&ldquo;{item.text}&rdquo;</span>
-                        {item.count > 1 && (
-                          <span className="flex-shrink-0 text-xs font-semibold text-purple-600 ml-2">
-                            ×{item.count}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : !loading ? (
-            <div className="text-center py-4 text-gray-400">{t('dashboard.noFeedback')}</div>
-          ) : null}
-        </div>
+        {/* Customer Feedback - aligned with admin insights style */}
+        <FeedbackSection
+          negativeFeedbacks={sentiment?.negative_feedbacks ?? []}
+          positiveFeedbacks={sentiment?.positive_feedbacks ?? []}
+          suggestions={suggestions}
+          loading={loading}
+        />
 
         {/* Manager Questions - 话术使用 (split into good/bad) */}
         <div className="glass-card rounded-2xl p-4">
@@ -579,125 +416,6 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* Feedback Conversation Popover */}
-      {selectedFeedback && (() => {
-        // Shift strategy: keep popover within viewport with 16px padding
-        const popoverWidth = 320; // w-80 = 320px
-        const padding = 16;
-        const viewportWidth = window.innerWidth;
-
-        // Try to center below the bubble, then shift to stay in bounds
-        const bubbleCenter = selectedFeedback.rect.left + selectedFeedback.rect.width / 2;
-        let left = bubbleCenter - popoverWidth / 2;
-
-        // Shift right if overflowing left edge
-        if (left < padding) {
-          left = padding;
-        }
-        // Shift left if overflowing right edge
-        if (left + popoverWidth > viewportWidth - padding) {
-          left = viewportWidth - popoverWidth - padding;
-        }
-
-        return (
-          <div
-            ref={popoverRef}
-            className="fixed z-50 glass-card rounded-2xl p-4 w-80 shadow-xl animate-in fade-in zoom-in-95 duration-200"
-            style={{
-              top: Math.min(selectedFeedback.rect.bottom + 8, window.innerHeight - 300),
-              left,
-            }}
-          >
-          {/* Close button */}
-          <button
-            onClick={() => { stopAudio(); setSelectedFeedback(null); }}
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          {/* Header with feedback text highlighted */}
-          <div className={`inline-block px-2 py-1 rounded-full text-sm font-medium mb-3 ${
-            selectedFeedback.type === 'positive'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-700'
-          }`}>
-            {selectedFeedback.feedback.text}
-          </div>
-
-          {/* Conversation contexts */}
-          {selectedFeedback.feedback.contexts && selectedFeedback.feedback.contexts.length > 0 ? (
-            <div className="space-y-3 max-h-60 overflow-y-auto">
-              {selectedFeedback.feedback.contexts.map((ctx, idx) => (
-                <div key={idx} className="border-l-2 border-primary-200 pl-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{t('dashboard.tableId', ctx.tableId)}</span>
-                    {ctx.audioUrl && (
-                      <button
-                        onClick={() => handleAudioToggle(ctx.visitId, ctx.audioUrl!)}
-                        className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                      >
-                        {playingVisitId === ctx.visitId ? (
-                          <svg className="w-3 h-3 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
-                        ) : (
-                          <svg className="w-4 h-4 text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                        )}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Q&A conversation */}
-                  {ctx.managerQuestions.length > 0 && (
-                    <div className="flex gap-2 mb-1">
-                      <span className="w-7 text-right text-[10px] text-gray-400 pt-0.5 flex-shrink-0">{t('dashboard.managerRole')}</span>
-                      <p className="text-sm text-gray-600">{ctx.managerQuestions.join(' ')}</p>
-                    </div>
-                  )}
-                  {ctx.customerAnswers.length > 0 && (
-                    <div className="flex gap-2">
-                      <span className="w-7 text-right text-[10px] text-gray-400 pt-0.5 flex-shrink-0">{t('dashboard.customerRole')}</span>
-                      <p className="text-sm text-gray-800">
-                        {ctx.customerAnswers.map((answer, ansIdx) => {
-                          const keyword = selectedFeedback.feedback.text;
-                          const parts = answer.split(new RegExp(`(${keyword})`, 'gi'));
-                          return (
-                            <span key={ansIdx}>
-                              {parts.map((part, partIdx) =>
-                                part.toLowerCase() === keyword.toLowerCase() ? (
-                                  <mark
-                                    key={partIdx}
-                                    className={`px-0.5 rounded ${
-                                      selectedFeedback.type === 'positive'
-                                        ? 'bg-green-200'
-                                        : 'bg-red-200'
-                                    }`}
-                                  >
-                                    {part}
-                                  </mark>
-                                ) : (
-                                  <span key={partIdx}>{part}</span>
-                                )
-                              )}
-                              {ansIdx < ctx.customerAnswers.length - 1 && ' '}
-                            </span>
-                          );
-                        })}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-sm text-gray-400 text-center py-2">
-              {t('dashboard.noDialogue')}
-            </div>
-          )}
-        </div>
-        );
-      })()}
     </div>
   );
 }
