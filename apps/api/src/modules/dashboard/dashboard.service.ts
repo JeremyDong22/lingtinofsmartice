@@ -462,6 +462,7 @@ export class DashboardService {
         by_restaurant: [
           {
             restaurant_id: 'mock-rest-1', restaurant_name: '望京旗舰店',
+            brand_id: 1, brand_name: '品牌A',
             positive_count: 7, negative_count: 2,
             positive_feedbacks: [
               { text: '味道很好', count: 4, contexts: [] },
@@ -473,6 +474,7 @@ export class DashboardService {
           },
           {
             restaurant_id: 'mock-rest-2', restaurant_name: '三里屯店',
+            brand_id: 1, brand_name: '品牌A',
             positive_count: 5, negative_count: 1,
             positive_feedbacks: [
               { text: '环境不错', count: 2, contexts: [] },
@@ -576,6 +578,8 @@ export class DashboardService {
     let byRestaurantResult: {
       restaurant_id: string;
       restaurant_name: string;
+      brand_id: number | null;
+      brand_name: string | null;
       positive_count: number;
       negative_count: number;
       positive_feedbacks: { text: string; count: number; contexts: FeedbackWithContext[] }[];
@@ -584,6 +588,7 @@ export class DashboardService {
 
     if (restaurantId === 'all' && restaurants) {
       const restNameMap = new Map(restaurants.map(r => [r.id, r.restaurant_name]));
+      const restBrandMap = new Map(restaurants.map(r => [r.id, { brand_id: r.brand_id, brand_name: r.brand_name }]));
 
       const restBuckets = new Map<string, { positive: FeedbackWithContext[]; negative: FeedbackWithContext[] }>();
       for (const fb of positiveFeedbacks) {
@@ -601,6 +606,7 @@ export class DashboardService {
         .map(([restId, bucket]) => ({
           restaurant_id: restId,
           restaurant_name: restNameMap.get(restId) || restId,
+          ...(restBrandMap.get(restId) ?? { brand_id: null, brand_name: null }),
           positive_count: bucket.positive.length,
           negative_count: bucket.negative.length,
           positive_feedbacks: groupFeedbacks(bucket.positive, 6),
@@ -1286,6 +1292,9 @@ export class DashboardService {
     const restMap = restaurants
       ? new Map(restaurants.map(r => [r.id, r.restaurant_name]))
       : new Map<string, string>();
+    const restBrandMap = restaurants
+      ? new Map(restaurants.map(r => [r.id, { brand_id: r.brand_id, brand_name: r.brand_name }]))
+      : new Map<string, { brand_id: number | null; brand_name: string | null }>();
 
     // Collect all suggestion feedbacks
     const suggestionMap = new Map<string, {
@@ -1335,6 +1344,8 @@ export class DashboardService {
     const byRestMap = new Map<string, {
       restaurant_id: string;
       restaurant_name: string;
+      brand_id: number | null;
+      brand_name: string | null;
       suggestions: typeof suggestions;
     }>();
 
@@ -1342,9 +1353,12 @@ export class DashboardService {
       for (const ev of sug.evidence) {
         const rid = ev.restaurantId;
         if (!byRestMap.has(rid)) {
+          const brand = restBrandMap.get(rid);
           byRestMap.set(rid, {
             restaurant_id: rid,
             restaurant_name: ev.restaurantName || restMap.get(rid) || rid,
+            brand_id: brand?.brand_id ?? null,
+            brand_name: brand?.brand_name ?? null,
             suggestions: [],
           });
         }
