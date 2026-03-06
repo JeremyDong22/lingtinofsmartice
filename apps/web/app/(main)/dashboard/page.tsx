@@ -1,11 +1,10 @@
 // Dashboard Page - Business metrics and analytics
-// v3.0 - Product-driven redesign: multi-dimension feedback, speech quality split,
+// v3.0 - Product-driven redesign: multi-dimension feedback,
 //         emotion trend arrows, problem-first layout
 
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -54,13 +53,6 @@ interface SentimentSummary {
   negative_feedbacks: SentimentFeedback[];
 }
 
-interface ManagerQuestion {
-  text: string;
-  table: string;
-  time: string;
-}
-
-
 interface SuggestionItem {
   text: string;
   count: number;
@@ -85,80 +77,7 @@ interface CoverageResponse {
   review_completion?: ReviewCompletion | null;
 }
 
-interface HighlightsResponse {
-  questions: ManagerQuestion[];
-}
-
-// Classify speech questions as good or needs-improvement
-function classifySpeech(text: string): 'good' | 'improve' {
-  // Too vague or open-ended → needs improvement
-  if (/^(还满意吗|满意吗|还好吗|还行吗|有什么建议|有什么意见|可以吗)\?*[？]?$/.test(text.trim())) return 'improve';
-  if (text.length < 6) return 'improve';
-  // Specific and targeted → good
-  if (/怎么样|觉得|口味|速度|推荐|招牌|特色|第几次/.test(text)) return 'good';
-  return 'good'; // default to good if not clearly vague
-}
-
-// Speech quality reasons
-function getSpeechReason(text: string, quality: 'good' | 'improve'): string {
-  if (quality === 'improve') {
-    if (/满意/.test(text)) return '太笼统，顾客只会说"还行"';
-    if (/建议|意见/.test(text)) return '开放式，顾客不知从何答起';
-    return '话术过短，难以引导深度反馈';
-  }
-  if (/怎么样/.test(text)) return '精准定位问题，引出真实反馈';
-  if (/推荐|招牌|特色/.test(text)) return '顾客积极回应，获得有效反馈';
-  if (/速度|上菜/.test(text)) return '定向服务问题，获得直接回答';
-  if (/第几次/.test(text)) return '建立关系，了解客户忠诚度';
-  return '针对性提问，获得有效反馈';
-}
-
-// Speech quality split component
-function SpeechQualitySplit({ questions }: { questions: ManagerQuestion[] }) {
-  const { t } = useT();
-  const good = questions.filter(q => classifySpeech(q.text) === 'good');
-  const improve = questions.filter(q => classifySpeech(q.text) === 'improve');
-
-  return (
-    <div className="space-y-4">
-      {good.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-            <span className="text-xs font-semibold text-gray-600">{t('dashboard.goodExample')}</span>
-          </div>
-          <div className="space-y-2">
-            {good.slice(0, 3).map((q, i) => (
-              <div key={i} className="bg-green-50/60 rounded-lg p-3">
-                <div className="text-sm text-green-800 font-medium">&ldquo;{q.text}&rdquo;</div>
-                <div className="text-xs text-green-600 mt-1">→ {getSpeechReason(q.text, 'good')}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {improve.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            <span className="text-xs font-semibold text-gray-600">{t('dashboard.canImprove')}</span>
-          </div>
-          <div className="space-y-2">
-            {improve.slice(0, 3).map((q, i) => (
-              <div key={i} className="bg-amber-50/60 rounded-lg p-3">
-                <div className="text-sm text-amber-800 font-medium">&ldquo;{q.text}&rdquo;</div>
-                <div className="text-xs text-amber-600 mt-1">→ {getSpeechReason(q.text, 'improve')}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function DashboardPage() {
-  const router = useRouter();
   const { t } = useT();
   const storePresets = useStorePresets();
   const [dateRange, setDateRange] = useState<DateRange>(() => singleDay(getChinaToday()));
@@ -191,9 +110,6 @@ export default function DashboardPage() {
   const { data: yesterdaySentiment } = useSWR<SentimentSummary>(
     yesterdayParams ? `/api/dashboard/sentiment-summary?${yesterdayParams}` : null
   );
-  const { data: highlightsData, isLoading: highlightsLoading } = useSWR<HighlightsResponse>(
-    params ? `/api/dashboard/speech-highlights?${params}` : null
-  );
   const { data: suggestionsData } = useSWR<SuggestionsResponse>(
     restaurantId ? `/api/dashboard/suggestions?restaurant_id=${restaurantId}&days=7` : null
   );
@@ -211,10 +127,9 @@ export default function DashboardPage() {
   const coverage = coverageData ?? { periods: [] };
   const reviewCompletion = coverageData?.review_completion;
   const sentiment = sentimentData ?? null;
-  const managerQuestions = highlightsData?.questions ?? [];
   const suggestions = suggestionsData?.suggestions ?? [];
   const kitchenActions = (kitchenActionsData?.actions ?? []).filter(a => a.category === 'dish_quality');
-  const loading = coverageLoading || sentimentLoading || highlightsLoading;
+  const loading = coverageLoading || sentimentLoading;
 
   return (
     <div className="min-h-screen">
@@ -335,34 +250,6 @@ export default function DashboardPage() {
           suggestions={suggestions}
           loading={loading}
         />
-
-        {/* Manager Questions - 话术使用 (split into good/bad) */}
-        <div className="glass-card rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-gray-700">{t('dashboard.speechUsage')}</h2>
-            <button
-              onClick={() => {
-                const question = '请你获取我们最近的桌台访问的话术并且以专业餐饮经营者的角度，告诉我该如何优化这些话术，以获得更好的效果';
-                router.push(`/chat?q=${encodeURIComponent(question)}`);
-              }}
-              className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95"
-            >
-              <span className="absolute inset-0 animate-shimmer bg-[linear-gradient(110deg,#8b5cf6,45%,#c084fc,55%,#8b5cf6)] bg-[length:200%_100%]" />
-              <span className="relative flex items-center gap-1.5 text-white">
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" strokeLinecap="round" />
-                  <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-                </svg>
-                <span>{t('dashboard.aiOptimize')}</span>
-              </span>
-            </button>
-          </div>
-          {managerQuestions.length > 0 ? (
-            <SpeechQualitySplit questions={managerQuestions} />
-          ) : !loading ? (
-            <div className="text-center py-4 text-gray-400 text-sm">{t('dashboard.noData')}</div>
-          ) : null}
-        </div>
 
         {/* Kitchen Response Section */}
         {kitchenActions.length > 0 && (
