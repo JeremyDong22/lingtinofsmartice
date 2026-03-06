@@ -1,11 +1,11 @@
-// Customer Insights Component - Brand-grouped flat issue layout
-// v3.0.0 - Issues directly visible, grouped by brand, click to expand evidence
+// Customer Insights Component - Brand-grouped, mobile-optimized info hierarchy
+// v4.0.0 - Suggestions first, needs-attention with store distribution, satisfied collapsed
 
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
 import useSWR from 'swr';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, ChevronRight } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import { QAConversation, AudioButton, ChevronDown, useAudioPlayback } from '@/components/shared/FeedbackWidgets';
 
@@ -94,12 +94,19 @@ interface BrandSuggestionItem {
   stores: (StoreRef & { evidence: SuggestionEvidence[] })[];
 }
 
+interface StoreDistribution {
+  restaurant_name: string;
+  count: number;
+}
+
 interface BrandFeedbackGroup {
   brand_id: number | null;
   brand_name: string;
   negatives: BrandFeedbackItem[];
   suggestions: BrandSuggestionItem[];
   positives: BrandFeedbackItem[];
+  negativeStoreDistribution: StoreDistribution[];
+  positiveStoreDistribution: StoreDistribution[];
 }
 
 interface CustomerInsightsProps {
@@ -107,6 +114,8 @@ interface CustomerInsightsProps {
   endDate: string;
   managedIdsParam?: string;
 }
+
+const INITIAL_SHOW = 3;
 
 export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: CustomerInsightsProps) {
   const { t } = useT();
@@ -183,6 +192,9 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
       sugMap: Map<string, BrandSuggestionItem>;
       posMap: Map<string, BrandFeedbackItem>;
       totalNeg: number;
+      // Store-level counts for distribution
+      negByStore: Map<string, { name: string; count: number }>;
+      posByStore: Map<string, { name: string; count: number }>;
     }>();
 
     for (const store of stores) {
@@ -195,12 +207,15 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
           sugMap: new Map(),
           posMap: new Map(),
           totalNeg: 0,
+          negByStore: new Map(),
+          posByStore: new Map(),
         });
       }
       const brand = brandMap.get(bKey)!;
       const storeRef: StoreRef = { restaurant_id: store.restaurant_id, restaurant_name: store.restaurant_name };
 
       // Negatives
+      let storeNegCount = 0;
       for (const fb of store.negative_feedbacks) {
         const existing = brand.negMap.get(fb.text);
         if (existing) {
@@ -214,6 +229,10 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
           });
         }
         brand.totalNeg += fb.count;
+        storeNegCount += fb.count;
+      }
+      if (storeNegCount > 0) {
+        brand.negByStore.set(store.restaurant_id, { name: store.restaurant_name, count: storeNegCount });
       }
 
       // Suggestions
@@ -232,6 +251,7 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
       }
 
       // Positives
+      let storePosCount = 0;
       for (const fb of store.positive_feedbacks) {
         const existing = brand.posMap.get(fb.text);
         if (existing) {
@@ -244,12 +264,21 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
             stores: [{ ...storeRef, contexts: fb.contexts ?? [] }],
           });
         }
+        storePosCount += fb.count;
+      }
+      if (storePosCount > 0) {
+        brand.posByStore.set(store.restaurant_id, { name: store.restaurant_name, count: storePosCount });
       }
     }
 
     // Step 3: Convert to sorted arrays
     const sortByCount = <T extends { total_count: number }>(arr: T[]) =>
       arr.sort((a, b) => b.total_count - a.total_count);
+
+    const toDistribution = (m: Map<string, { name: string; count: number }>): StoreDistribution[] =>
+      Array.from(m.values())
+        .map(v => ({ restaurant_name: v.name, count: v.count }))
+        .sort((a, b) => b.count - a.count);
 
     return Array.from(brandMap.values())
       .map(b => ({
@@ -258,6 +287,8 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
         negatives: sortByCount(Array.from(b.negMap.values())),
         suggestions: sortByCount(Array.from(b.sugMap.values())),
         positives: sortByCount(Array.from(b.posMap.values())),
+        negativeStoreDistribution: toDistribution(b.negByStore),
+        positiveStoreDistribution: toDistribution(b.posByStore),
         totalNeg: b.totalNeg,
       }))
       .filter(b => b.negatives.length > 0 || b.suggestions.length > 0 || b.positives.length > 0)
@@ -267,10 +298,20 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
 
   const isMultiBrand = brandGroups.length > 1 || (brandGroups.length === 1 && brandGroups[0].brand_name !== '');
 
-  // Single expand state for issue detail rows
+  // Single expand state for issue detail rows (evidence)
   const [expandedDetail, setExpandedDetail] = useState<string | null>(null);
   const toggleDetail = useCallback((key: string) => {
     setExpandedDetail(prev => prev === key ? null : key);
+  }, []);
+
+  // Category-level expand states ("show all" and satisfaction collapse)
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const toggleCategory = useCallback((key: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
   }, []);
 
   // Store name list for an issue row
@@ -292,119 +333,198 @@ export function CustomerInsights({ startDate, endDate, managedIdsParam = '' }: C
         </div>
       )}
 
-      {/* Brand-grouped flat issue list */}
+      {/* Brand-grouped sections */}
       {brandGroups.map((brand) => {
         const brandKey = brand.brand_id != null ? String(brand.brand_id) : '__none__';
+        const sugTotal = brand.suggestions.length;
+        const negTotal = brand.negatives.length;
+        const posTotal = brand.positives.length;
+
+        const sugCatKey = `${brandKey}-sug-cat`;
+        const negCatKey = `${brandKey}-neg-cat`;
+        const posCatKey = `${brandKey}-pos-cat`;       // collapse/expand section
+        const posShowAllKey = `${brandKey}-pos-all`;   // show all items within
+
+        const sugExpanded = expandedCategories.has(sugCatKey);
+        const negExpanded = expandedCategories.has(negCatKey);
+        const posShowAll = expandedCategories.has(posShowAllKey);
+
+        const visibleSuggestions = sugExpanded || sugTotal <= INITIAL_SHOW ? brand.suggestions : brand.suggestions.slice(0, INITIAL_SHOW);
+        const visibleNegatives = negExpanded || negTotal <= INITIAL_SHOW ? brand.negatives : brand.negatives.slice(0, INITIAL_SHOW);
+        const visiblePositives = posShowAll || posTotal <= INITIAL_SHOW ? brand.positives : brand.positives.slice(0, INITIAL_SHOW);
 
         return (
           <div key={brandKey}>
-            {/* Brand title (only when multi-brand) */}
+            {/* Brand title */}
             {isMultiBrand && brand.brand_name && (
-              <div className="flex items-center gap-3 px-1 pt-2 pb-1.5">
-                <div className="h-px flex-1 bg-gray-200" />
-                <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">{brand.brand_name}</span>
-                <div className="h-px flex-1 bg-gray-200" />
+              <div className="px-1 pt-2 pb-2.5">
+                <span className="text-sm font-bold text-gray-800">{brand.brand_name}</span>
               </div>
             )}
 
-            <div className="glass-card rounded-2xl overflow-hidden">
-              {/* Needs attention (negatives) */}
-              {brand.negatives.length > 0 && (
-                <div>
-                  <div className="px-4 pt-3 pb-1">
-                    <span className="text-xs text-amber-500 font-medium">{t('insights.needsAttention')}</span>
+            <div className="space-y-2.5">
+              {/* 1) Suggestions card */}
+              {sugTotal > 0 && (
+                <div className="glass-card rounded-2xl overflow-hidden">
+                  <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+                    <span className="text-xs text-purple-500 font-medium">{t('insights.suggestion')} ({sugTotal})</span>
                   </div>
-                  {brand.negatives.map((item, idx) => {
+                  {visibleSuggestions.map((item, idx) => {
+                    const itemKey = `${brandKey}-sug-${idx}`;
+                    const isExp = expandedDetail === itemKey;
+                    const hasEvidence = item.stores.some(s => s.evidence.length > 0);
+                    return (
+                      <div key={itemKey} className={`transition-colors ${isExp ? 'bg-gray-50' : ''}`}>
+                        <div className="mx-4 border-t border-gray-100" />
+                        <div
+                          className={`flex items-start gap-2.5 px-4 py-2.5 ${hasEvidence ? 'cursor-pointer active:bg-gray-50' : ''}`}
+                          onClick={() => hasEvidence && toggleDetail(itemKey)}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0 mt-1.5" />
+                          <span className="text-sm text-gray-800 flex-1 leading-relaxed">{item.text}</span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+                            <span className="text-xs text-gray-400 max-w-[120px] truncate">{storeNames(item.stores)}</span>
+                            {hasEvidence && <ChevronRight className="w-3.5 h-3.5 text-gray-300" />}
+                          </div>
+                        </div>
+                        {isExp && renderStoreEvidence(item.stores.map(s => ({ ...s, items: s.evidence })), itemKey, t, playingKey, handleAudioToggle)}
+                      </div>
+                    );
+                  })}
+                  {sugTotal > INITIAL_SHOW && !sugExpanded && (
+                    <>
+                      <div className="mx-4 border-t border-gray-100" />
+                      <button
+                        className="w-full py-2.5 text-xs text-purple-500 font-medium flex items-center justify-center gap-1"
+                        onClick={() => toggleCategory(sugCatKey)}
+                      >
+                        {t('insights.showAllSuggestions', sugTotal)}
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                  <div className="h-1" />
+                </div>
+              )}
+
+              {/* 2) Needs attention card */}
+              {negTotal > 0 && (
+                <div className="glass-card rounded-2xl overflow-hidden">
+                  {/* Header: label + count */}
+                  <div className="px-4 pt-3 pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        <span className="text-xs text-amber-500 font-medium">{t('insights.needsAttention')}</span>
+                      </div>
+                      <span className="text-xs text-amber-600 font-semibold">{negTotal}</span>
+                    </div>
+                    {/* Store distribution pills */}
+                    {brand.negativeStoreDistribution.length > 1 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {brand.negativeStoreDistribution.map(s => (
+                          <span key={s.restaurant_name} className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                            {s.restaurant_name} {s.count}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Issue list: top 3 + show more */}
+                  {visibleNegatives.map((item, idx) => {
                     const itemKey = `${brandKey}-neg-${idx}`;
                     const isExp = expandedDetail === itemKey;
                     const hasEvidence = item.stores.some(s => s.contexts.length > 0);
                     return (
                       <div key={itemKey} className={`transition-colors ${isExp ? 'bg-gray-50' : ''}`}>
+                        <div className="mx-4 border-t border-gray-100" />
                         <div
                           className={`flex items-start gap-2.5 px-4 py-2.5 ${hasEvidence ? 'cursor-pointer active:bg-gray-50' : ''}`}
                           onClick={() => hasEvidence && toggleDetail(itemKey)}
                         >
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 mt-1.5" />
                           <span className="text-sm text-gray-800 flex-1 leading-relaxed">&ldquo;{item.text}&rdquo;</span>
                           <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
                             <span className="text-xs text-gray-400 max-w-[120px] truncate">{storeNames(item.stores)}</span>
-                            {hasEvidence && <ChevronDown expanded={isExp} />}
+                            {hasEvidence && <ChevronRight className="w-3.5 h-3.5 text-gray-300" />}
                           </div>
                         </div>
                         {isExp && renderStoreEvidence(item.stores.map(s => ({ ...s, items: s.contexts })), itemKey, t, playingKey, handleAudioToggle)}
                       </div>
                     );
                   })}
+                  {negTotal > INITIAL_SHOW && !negExpanded && (
+                    <>
+                      <div className="mx-4 border-t border-gray-100" />
+                      <button
+                        className="w-full py-2.5 text-xs text-amber-500 font-medium flex items-center justify-center gap-1"
+                        onClick={() => toggleCategory(negCatKey)}
+                      >
+                        {t('insights.showAll', negTotal)}
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                  <div className="h-1" />
                 </div>
               )}
 
-              {/* Suggestions */}
-              {brand.suggestions.length > 0 && (
-                <>
-                  {brand.negatives.length > 0 && <div className="mx-4 border-t border-gray-100" />}
-                  <div>
-                    <div className="px-4 pt-3 pb-1">
-                      <span className="text-xs text-purple-500 font-medium">{t('insights.suggestion')}</span>
-                    </div>
-                    {brand.suggestions.map((item, idx) => {
-                      const itemKey = `${brandKey}-sug-${idx}`;
-                      const isExp = expandedDetail === itemKey;
-                      const hasEvidence = item.stores.some(s => s.evidence.length > 0);
-                      return (
-                        <div key={itemKey} className={`transition-colors ${isExp ? 'bg-gray-50' : ''}`}>
-                          <div
-                            className={`flex items-start gap-2.5 px-4 py-2.5 ${hasEvidence ? 'cursor-pointer active:bg-gray-50' : ''}`}
-                            onClick={() => hasEvidence && toggleDetail(itemKey)}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0 mt-1.5" />
-                            <span className="text-sm text-gray-800 flex-1 leading-relaxed">{item.text}</span>
-                            <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-                              <span className="text-xs text-gray-400 max-w-[120px] truncate">{storeNames(item.stores)}</span>
-                              {hasEvidence && <ChevronDown expanded={isExp} />}
-                            </div>
-                          </div>
-                          {isExp && renderStoreEvidence(item.stores.map(s => ({ ...s, items: s.evidence })), itemKey, t, playingKey, handleAudioToggle)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-
-              {/* Positives */}
-              {brand.positives.length > 0 && (
-                <>
-                  {(brand.negatives.length > 0 || brand.suggestions.length > 0) && <div className="mx-4 border-t border-gray-100" />}
-                  <div>
-                    <div className="px-4 pt-3 pb-1">
+              {/* 3) Satisfied card — collapsed by default */}
+              {posTotal > 0 && (
+                <div className="glass-card rounded-2xl overflow-hidden">
+                  <div
+                    className="px-4 py-3 flex items-center justify-between cursor-pointer active:bg-gray-50"
+                    onClick={() => toggleCategory(posCatKey)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                       <span className="text-xs text-green-500 font-medium">{t('insights.satisfied')}</span>
                     </div>
-                    {brand.positives.map((item, idx) => {
-                      const itemKey = `${brandKey}-pos-${idx}`;
-                      const isExp = expandedDetail === itemKey;
-                      const hasEvidence = item.stores.some(s => s.contexts.length > 0);
-                      return (
-                        <div key={itemKey} className={`transition-colors ${isExp ? 'bg-gray-50' : ''}`}>
-                          <div
-                            className={`flex items-start gap-2.5 px-4 py-2.5 ${hasEvidence ? 'cursor-pointer active:bg-gray-50' : ''}`}
-                            onClick={() => hasEvidence && toggleDetail(itemKey)}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 mt-1.5" />
-                            <span className="text-sm text-gray-800 flex-1 leading-relaxed">&ldquo;{item.text}&rdquo;</span>
-                            <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-                              <span className="text-xs text-gray-400 max-w-[120px] truncate">{storeNames(item.stores)}</span>
-                              {hasEvidence && <ChevronDown expanded={isExp} />}
-                            </div>
-                          </div>
-                          {isExp && renderStoreEvidence(item.stores.map(s => ({ ...s, items: s.contexts })), itemKey, t, playingKey, handleAudioToggle)}
-                        </div>
-                      );
-                    })}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{posTotal}</span>
+                      <ChevronDown expanded={expandedCategories.has(posCatKey)} />
+                    </div>
                   </div>
-                </>
+                  {expandedCategories.has(posCatKey) && (
+                    <>
+                      {visiblePositives.map((item, idx) => {
+                        const itemKey = `${brandKey}-pos-${idx}`;
+                        const isExp = expandedDetail === itemKey;
+                        const hasEvidence = item.stores.some(s => s.contexts.length > 0);
+                        return (
+                          <div key={itemKey} className={`transition-colors ${isExp ? 'bg-gray-50' : ''}`}>
+                            <div className="mx-4 border-t border-gray-100" />
+                            <div
+                              className={`flex items-start gap-2.5 px-4 py-2.5 ${hasEvidence ? 'cursor-pointer active:bg-gray-50' : ''}`}
+                              onClick={() => hasEvidence && toggleDetail(itemKey)}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 mt-1.5" />
+                              <span className="text-sm text-gray-800 flex-1 leading-relaxed">&ldquo;{item.text}&rdquo;</span>
+                              <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+                                <span className="text-xs text-gray-400 max-w-[120px] truncate">{storeNames(item.stores)}</span>
+                                {hasEvidence && <ChevronRight className="w-3.5 h-3.5 text-gray-300" />}
+                              </div>
+                            </div>
+                            {isExp && renderStoreEvidence(item.stores.map(s => ({ ...s, items: s.contexts })), itemKey, t, playingKey, handleAudioToggle)}
+                          </div>
+                        );
+                      })}
+                      {posTotal > INITIAL_SHOW && !posShowAll && (
+                        <>
+                          <div className="mx-4 border-t border-gray-100" />
+                          <button
+                            className="w-full py-2.5 text-xs text-green-500 font-medium flex items-center justify-center gap-1"
+                            onClick={(e) => { e.stopPropagation(); toggleCategory(posShowAllKey); }}
+                          >
+                            {t('insights.showAll', posTotal)}
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                      <div className="h-1" />
+                    </>
+                  )}
+                </div>
               )}
-
-              <div className="h-2" />
             </div>
           </div>
         );
