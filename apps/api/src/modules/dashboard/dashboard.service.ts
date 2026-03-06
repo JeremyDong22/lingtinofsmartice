@@ -1615,6 +1615,11 @@ export class DashboardService {
 
   async getCustomerProfile(startDate: string, endDate: string, managedIds: string[] | null = null) {
     if (this.supabase.isMockMode()) {
+      const mockStores = [
+        { restaurant_id: 'r1', restaurant_name: '春熙路店', brand_id: 1, brand_name: '品牌A', total_visits: 20, repeat_ratio: 45, frequency: { first: 8, repeat: 6, regular: 3, unknown: 2, no_data: 1 }, source_distribution: [{ source: '美团', count: 6, ratio: 35 }, { source: '抖音', count: 4, ratio: 24 }], data_coverage: 50 },
+        { restaurant_id: 'r2', restaurant_name: '太古里店', brand_id: 1, brand_name: '品牌A', total_visits: 15, repeat_ratio: 30, frequency: { first: 7, repeat: 3, regular: 2, unknown: 1, no_data: 2 }, source_distribution: [{ source: '朋友推荐', count: 5, ratio: 38 }, { source: '路过', count: 3, ratio: 23 }], data_coverage: 45 },
+        { restaurant_id: 'r3', restaurant_name: '万象城店', brand_id: 2, brand_name: '品牌B', total_visits: 15, repeat_ratio: 35, frequency: { first: 5, repeat: 3, regular: 2, unknown: 2, no_data: 3 }, source_distribution: [{ source: '大众点评', count: 4, ratio: 33 }, { source: '美团', count: 3, ratio: 25 }], data_coverage: 40 },
+      ];
       return {
         summary: {
           total_visits: 50,
@@ -1627,7 +1632,19 @@ export class DashboardService {
           ],
           data_coverage: 42,
         },
-        by_restaurant: [],
+        by_restaurant: mockStores,
+        brands: [
+          {
+            brand_id: 1, brand_name: '品牌A',
+            restaurants: mockStores.filter(s => s.brand_id === 1),
+            summary: { repeat_ratio: 39, total_visits: 35, top_source: '美团', store_count: 2 },
+          },
+          {
+            brand_id: 2, brand_name: '品牌B',
+            restaurants: mockStores.filter(s => s.brand_id === 2),
+            summary: { repeat_ratio: 35, total_visits: 15, top_source: '大众点评', store_count: 1 },
+          },
+        ],
       };
     }
 
@@ -1651,9 +1668,8 @@ export class DashboardService {
     ]);
     if (error) throw error;
 
-    const restIds = restaurants.map(r => r.id);
     const restMap = new Map(restaurants.map(r => [r.id, r.restaurant_name]));
-    const restIdSet = new Set(restIds);
+    const restIdSet = new Set(restaurants.map(r => r.id));
 
     // Filter to active restaurants only (managedIds may include inactive ones)
     const allRecords = (records || []).filter(r => restIdSet.has(r.restaurant_id));
@@ -1713,12 +1729,48 @@ export class DashboardService {
         return {
           restaurant_id: rest.id,
           restaurant_name: restMap.get(rest.id) || rest.id,
+          brand_id: rest.brand_id ?? null,
+          brand_name: rest.brand_name ?? null,
           ...stats,
         };
       })
       .filter(Boolean);
 
-    return { summary, by_restaurant };
+    // Group by brand
+    const restEntryMap = new Map(by_restaurant.map((r: any) => [r.restaurant_id, r]));
+    const brandGroupMap = new Map<number | null, { brand_name: string; restaurants: typeof by_restaurant; records: typeof allRecords }>();
+    for (const rest of restaurants) {
+      const key = rest.brand_id;
+      if (!brandGroupMap.has(key)) {
+        brandGroupMap.set(key, {
+          brand_name: rest.brand_name || '未分类',
+          restaurants: [],
+          records: [],
+        });
+      }
+      const group = brandGroupMap.get(key)!;
+      const restEntry = restEntryMap.get(rest.id);
+      if (restEntry) group.restaurants.push(restEntry);
+      const recs = byRestaurantMap.get(rest.id) || [];
+      group.records.push(...recs);
+    }
+
+    const brands = Array.from(brandGroupMap.entries()).map(([brand_id, group]) => {
+      const stats = computeStats(group.records);
+      return {
+        brand_id,
+        brand_name: group.brand_name,
+        restaurants: group.restaurants,
+        summary: {
+          repeat_ratio: stats.repeat_ratio,
+          total_visits: stats.total_visits,
+          top_source: stats.source_distribution[0]?.source ?? null,
+          store_count: group.restaurants.length,
+        },
+      };
+    });
+
+    return { summary, by_restaurant, brands };
   }
 
   // Execution summary for a single restaurant on a given date

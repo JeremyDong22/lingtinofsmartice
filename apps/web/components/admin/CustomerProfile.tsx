@@ -1,9 +1,9 @@
 // Customer Profile Tab - Visit frequency + source channel analytics
-// Shows overview card + per-restaurant breakdown with expand/collapse
+// Shows overview card + brand→store hierarchy with expand/collapse
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import useSWR from 'swr';
 import { BarChart3 } from 'lucide-react';
 
@@ -24,11 +24,25 @@ interface SourceItem {
 interface RestaurantProfile {
   restaurant_id: string;
   restaurant_name: string;
+  brand_id: number | null;
+  brand_name: string | null;
   total_visits: number;
   repeat_ratio: number | null;
   frequency: FrequencyData;
   source_distribution: SourceItem[];
   data_coverage: number;
+}
+
+interface BrandProfileGroup {
+  brand_id: number | null;
+  brand_name: string;
+  restaurants: RestaurantProfile[];
+  summary: {
+    repeat_ratio: number | null;
+    total_visits: number;
+    top_source: string | null;
+    store_count: number;
+  };
 }
 
 interface ProfileResponse {
@@ -40,6 +54,7 @@ interface ProfileResponse {
     data_coverage: number;
   };
   by_restaurant: RestaurantProfile[];
+  brands?: BrandProfileGroup[];
 }
 
 interface CustomerProfileProps {
@@ -53,7 +68,44 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
     `/api/dashboard/customer-profile?start_date=${startDate}&end_date=${endDate}${managedIdsParam}`,
   );
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedBrands, setExpandedBrands] = useState<Set<number | null>>(new Set());
+  const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set());
+
+  const toggleBrand = useCallback((brandId: number | null) => {
+    setExpandedBrands(prev => {
+      const next = new Set(prev);
+      if (next.has(brandId)) next.delete(brandId);
+      else next.add(brandId);
+      return next;
+    });
+  }, []);
+
+  const toggleStore = useCallback((restaurantId: string) => {
+    setExpandedStores(prev => {
+      const next = new Set(prev);
+      if (next.has(restaurantId)) next.delete(restaurantId);
+      else next.add(restaurantId);
+      return next;
+    });
+  }, []);
+
+  const brands = data?.brands;
+  const byRestaurant = data?.by_restaurant;
+  const isMultiBrand = (brands?.length ?? 0) > 1;
+
+  const sortedBrands = useMemo(
+    () => [...(brands || [])].sort((a, b) => (a.summary.repeat_ratio ?? -1) - (b.summary.repeat_ratio ?? -1)),
+    [brands],
+  );
+
+  // For single-brand or fallback (no brands field), use store list directly
+  const singleBrandStores = useMemo(
+    () => {
+      const stores = (!isMultiBrand && brands?.[0]?.restaurants) || byRestaurant || [];
+      return [...stores].sort((a, b) => (a.repeat_ratio ?? -1) - (b.repeat_ratio ?? -1));
+    },
+    [isMultiBrand, brands, byRestaurant],
+  );
 
   if (isLoading) {
     return (
@@ -71,7 +123,7 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
 
   if (!data) return null;
 
-  const { summary, by_restaurant } = data;
+  const { summary } = data;
   const coverage = summary.data_coverage;
   const freq = summary.frequency;
   const withData = freq.first + freq.repeat + freq.regular + freq.unknown;
@@ -89,27 +141,28 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
     );
   }
 
+  const brandCount = brands?.length ?? 0;
+  const storeCount = brands?.reduce((sum, b) => sum + b.restaurants.length, 0) ?? 0;
+
   return (
     <div className="space-y-3">
       {/* Overview card */}
       <div className="glass-card rounded-2xl p-4 space-y-3">
-        {/* Frequency bar */}
+        {isMultiBrand && (
+          <div className="text-xs font-medium text-gray-500">全品牌汇总</div>
+        )}
         <div>
           <FrequencyBar frequency={freq} />
           <div className="mt-2 flex items-center justify-between">
             <div className="text-sm font-semibold text-gray-900">
               老客占比{' '}
-              <span className={summary.repeat_ratio != null
-                ? (summary.repeat_ratio >= 40 ? 'text-green-600' : 'text-yellow-600')
-                : 'text-gray-400'
-              }>
+              <span className={repeatRatioColor(summary.repeat_ratio)}>
                 {summary.repeat_ratio != null ? `${summary.repeat_ratio}%` : '--'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Top sources */}
         {summary.source_distribution.length > 0 && (
           <div>
             <div className="text-xs text-gray-500 mb-1.5">主要来源</div>
@@ -117,83 +170,162 @@ export function CustomerProfile({ startDate, endDate, managedIdsParam = '' }: Cu
           </div>
         )}
 
-        {/* Data coverage note */}
-        {coverage > 0 && coverage < 80 && (
-          <p className="text-xs text-gray-400">
-            基于 {coverage}% 桌访数据
-          </p>
-        )}
+        <div className="text-xs text-gray-400 flex items-center gap-1.5">
+          {isMultiBrand && <span>{brandCount}品牌 · {storeCount}店</span>}
+          {!isMultiBrand && storeCount > 0 && <span>{storeCount}店</span>}
+          {coverage > 0 && coverage < 80 && (
+            <>{(isMultiBrand || storeCount > 0) && <span>·</span>}<span>基于 {coverage}% 数据</span></>
+          )}
+        </div>
       </div>
 
-      {/* Per-restaurant list */}
-      {by_restaurant.length > 0 && (
-        <div className="space-y-2">
-          {by_restaurant.map(rest => {
-            const isExpanded = expandedId === rest.restaurant_id;
-            const topSource = rest.source_distribution[0];
+      {/* Brand/Store hierarchy */}
+      {isMultiBrand ? (
+        <div className="glass-card rounded-2xl overflow-hidden divide-y divide-gray-100">
+          {sortedBrands.map(brand => {
+            const isBrandExpanded = expandedBrands.has(brand.brand_id);
+            const sortedStores = [...brand.restaurants].sort((a, b) => (a.repeat_ratio ?? -1) - (b.repeat_ratio ?? -1));
 
             return (
-              <div key={rest.restaurant_id} className="glass-card rounded-2xl overflow-hidden">
-                {/* Restaurant summary row */}
+              <div key={brand.brand_id ?? 'none'}>
+                {/* Brand row */}
                 <div
                   className="px-4 py-3 flex items-center gap-3 cursor-pointer active:bg-gray-50 transition-colors"
-                  onClick={() => setExpandedId(isExpanded ? null : rest.restaurant_id)}
+                  onClick={() => toggleBrand(brand.brand_id)}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-900 truncate">
-                      {rest.restaurant_name}
+                      {brand.brand_name}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                      <span className={
-                        rest.repeat_ratio != null
-                          ? (rest.repeat_ratio >= 40 ? 'text-green-600' : 'text-yellow-600')
-                          : 'text-gray-400'
-                      }>
-                        老客 {rest.repeat_ratio != null ? `${rest.repeat_ratio}%` : '--'}
+                      <span className={repeatRatioColor(brand.summary.repeat_ratio)}>
+                        老客 {brand.summary.repeat_ratio != null ? `${brand.summary.repeat_ratio}%` : '--'}
                       </span>
-                      {topSource && (
+                      {brand.summary.top_source && (
                         <>
                           <span>·</span>
-                          <span>首要来源: {topSource.source}</span>
+                          <span>首要来源: {brand.summary.top_source}</span>
                         </>
                       )}
+                      <span>·</span>
+                      <span>{brand.summary.store_count}店</span>
                     </div>
                   </div>
-                  <svg
-                    className={`w-5 h-5 text-gray-300 transition-transform duration-200 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <ChevronIcon expanded={isBrandExpanded} />
                 </div>
 
-                {/* Expanded detail */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
-                    <FrequencyBar frequency={rest.frequency} />
-                    {rest.source_distribution.length > 0 && (
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1.5">来源渠道</div>
-                        <SourceList sources={rest.source_distribution} />
-                      </div>
-                    )}
-                    {rest.data_coverage > 0 && rest.data_coverage < 80 && (
-                      <p className="text-xs text-gray-400">
-                        基于 {rest.data_coverage}% 数据
-                      </p>
-                    )}
+                {/* Expanded brand → store rows */}
+                {isBrandExpanded && (
+                  <div className="bg-gray-50/50">
+                    {sortedStores.map(store => (
+                      <StoreProfileRow
+                        key={store.restaurant_id}
+                        store={store}
+                        indent
+                        expanded={expandedStores.has(store.restaurant_id)}
+                        onToggle={() => toggleStore(store.restaurant_id)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+      ) : singleBrandStores.length > 0 ? (
+        <div className="glass-card rounded-2xl overflow-hidden divide-y divide-gray-100">
+          {singleBrandStores.map(store => (
+            <StoreProfileRow
+              key={store.restaurant_id}
+              store={store}
+              indent={false}
+              expanded={expandedStores.has(store.restaurant_id)}
+              onToggle={() => toggleStore(store.restaurant_id)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// --- Helpers ---
+
+function repeatRatioColor(ratio: number | null): string {
+  if (ratio == null) return 'text-gray-400';
+  return ratio >= 40 ? 'text-green-600' : 'text-yellow-600';
+}
+
+// --- Sub-components ---
+
+function StoreProfileRow({
+  store,
+  indent,
+  expanded,
+  onToggle,
+}: {
+  store: RestaurantProfile;
+  indent: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const topSource = store.source_distribution[0];
+
+  return (
+    <div>
+      <div
+        className={`${indent ? 'pl-8' : 'px-4'} pr-4 py-3 flex items-center gap-3 cursor-pointer active:bg-gray-50 transition-colors`}
+        onClick={onToggle}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-gray-900 truncate">
+            {store.restaurant_name}
+          </div>
+          <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
+            <span className={repeatRatioColor(store.repeat_ratio)}>
+              老客 {store.repeat_ratio != null ? `${store.repeat_ratio}%` : '--'}
+            </span>
+            {topSource && (
+              <>
+                <span>·</span>
+                <span>首要来源: {topSource.source}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <ChevronIcon expanded={expanded} />
+      </div>
+
+      {expanded && (
+        <div className={`${indent ? 'pl-8' : 'px-4'} pr-4 pb-4 space-y-3 border-t border-gray-100 pt-3`}>
+          <FrequencyBar frequency={store.frequency} />
+          {store.source_distribution.length > 0 && (
+            <div>
+              <div className="text-xs text-gray-500 mb-1.5">来源渠道</div>
+              <SourceList sources={store.source_distribution} />
+            </div>
+          )}
+          {store.data_coverage > 0 && store.data_coverage < 80 && (
+            <p className="text-xs text-gray-400">
+              基于 {store.data_coverage}% 数据
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-// --- Inline sub-components ---
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={`w-5 h-5 text-gray-300 transition-transform duration-200 flex-shrink-0 ${expanded ? 'rotate-180' : ''}`}
+      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
 
 function FrequencyBar({ frequency }: { frequency: FrequencyData }) {
   // Include unknown in total to match backend repeat_ratio denominator
