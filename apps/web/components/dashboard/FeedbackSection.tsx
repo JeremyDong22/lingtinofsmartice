@@ -58,6 +58,12 @@ export function FeedbackSection({ negativeFeedbacks, positiveFeedbacks, suggesti
   const hasSug = suggestions.length > 0;
   const hasAny = hasNeg || hasPos || hasSug;
 
+  // Summary banner stats
+  const negTableTotal = negativeFeedbacks.reduce((s, f) => s + f.count, 0);
+  const posTableTotal = positiveFeedbacks.reduce((s, f) => s + f.count, 0);
+  const formatTopItems = (items: FeedbackItem[]) =>
+    items.slice(0, 2).map(f => `\u201C${f.text}\u201D(${f.count}桌)`).join('\u3001');
+
   const renderFeedbackRow = (fb: FeedbackItem, type: 'neg' | 'pos', idx: number) => {
     const fbKey = `${type}-${idx}`;
     const isExp = expandedDetail === fbKey;
@@ -150,6 +156,54 @@ export function FeedbackSection({ negativeFeedbacks, positiveFeedbacks, suggesti
       <div className="px-4 pt-4 pb-2">
         <h2 className="text-sm font-medium text-gray-700">{t('dashboard.customerFeedback')}</h2>
       </div>
+
+      {/* Summary Banner */}
+      {hasAny && (
+        <>
+          <div className="px-4 pb-2 space-y-1">
+            {hasNeg ? (
+              <div className="flex items-start gap-1.5">
+                <span className="text-amber-500 mt-px">⚠</span>
+                <div>
+                  <span className="text-sm font-medium text-gray-800">
+                    {t('dashboard.feedbackSummaryNeg', negativeFeedbacks.length, negTableTotal)}
+                  </span>
+                  <span className="text-xs text-gray-500 ml-1">
+                    {formatTopItems(negativeFeedbacks)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-green-500">✓</span>
+                <span className="text-sm text-gray-600">{t('dashboard.allClear')}</span>
+              </div>
+            )}
+            {hasPos && (
+              <div className="flex items-start gap-1.5">
+                <span className="text-green-500 mt-px">✓</span>
+                <div>
+                  <span className="text-sm font-medium text-gray-800">
+                    {t('dashboard.feedbackSummaryPos', positiveFeedbacks.length, posTableTotal)}
+                  </span>
+                  <span className="text-xs text-gray-500 ml-1">
+                    {formatTopItems(positiveFeedbacks)}
+                  </span>
+                </div>
+              </div>
+            )}
+            {hasSug && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-purple-500">💡</span>
+                <span className="text-sm font-medium text-gray-800">
+                  {t('dashboard.feedbackSummarySug', suggestions.length)}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="mx-4 border-t border-gray-100" />
+        </>
+      )}
 
       {hasAny ? (
         <div>
