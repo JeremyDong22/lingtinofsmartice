@@ -144,6 +144,54 @@ export class FeedbackController {
     return { data, message: '语音反馈已上传' };
   }
 
+  // POST /api/feedback/auto-resolve - AI match feedbacks against changelog
+  // NOTE: Must be before :id routes to avoid param capture
+  @Post('auto-resolve')
+  async autoResolve(
+    @Body('changelog_text') changelogText: string,
+    @Body('version') version: string,
+  ) {
+    this.logger.log(`▶ POST /feedback/auto-resolve v${version}`);
+
+    if (!changelogText || !version) {
+      throw new BadRequestException('changelog_text and version are required');
+    }
+
+    // 1. Fetch pending feedbacks
+    const feedbacks = await this.feedbackService.getPendingFeedbacks();
+    this.logger.log(`  Found ${feedbacks.length} pending feedbacks`);
+
+    if (feedbacks.length === 0) {
+      return { data: { matched: 0, details: [] }, message: '无待处理反馈' };
+    }
+
+    // 2. AI matching
+    const matches = await this.feedbackAi.matchAndReply(feedbacks, changelogText, version);
+    this.logger.log(`  AI matched ${matches.length} feedbacks`);
+
+    if (matches.length === 0) {
+      return { data: { matched: 0, details: [] }, message: '无匹配反馈' };
+    }
+
+    // 3. Batch resolve
+    const results = await this.feedbackService.batchResolve(matches, version);
+    const successCount = results.filter(r => r.success).length;
+
+    this.logger.log(`◀ Auto-resolved ${successCount}/${matches.length} feedbacks`);
+    return {
+      data: {
+        matched: matches.length,
+        resolved: successCount,
+        details: matches.map(m => ({
+          feedback_id: m.feedback_id,
+          reply: m.reply,
+          success: results.find(r => r.id === m.feedback_id)?.success ?? false,
+        })),
+      },
+      message: `已自动解决 ${successCount} 条反馈`,
+    };
+  }
+
   // POST /api/feedback/:id/process - Trigger STT + AI classification for voice feedback
   @Post(':id/process')
   async processFeedback(
@@ -275,5 +323,22 @@ export class FeedbackController {
     const data = await this.feedbackService.replyToFeedback(id, reply.trim(), replyBy);
     this.logger.log(`◀ Reply saved`);
     return { data, message: '回复已发送' };
+  }
+
+  // PATCH /api/feedback/:id/read-reply - Mark reply as read by employee
+  @Patch(':id/read-reply')
+  async markReplyRead(
+    @Param('id') id: string,
+    @Body('employee_id') employeeId: string,
+  ) {
+    this.logger.log(`▶ PATCH /feedback/${id}/read-reply`);
+
+    if (!employeeId) {
+      throw new BadRequestException('employee_id is required');
+    }
+
+    const data = await this.feedbackService.markReplyRead(id, employeeId);
+    this.logger.log(`◀ Reply marked as read`);
+    return { data, message: '已标记为已读' };
   }
 }

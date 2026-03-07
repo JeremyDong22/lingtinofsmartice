@@ -1,5 +1,5 @@
 // User Menu Component - Display user avatar with dropdown menu
-// v1.6 - Added i18n support with language switch for admin
+// v1.7 - Added unread reply badge for feedback auto-resolve notifications
 
 'use client';
 
@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/lib/i18n';
 import { APP_VERSION } from './UpdatePrompt';
+import useSWR from 'swr';
 import {
   ClipboardList, Map, BarChart3, Settings,
   MessageSquare, FileText, BookOpen, Languages,
@@ -20,23 +21,35 @@ export function UserMenu() {
   const { t, locale, setLocale } = useT();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
+  const [hasUnreadGuide, setHasUnreadGuide] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Poll for unread feedback replies (60s interval, non-admin only)
+  const isAdmin = user?.roleCode === 'administrator';
+  const { data: feedbackData } = useSWR<{ data: Array<{ admin_reply: string | null; reply_read_at: string | null }> }>(
+    user && !isAdmin ? `/api/feedback/mine?employee_id=${user.id}` : null,
+    { refreshInterval: 60_000 },
+  );
+  const hasUnreadReply = feedbackData?.data?.some(
+    f => f.admin_reply && !f.reply_read_at,
+  ) ?? false;
+
+  // Combined unread state
+  const hasUnread = hasUnreadGuide || hasUnreadReply;
 
   // Get first character of employee name (e.g., "梁店长" -> "梁")
   const avatarChar = user?.employeeName?.charAt(0) || '?';
-  const isAdmin = user?.roleCode === 'administrator';
 
   // Check for unread guide updates
   useEffect(() => {
     try {
       const seen = localStorage.getItem(GUIDE_SEEN_KEY);
-      setHasUnread(seen !== APP_VERSION);
+      setHasUnreadGuide(seen !== APP_VERSION);
     } catch {
-      setHasUnread(false);
+      setHasUnreadGuide(false);
     }
 
-    const handleGuideSeen = () => setHasUnread(false);
+    const handleGuideSeen = () => setHasUnreadGuide(false);
     window.addEventListener('lingtin-guide-seen', handleGuideSeen);
     return () => window.removeEventListener('lingtin-guide-seen', handleGuideSeen);
   }, []);
@@ -178,7 +191,10 @@ export function UserMenu() {
             className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
             <FileText className="w-4 h-4 text-gray-400" />
-            {t('menu.myFeedback')}
+            <span className="flex-1">{t('menu.myFeedback')}</span>
+            {hasUnreadReply && (
+              <span className="w-2 h-2 bg-red-500 rounded-full" />
+            )}
           </button>
 
           {/* Guide */}
@@ -191,7 +207,7 @@ export function UserMenu() {
           >
             <BookOpen className="w-4 h-4 text-gray-400" />
             <span className="flex-1">{t('menu.guide')}</span>
-            {hasUnread && (
+            {hasUnreadGuide && (
               <span className="w-2 h-2 bg-red-500 rounded-full" />
             )}
           </button>

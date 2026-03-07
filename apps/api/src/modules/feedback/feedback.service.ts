@@ -1,5 +1,5 @@
 // Feedback Service - DB operations for employee product feedback
-// v1.1 - STT model provenance: stt_model column tracks which engine processed each recording
+// v1.2 - Added autoResolve() and markReplyRead() for feedback auto-close loop
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
@@ -292,6 +292,78 @@ export class FeedbackService {
     if (error) {
       this.logger.error(`Failed to reply: ${error.message}`);
       throw error;
+    }
+
+    return data;
+  }
+
+  async getPendingFeedbacks() {
+    const client = this.supabase.getClient();
+
+    const { data, error } = await client
+      .from('lingtin_product_feedback')
+      .select('id, content_text, ai_summary, category')
+      .in('status', ['pending', 'read', 'in_progress'])
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      this.logger.error(`Failed to fetch pending feedbacks: ${error.message}`);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  async batchResolve(
+    matches: { feedback_id: string; reply: string }[],
+    version: string,
+  ) {
+    const client = this.supabase.getClient();
+    const now = new Date().toISOString();
+
+    // Run all updates in parallel instead of sequential loop
+    const settled = await Promise.allSettled(
+      matches.map(async (match) => {
+        const { error } = await client
+          .from('lingtin_product_feedback')
+          .update({
+            status: 'resolved',
+            admin_reply: match.reply,
+            admin_reply_at: now,
+            resolved_version: version,
+            status_changed_at: now,
+          })
+          .eq('id', match.feedback_id);
+
+        if (error) {
+          this.logger.error(`Failed to resolve feedback ${match.feedback_id}: ${error.message}`);
+          throw error;
+        }
+        return match.feedback_id;
+      }),
+    );
+
+    return matches.map((match, i) => ({
+      id: match.feedback_id,
+      success: settled[i].status === 'fulfilled',
+    }));
+  }
+
+  async markReplyRead(feedbackId: string, employeeId: string) {
+    const client = this.supabase.getClient();
+
+    // Single query: ownership check via employee_id in WHERE clause
+    const { data, error } = await client
+      .from('lingtin_product_feedback')
+      .update({ reply_read_at: new Date().toISOString() })
+      .eq('id', feedbackId)
+      .eq('employee_id', employeeId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error('Feedback not found or unauthorized');
     }
 
     return data;
