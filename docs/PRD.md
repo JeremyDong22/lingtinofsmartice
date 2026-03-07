@@ -1,6 +1,6 @@
 # 灵听 (Lingtin) - 产品需求文档
 
-> 版本：v1.0 | 更新日期：2026-02-16
+> 版本：v1.1 | 更新日期：2026-03-07
 
 ---
 
@@ -66,7 +66,7 @@
 | 环节 | 输入 | 处理 | 输出 |
 |------|------|------|------|
 | ① 桌访录音 | 店长与顾客对话音频 | 本地录制 + 云端上传 | 音频文件 + 元数据（桌号、时间） |
-| ② AI 分析 | 音频文件 | 讯飞 STT + AI 打标 | 转写文本、情绪分、关键词、菜品评价 |
+| ② AI 分析 | 音频文件 | DashScope STT（讯飞 fallback）+ AI 打标 | 转写文本、情绪分、关键词、菜品评价 |
 | ③ 每日复盘 | 当日全部桌访数据 | 看板聚合展示 | 覆盖率、TOP 菜品、情绪概览 |
 | ④ 行动建议 | 桌访分析结果 | AI 识别问题 + 生成建议 | 待办清单（建议行动项） |
 | ⑤ 执行 | 待办清单 | 店长确认 + 分派执行 | 已处理/已忽略标记 |
@@ -183,30 +183,35 @@ AI 分析识别问题
 所有语音场景共享同一处理管线，通过参数区分场景类型：
 
 ```
-音频输入 → 格式标准化 → 讯飞 STT → AI 分析 → 结构化存储
-              │                          │
-              │                          ├── scene_type: table_visit
-              │                          ├── scene_type: meeting
-              │                          ├── scene_type: inspection
-              │                          └── (按类型选择不同 prompt)
+音频输入 → 格式标准化 → DashScope STT（讯飞 fallback）→ AI 分析 → 结构化存储
+              │                  │                          │
+              │                  │                          ├── scene_type: table_visit
+              │                  │                          ├── scene_type: meeting
+              │                  │                          ├── scene_type: inspection
+              │                  │                          └── (按类型选择不同 prompt)
+              │                  │
+              │                  └── 说话人分离（diarization）
+              │                       ├── success → AI 利用标签分配 Q&A
+              │                       ├── single_speaker → Q&A 留空，仅提取 feedbacks
+              │                       └── unavailable → 同 single_speaker
               │
               └── 短音频直传 / 长音频分片
 ```
 
 ### 5.2 AI 分析参数化
 
-| 场景 | Prompt 关注点 | 输出结构 |
-|------|---------------|----------|
-| 桌访 | 菜品评价、服务感受、情绪 | 情绪分 + 关键词 + 菜品提及 |
-| 例会 | 讨论要点、决议、行动项 | 纪要 + 行动项列表 |
-| 巡检 | 检查项达标情况、问题 | 检查项评分 + 整改项 |
+| 场景 | Prompt 关注点 | 输出结构 | 说话人分离 |
+|------|---------------|----------|------------|
+| 桌访 | 菜品评价、服务感受、情绪、顾客画像 | 情绪分 + feedbacks + Q&A + 来源/频次 | 双说话人时利用标签；单说话人/无标签时 Q&A 留空 |
+| 例会 | 讨论要点、决议、行动项 | 纪要 + 行动项列表 | 多说话人（4人） |
+| 巡检 | 检查项达标情况、问题 | 检查项评分 + 整改项 | 不适用 |
 
 ### 5.3 共享能力
 
-- 统一的音频上传与存储服务
-- 统一的 STT 调用封装
-- 统一的 AI 分析调用封装（支持多模型切换）
-- 统一的权限与认证体系
+- 统一的音频上传与存储服务（Supabase Storage）
+- 统一的 STT 调用封装（DashScope Paraformer-v2 主引擎 + 讯飞 fallback，含说话人分离状态追踪）
+- 统一的 AI 分析调用封装（DeepSeek Chat V3 via OpenRouter，prompt 根据说话人分离状态自动分支）
+- 统一的权限与认证体系（Supabase Auth + JWT）
 
 ---
 
@@ -216,9 +221,12 @@ AI 分析识别问题
 
 | 表 | 当前状态 | 扩展方向 |
 |----|----------|----------|
-| `lingtin_visit_records` | 已上线 | 增加 `scene_type` 字段区分场景 |
-| `lingtin_dish_mentions` | 已上线 | 保持不变 |
+| `lingtin_visit_records` | 已上线 | 已扩展：`feedbacks JSONB`、`customer_source`、`visit_frequency`、`stt_model`、`stt_diarization_status` |
+| `lingtin_dish_mentions` | 已废弃 | v1.3.3 起全用 `feedbacks JSONB`，此表不再使用 |
 | `lingtin_table_sessions` | 已上线 | 保持不变 |
+| `lingtin_action_items` | 已上线 | AI 建议行动清单 |
+| `lingtin_meeting_records` | 已上线 | 例会录音 + AI 纪要 |
+| `lingtin_question_templates` | 已上线 | 智能问卷提示 |
 
 ### 新增表方向
 
@@ -297,7 +305,7 @@ created_at
 |------|------|--------|
 | v2.0 | 例会录音 + 纪要生成 | P1 |
 | v2.1 | 例会行动项提取 + 与桌访关联 | P1 |
-| v2.2 | 说话人分离（增强） | P2 |
+| v2.2 | 说话人分离（增强） | ✅ 基础已上线（DashScope diarization + 状态追踪） |
 
 ### v3.x — 多角色 + 巡店
 
