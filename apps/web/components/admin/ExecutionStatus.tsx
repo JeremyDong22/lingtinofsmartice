@@ -6,6 +6,9 @@
 import { useState, useCallback, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/lib/i18n';
+import { FeedbackLoopCards } from './FeedbackLoopCards';
+import type { FeedbackLoopRestaurant } from './FeedbackLoopCards';
+import { ActionItemsDrillDown } from './ActionItemsDrillDown';
 
 // --- Types ---
 interface BriefingEvidence {
@@ -76,12 +79,17 @@ interface OverviewResponse {
   restaurants: RestaurantOverview[];
 }
 
+export interface FeedbackLoopResponse {
+  restaurants: FeedbackLoopRestaurant[];
+}
+
 interface ExecutionStatusProps {
   executionData: ExecutionOverview | undefined;
   problems: BriefingProblem[];
   overviewData: OverviewResponse | undefined;
   onAudioToggle: (key: string, url: string) => void;
   playingKey: string | null;
+  feedbackLoopData?: FeedbackLoopResponse;
 }
 
 function getStoreStatusColor(r: { review_done: boolean; pending_actions: number }): { dot: string; order: number } {
@@ -102,7 +110,7 @@ function Chevron({ expanded, className = '' }: { expanded: boolean; className?: 
   );
 }
 
-export function ExecutionStatus({ executionData, problems, overviewData, onAudioToggle, playingKey }: ExecutionStatusProps) {
+export function ExecutionStatus({ executionData, problems, overviewData, onAudioToggle, playingKey, feedbackLoopData }: ExecutionStatusProps) {
   const { t } = useT();
   const router = useRouter();
 
@@ -146,6 +154,12 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
     overviewByRestaurant.set(r.id, r);
   }
 
+  // Feedback loop data by restaurant ID
+  const feedbackByRestaurant = new Map<string, FeedbackLoopRestaurant>();
+  for (const r of (feedbackLoopData?.restaurants || [])) {
+    feedbackByRestaurant.set(r.restaurant_id, r);
+  }
+
   // Sort brands: not-all-reviewed first
   const sortedBrands = [...brands].sort((a, b) => {
     const aAllDone = a.summary.reviewed_count === a.summary.total_count;
@@ -187,6 +201,7 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
               store={store}
               problems={problemsByRestaurant.get(store.id) || []}
               overview={overviewByRestaurant.get(store.id)}
+              feedbackLoop={feedbackByRestaurant.get(store.id)}
               expanded={expandedStores.has(store.id)}
               onToggle={() => toggleStore(store.id)}
               playingKey={playingKey}
@@ -232,6 +247,7 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
                         store={store}
                         problems={problemsByRestaurant.get(store.id) || []}
                         overview={overviewByRestaurant.get(store.id)}
+                        feedbackLoop={feedbackByRestaurant.get(store.id)}
                         expanded={expandedStores.has(store.id)}
                         onToggle={() => toggleStore(store.id)}
                         playingKey={playingKey}
@@ -256,6 +272,7 @@ function StoreRow({
   store,
   problems,
   overview,
+  feedbackLoop,
   expanded,
   onToggle,
   playingKey,
@@ -266,6 +283,7 @@ function StoreRow({
   store: BrandRestaurant;
   problems: BriefingProblem[];
   overview: RestaurantOverview | undefined;
+  feedbackLoop: FeedbackLoopRestaurant | undefined;
   expanded: boolean;
   onToggle: () => void;
   playingKey: string | null;
@@ -275,6 +293,11 @@ function StoreRow({
 }) {
   const { t } = useT();
   const { dot } = getStoreStatusColor(store);
+  const [drillDownType, setDrillDownType] = useState<'action' | 'execution' | null>(null);
+
+  const handleDrillDown = (type: 'action' | 'execution') => {
+    setDrillDownType(prev => prev === type ? null : type);
+  };
 
   return (
     <>
@@ -311,9 +334,27 @@ function StoreRow({
         </div>
       </div>
 
-      {/* Expanded: problem detail (Level 3) */}
+      {/* Expanded: feedback loop cards + problem detail (Level 3) */}
       {expanded && (
         <div className={`pb-3 space-y-3 ${indent ? 'pl-12 pr-4' : 'pl-8 pr-4'}`}>
+          {/* Feedback loop cards (2x2 grid) */}
+          {feedbackLoop && (
+            <FeedbackLoopCards
+              data={feedbackLoop}
+              onDrillDown={handleDrillDown}
+            />
+          )}
+
+          {/* Drill-down: action items list */}
+          {drillDownType && (
+            <ActionItemsDrillDown
+              restaurantId={store.id}
+              onAudioToggle={onAudioToggle}
+              playingKey={playingKey}
+            />
+          )}
+
+          {/* Problem cards */}
           {problems.length > 0 ? (
             problems.map((problem, idx) => (
               <ProblemCard
@@ -323,7 +364,7 @@ function StoreRow({
                 onAudioToggle={onAudioToggle}
               />
             ))
-          ) : (
+          ) : !feedbackLoop && (
             <div className="text-xs text-gray-400 py-1">{t('execution.noProblems')}</div>
           )}
 

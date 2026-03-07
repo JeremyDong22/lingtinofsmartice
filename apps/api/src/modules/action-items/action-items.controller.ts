@@ -14,10 +14,12 @@ export class ActionItemsController {
   async getPendingActionItems(
     @Query('restaurant_id') restaurantId: string,
     @Query('limit') limit?: string,
+    @Query('include_audio') includeAudio?: string,
   ) {
     return this.actionItemsService.getPendingActionItems(
       restaurantId,
       limit ? parseInt(limit, 10) : 20,
+      includeAudio === 'true',
     );
   }
 
