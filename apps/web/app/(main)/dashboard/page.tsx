@@ -8,7 +8,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
-import { ActionItemsCard } from '@/components/dashboard/ActionItemsCard';
+import { DailyReviewCard } from '@/components/dashboard/DailyReviewCard';
 import { getChinaToday, singleDay, dateRangeParams, isMultiDay, shiftDate } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, useStorePresets } from '@/components/shared/DatePicker';
@@ -297,9 +297,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* AI Action Items */}
-        {restaurantId && (
-          <ActionItemsCard restaurantId={restaurantId} date={dateRange.endDate} />
+        {/* Daily Review - meeting summary + action items */}
+        {restaurantId && !multiDay && (
+          <DailyReviewCard
+            restaurantId={restaurantId}
+            date={dateRange.endDate}
+            negativeCount={sentiment?.negative_count ?? 0}
+          />
         )}
       </main>
 
