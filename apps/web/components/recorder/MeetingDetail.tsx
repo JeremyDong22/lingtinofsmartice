@@ -93,7 +93,7 @@ export function MeetingDetail({ meeting, onClose }: MeetingDetailProps) {
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto p-4 space-y-4" style={{ maxHeight: 'calc(90vh - 64px)' }}>
+        <div className="overflow-y-auto p-4 pb-20 space-y-4" style={{ maxHeight: 'calc(90vh - 64px)' }}>
           {/* Summary */}
           {meeting.aiSummary && (
             <section>
