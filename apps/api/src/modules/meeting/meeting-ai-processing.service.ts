@@ -10,6 +10,8 @@ import { getChinaDateString } from '../../common/utils/date';
 import { SttModel } from '../../common/types/stt';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const PRIMARY_MODEL = 'deepseek/deepseek-chat-v3-0324';
+const FALLBACK_MODEL = 'qwen/qwen3-235b-a22b';
 
 // 35 minutes timeout for STT (covers 30-min meetings + buffer)
 const MEETING_STT_TIMEOUT_MS = 2100000;
@@ -59,20 +61,26 @@ export class MeetingAiProcessingService {
       const startTime = Date.now();
       this.logger.log(`Pipeline: ${meetingType} 开始处理`);
 
-      // Step 1: STT — DashScope first (speaker_count=4 for meetings), fallback to 讯飞
+      // Step 1: STT — DashScope first (with retry for network errors), fallback to 讯飞
       let rawTranscript: string;
       let sttModel: SttModel | undefined;
       if (this.dashScopeStt.isConfigured()) {
         try {
-          const sttResult = await this.dashScopeStt.transcribe(audioUrl, 4, 600000);
+          const sttResult = await this.transcribeWithRetry(audioUrl);
           rawTranscript = sttResult.transcript;
           sttModel = sttResult.sttModel;
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           this.logger.warn(`DashScope STT failed, falling back to 讯飞: ${msg}`);
-          const sttResult = await this.xunfeiStt.transcribe(audioUrl, MEETING_STT_TIMEOUT_MS);
-          rawTranscript = sttResult.transcript;
-          sttModel = sttResult.sttModel;
+          try {
+            const sttResult = await this.xunfeiStt.transcribe(audioUrl, MEETING_STT_TIMEOUT_MS);
+            rawTranscript = sttResult.transcript;
+            sttModel = sttResult.sttModel;
+          } catch (fallbackError) {
+            const fbMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+            this.logger.error(`讯飞 STT also failed: ${fbMsg}`);
+            throw new Error(`STT双通道失败: DashScope(${msg}), 讯飞(${fbMsg})`);
+          }
         }
       } else {
         const sttResult = await this.xunfeiStt.transcribe(audioUrl, MEETING_STT_TIMEOUT_MS);
@@ -161,10 +169,44 @@ export class MeetingAiProcessingService {
     }
   }
 
+  // Retry DashScope STT once for transient network errors (fetch failed, ETIMEDOUT, etc.)
+  private async transcribeWithRetry(audioUrl: string): Promise<{ transcript: string; sttModel: SttModel }> {
+    try {
+      return await this.dashScopeStt.transcribe(audioUrl, 4, 600000);
+    } catch (firstError) {
+      const msg = firstError instanceof Error ? firstError.message : String(firstError);
+      const isTransient = /fetch failed|ETIMEDOUT|ECONNRESET|ENOTFOUND|socket hang up|network/i.test(msg);
+      if (!isTransient) throw firstError;
+
+      this.logger.warn(`DashScope STT network error, retrying in 3s: ${msg}`);
+      await new Promise(r => setTimeout(r, 3000));
+      return await this.dashScopeStt.transcribe(audioUrl, 4, 600000);
+    }
+  }
+
   private async generateMinutes(
     transcript: string,
     meetingType: string,
     dailySummaryContext = '',
+  ): Promise<MeetingProcessingResult> {
+    // Try primary model, fallback to secondary on 402/500/502/503 errors
+    try {
+      return await this.callAiModel(transcript, meetingType, dailySummaryContext, PRIMARY_MODEL);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const isRetryable = /API 错误 (402|500|502|503)|fetch failed|ETIMEDOUT/i.test(msg);
+      if (!isRetryable) throw error;
+
+      this.logger.warn(`Primary AI model failed (${msg}), trying fallback: ${FALLBACK_MODEL}`);
+      return await this.callAiModel(transcript, meetingType, dailySummaryContext, FALLBACK_MODEL);
+    }
+  }
+
+  private async callAiModel(
+    transcript: string,
+    meetingType: string,
+    dailySummaryContext: string,
+    model: string,
   ): Promise<MeetingProcessingResult> {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) {
@@ -214,6 +256,8 @@ export class MeetingAiProcessingService {
    - 跨门店经营分析会：重点提取各店问题对比和跨店统一决策
    - 与店长一对一沟通：重点提取问题根因分析和承诺事项`;
 
+    this.logger.log(`AI 调用模型: ${model}`);
+
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
@@ -221,7 +265,7 @@ export class MeetingAiProcessingService {
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-chat-v3-0324',
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `${dailySummaryContext}会议转写文本：\n${transcript}` },
@@ -233,7 +277,7 @@ export class MeetingAiProcessingService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error(`OpenRouter API error: ${response.status} - ${errorText}`);
+      this.logger.error(`OpenRouter API error (${model}): ${response.status} - ${errorText}`);
       throw new Error(`AI_API_ERROR: OpenRouter API 错误 ${response.status}`);
     }
 
@@ -253,7 +297,7 @@ export class MeetingAiProcessingService {
 
     const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      this.logger.error(`AI返回无效JSON: ${cleanContent.substring(0, 200)}`);
+      this.logger.error(`AI返回无效JSON (${model}): ${cleanContent.substring(0, 200)}`);
       throw new Error('AI_PARSE_ERROR: 无法解析 AI 返回结果');
     }
 
@@ -261,7 +305,7 @@ export class MeetingAiProcessingService {
     try {
       result = JSON.parse(jsonMatch[0]);
     } catch {
-      this.logger.error(`AI返回无效JSON: ${jsonMatch[0].substring(0, 200)}`);
+      this.logger.error(`AI返回无效JSON (${model}): ${jsonMatch[0].substring(0, 200)}`);
       throw new Error('AI_PARSE_ERROR: 无法解析 AI 返回的JSON');
     }
 

@@ -14,6 +14,8 @@ import { getChinaHour } from '../../common/utils/date';
 const POLL_INTERVAL_MS = 60_000;
 // Only process records older than 2 minutes (give backend time to handle normally)
 const MIN_AGE_MINUTES = 2;
+// Records stuck in 'processing' for longer than this are considered crashed
+const STUCK_PROCESSING_MINUTES = 10;
 // Max records per poll cycle (avoid overloading)
 const BATCH_SIZE = 3;
 
@@ -39,12 +41,43 @@ export class PendingProcessorService {
     this.isProcessing = true;
 
     try {
+      await this.recoverStuckRecords();
       await this.processVisitRecords();
       await this.processMeetingRecords();
     } catch (error) {
       this.logger.error('Pending processor poll failed', error);
     } finally {
       this.isProcessing = false;
+    }
+  }
+
+  // Recover records stuck in 'processing' status (process crashed without cleanup)
+  private async recoverStuckRecords() {
+    const client = this.supabase.getClient();
+    const cutoff = new Date(Date.now() - STUCK_PROCESSING_MINUTES * 60 * 1000).toISOString();
+
+    // Reset stuck visit records
+    const { data: stuckVisits, error: visitErr } = await client
+      .from('lingtin_visit_records')
+      .update({ status: 'pending' })
+      .eq('status', 'processing')
+      .lt('updated_at', cutoff)
+      .select('id');
+
+    if (!visitErr && stuckVisits?.length) {
+      this.logger.warn(`Reset ${stuckVisits.length} stuck visit record(s) from 'processing' to 'pending'`);
+    }
+
+    // Reset stuck meeting records
+    const { data: stuckMeetings, error: meetingErr } = await client
+      .from('lingtin_meeting_records')
+      .update({ status: 'pending' })
+      .eq('status', 'processing')
+      .lt('updated_at', cutoff)
+      .select('id');
+
+    if (!meetingErr && stuckMeetings?.length) {
+      this.logger.warn(`Reset ${stuckMeetings.length} stuck meeting record(s) from 'processing' to 'pending'`);
     }
   }
 
