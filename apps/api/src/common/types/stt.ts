@@ -3,7 +3,10 @@
 
 export type SttModel = 'dashscope_paraformer_v2' | 'xunfei_dialect_slm' | 'xunfei_chinese_iat';
 
+export type DiarizationStatus = 'success' | 'single_speaker' | 'unavailable';
+
 export interface SttResult {
   transcript: string;
   sttModel: SttModel;
+  diarizationStatus: DiarizationStatus;
 }

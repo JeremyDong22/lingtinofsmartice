@@ -87,7 +87,7 @@ export class XunfeiSttService {
     try {
       const wsUrl = this.buildAuthUrl(apiKey, apiSecret, XUNFEI_HOST, XUNFEI_PATH, XUNFEI_WSS_URL);
       const transcript = await this.sendAudioAndGetTranscript(wsUrl, appId, pcmBuffer, timeoutMs);
-      return { transcript, sttModel: 'xunfei_dialect_slm' as const };
+      return { transcript, sttModel: 'xunfei_dialect_slm' as const, diarizationStatus: 'unavailable' as const };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const code = this.extractErrorCode(msg);
@@ -95,7 +95,7 @@ export class XunfeiSttService {
         this.logger.warn(`方言大模型 license 失败(${code})，fallback 到中文识别大模型`);
         const wsUrl = this.buildAuthUrl(apiKey, apiSecret, CHINESE_HOST, CHINESE_PATH, CHINESE_WSS_URL);
         const transcript = await this.sendAudioChineseModel(wsUrl, appId, pcmBuffer, timeoutMs);
-        return { transcript, sttModel: 'xunfei_chinese_iat' as const };
+        return { transcript, sttModel: 'xunfei_chinese_iat' as const, diarizationStatus: 'unavailable' as const };
       }
       throw err;
     }

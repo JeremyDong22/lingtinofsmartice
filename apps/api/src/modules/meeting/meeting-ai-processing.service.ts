@@ -7,7 +7,7 @@ import { XunfeiSttService } from '../audio/xunfei-stt.service';
 import { DashScopeSttService } from '../audio/dashscope-stt.service';
 import { DailySummaryService } from '../daily-summary/daily-summary.service';
 import { getChinaDateString } from '../../common/utils/date';
-import { SttModel } from '../../common/types/stt';
+import { SttModel, SttResult } from '../../common/types/stt';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const PRIMARY_MODEL = 'deepseek/deepseek-chat-v3-0324';
@@ -170,7 +170,7 @@ export class MeetingAiProcessingService {
   }
 
   // Retry DashScope STT once for transient network errors (fetch failed, ETIMEDOUT, etc.)
-  private async transcribeWithRetry(audioUrl: string): Promise<{ transcript: string; sttModel: SttModel }> {
+  private async transcribeWithRetry(audioUrl: string): Promise<SttResult> {
     try {
       return await this.dashScopeStt.transcribe(audioUrl, 4, 600000);
     } catch (firstError) {
