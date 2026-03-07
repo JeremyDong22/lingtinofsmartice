@@ -1,9 +1,3 @@
----
-paths:
-  - "docs/**"
-  - "CHANGELOG.md"
-  - "apps/web/components/layout/UpdatePrompt.tsx"
----
 # 文档更新规则
 
 ## 版本号更新（每次迭代必做）
