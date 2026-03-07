@@ -5,7 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { XunfeiSttService } from './xunfei-stt.service';
 import { DashScopeSttService } from './dashscope-stt.service';
-import { SttModel, SttResult } from '../../common/types/stt';
+import { DiarizationStatus, SttModel, SttResult } from '../../common/types/stt';
 
 // OpenRouter API Configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -76,8 +76,8 @@ export class AiProcessingService {
       this.logger.log(`Pipeline: ${tableId} 开始处理`);
 
       // Step 1: Speech-to-Text (DashScope → 讯飞 fallback)
-      const { transcript: rawTranscript, sttModel } = await this.transcribeAudio(audioUrl);
-      this.logger.log(`STT完成(${sttModel}): ${rawTranscript.length}字`);
+      const { transcript: rawTranscript, sttModel, diarizationStatus } = await this.transcribeAudio(audioUrl);
+      this.logger.log(`STT完成(${sttModel}): ${rawTranscript.length}字, diarization=${diarizationStatus}`);
 
       // Step 2: Handle empty transcript - skip AI processing
       if (!rawTranscript || rawTranscript.trim().length === 0) {
@@ -95,6 +95,7 @@ export class AiProcessingService {
         await this.saveResults(recordingId, {
           rawTranscript: '',
           sttModel,
+          diarizationStatus,
           ...emptyResult,
         });
         return {
@@ -120,12 +121,12 @@ export class AiProcessingService {
           customerSource: null as string | null,
           visitFrequency: null as string | null,
         };
-        await this.saveResults(recordingId, { rawTranscript, sttModel, ...fillerResult });
+        await this.saveResults(recordingId, { rawTranscript, sttModel, diarizationStatus, ...fillerResult });
         return { transcript: rawTranscript, ...fillerResult };
       }
 
       // Step 3: AI Tagging (Gemini) - 只做打标，不做纠偏
-      const aiResult = await this.processWithGemini(cleanedTranscript);
+      const aiResult = await this.processWithGemini(cleanedTranscript, diarizationStatus);
       // correctedTranscript 保留原始 STT 结果（用于调试对比）
       aiResult.correctedTranscript = rawTranscript;
       this.logger.log(`AI完成: ${aiResult.aiSummary}`);
@@ -134,6 +135,7 @@ export class AiProcessingService {
       await this.saveResults(recordingId, {
         rawTranscript,
         sttModel,
+        diarizationStatus,
         ...aiResult,
       });
 
@@ -175,7 +177,7 @@ export class AiProcessingService {
       const client = this.supabase.getClient();
       const { data, error } = await client
         .from('lingtin_visit_records')
-        .select('raw_transcript')
+        .select('raw_transcript, stt_diarization_status')
         .eq('id', recordingId)
         .single();
 
@@ -184,6 +186,9 @@ export class AiProcessingService {
       }
 
       const rawTranscript: string = data.raw_transcript;
+      // Use stored diarization status, fall back to text detection for legacy records
+      const diarizationStatus: DiarizationStatus = data.stt_diarization_status
+        || (/说话人1[:：]/.test(rawTranscript) && /说话人2[:：]/.test(rawTranscript) ? 'success' : 'unavailable');
 
       // Empty transcript — skip AI, just update processed_at
       if (!rawTranscript.trim()) {
@@ -218,7 +223,7 @@ export class AiProcessingService {
         return { success: true, aiSummary: '语音内容无有效信息' };
       }
 
-      const aiResult = await this.processWithGemini(cleanedTranscript);
+      const aiResult = await this.processWithGemini(cleanedTranscript, diarizationStatus);
       aiResult.correctedTranscript = rawTranscript;
 
       await this.saveResults(recordingId, { rawTranscript, ...aiResult });
@@ -555,6 +560,7 @@ export class AiProcessingService {
    */
   private async processWithGemini(
     transcript: string,
+    diarizationStatus: DiarizationStatus = 'unavailable',
   ): Promise<Omit<ProcessingResult, 'transcript'>> {
     // Read API key at runtime
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -564,13 +570,31 @@ export class AiProcessingService {
       throw new Error('AI_NOT_CONFIGURED: OpenRouter AI 未配置');
     }
 
-    const systemPrompt = `你是餐饮桌访对话分析专家。分析店长与顾客的对话，提取结构化信息。
+    // Use diarization status from STT pipeline instead of re-detecting from text
+    const hasDualSpeakers = diarizationStatus === 'success';
 
-## 角色识别（重要）
-对话是店长/服务员与顾客之间的桌访交流。根据语义模式判断角色：
+    // Build speaker identification section based on diarization status
+    let speakerSection: string;
+    if (hasDualSpeakers) {
+      speakerSection = `## 角色识别（重要）
+对话文本包含"说话人1:"和"说话人2:"标签，表示语音分离成功。
+- 同一标签下的内容来自同一个人
+- 结合标签+语义判断角色：通常先开口打招呼/提问的是店长，回答的是顾客
 - **店长/服务员**特征：打招呼("你好/打扰一下")、提问("菜品怎么样/第几次来")、推介("大众点评打卡送饮料")、致谢("祝你们用餐愉快")
 - **顾客**特征：回答提问("还可以/第1次")、评价菜品("好吃/有点咸")、表达来源("美团/朋友介绍")
-- feedbacks 只能包含**顾客**说的评价，不要把店长的话当作顾客反馈
+- 将对应标签下的内容分别归入 managerQuestions 和 customerAnswers
+- feedbacks 只能包含**顾客**说的评价，不要把店长的话当作顾客反馈`;
+    } else {
+      speakerSection = `## 角色识别
+注意：本段录音未能区分说话人，无法判断哪些是店长说的、哪些是顾客说的。
+- managerQuestions 和 customerAnswers 必须返回空数组 []
+- feedbacks 仍正常提取（根据语义判断评价内容）
+- 其余字段正常输出`;
+    }
+
+    const systemPrompt = `你是餐饮桌访对话分析专家。分析店长与顾客的对话，提取结构化信息。
+
+${speakerSection}
 
 输出JSON（只输出JSON，无其他内容）：
 {
@@ -760,6 +784,7 @@ export class AiProcessingService {
     result: {
       rawTranscript: string;
       sttModel?: SttModel;
+      diarizationStatus?: DiarizationStatus;
       correctedTranscript: string;
       aiSummary: string;
       sentimentScore: number;
@@ -798,6 +823,7 @@ export class AiProcessingService {
         customer_source: result.customerSource,
         visit_frequency: result.visitFrequency,
         stt_model: result.sttModel || null,
+        stt_diarization_status: result.diarizationStatus || null,
         status: 'processed',
         processed_at: new Date().toISOString(),
       })

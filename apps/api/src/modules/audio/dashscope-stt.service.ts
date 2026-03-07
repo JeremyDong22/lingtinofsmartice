@@ -4,7 +4,7 @@
 // Uses Alibaba DashScope batch transcription API with speaker diarization
 
 import { Injectable, Logger } from '@nestjs/common';
-import { SttResult } from '../../common/types/stt';
+import { DiarizationStatus, SttResult } from '../../common/types/stt';
 
 // Submit endpoint for transcription tasks
 const DASHSCOPE_SUBMIT_URL =
@@ -138,9 +138,9 @@ export class DashScopeSttService {
 
     // Step 2: Poll for result
     const result = await this.pollResult(apiKey, taskId, timeoutMs);
-    this.logger.log(`Task ${taskId} completed, transcript length=${result.length}`);
+    this.logger.log(`Task ${taskId} completed, transcript length=${result.transcript.length}, diarization=${result.diarizationStatus}`);
 
-    return { transcript: result, sttModel: 'dashscope_paraformer_v2' as const };
+    return { transcript: result.transcript, sttModel: 'dashscope_paraformer_v2' as const, diarizationStatus: result.diarizationStatus };
   }
 
   /**
@@ -217,7 +217,7 @@ export class DashScopeSttService {
   /**
    * Poll task status until completion or timeout
    */
-  private async pollResult(apiKey: string, taskId: string, timeoutMs: number): Promise<string> {
+  private async pollResult(apiKey: string, taskId: string, timeoutMs: number): Promise<{ transcript: string; diarizationStatus: DiarizationStatus }> {
     const startTime = Date.now();
     let delay = POLL_BASE_DELAY_MS;
 
@@ -279,7 +279,7 @@ export class DashScopeSttService {
    * Extract transcript text from completed task result
    * Downloads the transcription_url JSON and formats with speaker labels
    */
-  private async extractTranscript(taskData: TaskResponse): Promise<string> {
+  private async extractTranscript(taskData: TaskResponse): Promise<{ transcript: string; diarizationStatus: DiarizationStatus }> {
     const results = taskData.output?.results;
     if (!results || results.length === 0) {
       throw new Error('DASHSCOPE_NO_RESULTS: 转写成功但无结果');
@@ -322,22 +322,38 @@ export class DashScopeSttService {
       return this.formatWordsWithSpeakers(words);
     }
 
-    // Fallback: plain text without speaker labels
+    // Fallback: plain text without speaker labels (diarization unavailable)
     const text = transcript.text || '';
     if (!text.trim()) {
       throw new Error('DASHSCOPE_EMPTY_TRANSCRIPT: 转写成功但文本为空');
     }
-    return text;
+    return { transcript: text, diarizationStatus: 'single_speaker' };
   }
 
   /**
    * Format sentences with speaker labels
+   * If only one speaker_id found, returns plain text without misleading labels (single_speaker).
    * Input: [{ text: "你好", speaker_id: 0 }, { text: "请坐", speaker_id: 1 }]
    * Output: "说话人1: 你好\n说话人2: 请坐"
    */
+  /**
+   * Count distinct speaker IDs in an array of items with optional speaker_id.
+   */
+  private countSpeakers(items: Array<{ speaker_id?: number }>): number {
+    return new Set(items.map(i => i.speaker_id).filter(id => id !== undefined)).size;
+  }
+
   private formatWithSpeakers(
     sentences: Array<{ text: string; speaker_id?: number }>,
-  ): string {
+  ): { transcript: string; diarizationStatus: DiarizationStatus } {
+    if (this.countSpeakers(sentences) <= 1) {
+      return {
+        transcript: sentences.map(s => s.text).join(''),
+        diarizationStatus: 'single_speaker',
+      };
+    }
+
+    // Multiple speakers: format with labels
     const lines: string[] = [];
     let currentSpeaker: number | undefined;
 
@@ -356,13 +372,24 @@ export class DashScopeSttService {
       }
     }
 
-    return lines.join('\n');
+    return {
+      transcript: lines.join('\n'),
+      diarizationStatus: 'success',
+    };
   }
 
   /**
    * Format word-level results grouped by speaker
+   * If only one speaker_id found, returns plain text without misleading labels.
    */
-  private formatWordsWithSpeakers(words: TranscriptionWord[]): string {
+  private formatWordsWithSpeakers(words: TranscriptionWord[]): { transcript: string; diarizationStatus: DiarizationStatus } {
+    if (this.countSpeakers(words) <= 1) {
+      return {
+        transcript: words.map(w => w.text).join(''),
+        diarizationStatus: 'single_speaker',
+      };
+    }
+
     const lines: string[] = [];
     let currentSpeaker: number | undefined;
     let currentText = '';
@@ -387,7 +414,10 @@ export class DashScopeSttService {
       lines.push(`${label}${currentText}`);
     }
 
-    return lines.join('\n');
+    return {
+      transcript: lines.join('\n'),
+      diarizationStatus: 'success',
+    };
   }
 
   private sleep(ms: number): Promise<void> {
