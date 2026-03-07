@@ -223,6 +223,18 @@ export class DashboardController {
     );
   }
 
+  // GET /api/dashboard/feedback-loop - Feedback loop metrics (4 cards: visit/review/action/execution)
+  @Get('feedback-loop')
+  async getFeedbackLoop(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Query('managed_ids') managedIdsStr?: string,
+  ) {
+    const managedIds = DashboardService.parseManagedIds(managedIdsStr);
+    const range = resolveRange(undefined, startDate, endDate, getYesterdayChinaDateString);
+    return this.dashboardService.getFeedbackLoop(range.start, range.end, managedIds);
+  }
+
   // GET /api/dashboard/execution-overview - Multi-restaurant execution overview
   @Get('execution-overview')
   async getExecutionOverview(

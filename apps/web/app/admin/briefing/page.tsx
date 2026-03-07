@@ -11,6 +11,7 @@ import { useManagedScope } from '@/hooks/useManagedScope';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { BenchmarkPanel } from '@/components/admin/BenchmarkPanel';
 import { ExecutionStatus } from '@/components/admin/ExecutionStatus';
+import type { FeedbackLoopResponse } from '@/components/admin/ExecutionStatus';
 import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, useAdminPresets } from '@/components/shared/DatePicker';
@@ -153,6 +154,10 @@ export default function AdminBriefingPage() {
   const { data: executionData } = useSWR<ExecutionOverview>(
     `/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`
   );
+  // Fetch feedback loop metrics (linked to date picker)
+  const { data: feedbackLoopData } = useSWR<FeedbackLoopResponse>(
+    `/api/dashboard/feedback-loop?${dateRangeParams(dateRange)}${managedIdsParam}`
+  );
 
   const userName = user?.employeeName || user?.username || (locale === 'en' ? 'there' : '您');
   const greetingMap: Record<string, string> = {
@@ -216,6 +221,7 @@ export default function AdminBriefingPage() {
           overviewData={overviewData}
           onAudioToggle={handleAudioToggle}
           playingKey={playingKey}
+          feedbackLoopData={feedbackLoopData}
         />
 
         {/* Compact metrics grid (2×2) */}

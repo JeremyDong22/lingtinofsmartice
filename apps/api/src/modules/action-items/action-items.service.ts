@@ -62,7 +62,7 @@ export class ActionItemsService {
   }
 
   // Get all pending/acknowledged action items across all dates (for kitchen meeting reminders)
-  async getPendingActionItems(restaurantId: string, limit = 20) {
+  async getPendingActionItems(restaurantId: string, limit = 20, includeAudio = false) {
     const safeRestaurantId = UUID_REGEX.test(restaurantId) ? restaurantId : DEFAULT_RESTAURANT_ID;
 
     if (this.supabase.isMockMode()) {
@@ -72,19 +72,19 @@ export class ActionItemsService {
             id: 'mock-pending-1', restaurant_id: safeRestaurantId, action_date: '2026-02-24',
             category: 'dish_quality', priority: 'high', status: 'pending',
             suggestion_text: '清蒸鲈鱼偏咸，建议减盐',
-            evidence: [{ visitId: 'mock-v1', tableId: 'A3', feedback: '偏咸', sentiment: 'negative' }],
+            evidence: [{ visitId: 'mock-v1', tableId: 'A3', feedback: '偏咸', sentiment: 'negative', audioUrl: null }],
           },
           {
             id: 'mock-pending-2', restaurant_id: safeRestaurantId, action_date: '2026-02-24',
             category: 'dish_quality', priority: 'medium', status: 'pending',
             suggestion_text: '午市出菜速度慢，优化流程',
-            evidence: [{ visitId: 'mock-v2', tableId: 'A5', feedback: '上菜慢', sentiment: 'negative' }],
+            evidence: [{ visitId: 'mock-v2', tableId: 'A5', feedback: '上菜慢', sentiment: 'negative', audioUrl: null }],
           },
           {
             id: 'mock-pending-3', restaurant_id: safeRestaurantId, action_date: '2026-02-22',
             category: 'dish_quality', priority: 'medium', status: 'acknowledged',
             suggestion_text: '重新评估调整油焖虾口味',
-            evidence: [{ visitId: 'mock-v3', tableId: 'B2', feedback: '口味不对', sentiment: 'negative' }],
+            evidence: [{ visitId: 'mock-v3', tableId: 'B2', feedback: '口味不对', sentiment: 'negative', audioUrl: null }],
           },
         ],
       };
@@ -109,6 +109,39 @@ export class ActionItemsService {
       if (pw !== 0) return pw;
       return (b.action_date || '').localeCompare(a.action_date || '');
     });
+
+    // Enrich evidence with audio URLs from visit_records
+    if (includeAudio && sorted.length > 0) {
+      const visitIds = new Set<string>();
+      for (const action of sorted) {
+        const evidence = action.evidence as Array<{ visitId?: string }> | null;
+        if (Array.isArray(evidence)) {
+          for (const ev of evidence) {
+            if (ev.visitId) visitIds.add(ev.visitId);
+          }
+        }
+      }
+      if (visitIds.size > 0) {
+        const { data: visitData } = await client
+          .from('lingtin_visit_records')
+          .select('id, audio_url')
+          .in('id', [...visitIds]);
+        const audioMap = new Map<string, string | null>();
+        for (const v of (visitData || [])) {
+          audioMap.set(v.id, v.audio_url);
+        }
+        for (const action of sorted) {
+          const evidence = action.evidence as Array<{ visitId?: string; audioUrl?: string | null }> | null;
+          if (Array.isArray(evidence)) {
+            for (const ev of evidence) {
+              if (ev.visitId && audioMap.has(ev.visitId)) {
+                ev.audioUrl = audioMap.get(ev.visitId) ?? null;
+              }
+            }
+          }
+        }
+      }
+    }
 
     return { actions: sorted };
   }

@@ -1922,4 +1922,246 @@ export class DashboardService {
       },
     };
   }
+
+  // Feedback loop metrics for management briefing (4 cards: visit/review/action/execution)
+  async getFeedbackLoop(startDate: string, endDate: string, managedIds: string[] | null = null) {
+    if (this.supabase.isMockMode()) {
+      return {
+        restaurants: [{
+          restaurant_id: 'mock-rest-1',
+          restaurant_name: '测试店铺',
+          brand_id: null,
+          visit: { visit_count: 5, open_count: 8, coverage_rate: 63, negative_count: 2, health: 'yellow' },
+          review: { review_days: 1, total_days: 1, completion_rate: 100, avg_duration_seconds: 600, health: 'green' },
+          action: { total_items: 3, high_priority_count: 1, health: 'yellow' },
+          execution: { total_items: 3, resolved_count: 2, resolution_rate: 67, health: 'yellow' },
+        }],
+      };
+    }
+
+    const restaurants = await this.getVisibleRestaurants(managedIds);
+    const client = this.supabase.getClient();
+    const restaurantIds = restaurants.map(r => r.id);
+
+    if (restaurantIds.length === 0) return { restaurants: [] };
+
+    // Calculate previous period for trend comparison
+    const startMs = new Date(startDate + 'T00:00:00+08:00').getTime();
+    const endMs = new Date(endDate + 'T23:59:59+08:00').getTime();
+    const rangeDays = Math.round((endMs - startMs) / (86400000)) + 1;
+    const isMultiDay = startDate !== endDate;
+
+    const prevEnd = new Date(startMs - 86400000);
+    const prevStart = new Date(prevEnd.getTime() - (rangeDays - 1) * 86400000);
+    const prevStartStr = toChinaDateString(prevStart);
+    const prevEndStr = toChinaDateString(prevEnd);
+
+    // Current period queries + previous period queries (all parallel for single round-trip)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const queries: PromiseLike<{ data: any[] | null; error: any }>[] = [
+      // Current: 1. Visit records
+      client.from('lingtin_visit_records').select('restaurant_id, feedbacks').in('restaurant_id', restaurantIds).eq('status', 'processed').gte('visit_date', startDate).lte('visit_date', endDate),
+      // Current: 2. Table sessions
+      client.from('lingtin_table_sessions').select('restaurant_id').in('restaurant_id', restaurantIds).gte('session_date', startDate).lte('session_date', endDate),
+      // Current: 3. Meeting records
+      client.from('lingtin_meeting_records').select('restaurant_id, meeting_date, duration_seconds').in('restaurant_id', restaurantIds).eq('meeting_type', 'daily_review').gte('meeting_date', startDate).lte('meeting_date', endDate),
+      // Current: 4. Action items (pending/acknowledged OR resolved in range)
+      client.from('lingtin_action_items').select('restaurant_id, priority, status, created_at, resolved_at').in('restaurant_id', restaurantIds).neq('status', 'dismissed').or(`status.in.(pending,acknowledged),resolved_at.gte.${startDate}`).lte('created_at', endDate + 'T23:59:59'),
+    ];
+
+    // Previous period queries (for trend, only multi-day)
+    if (isMultiDay) {
+      queries.push(
+        client.from('lingtin_visit_records').select('restaurant_id').in('restaurant_id', restaurantIds).eq('status', 'processed').gte('visit_date', prevStartStr).lte('visit_date', prevEndStr),
+        client.from('lingtin_table_sessions').select('restaurant_id').in('restaurant_id', restaurantIds).gte('session_date', prevStartStr).lte('session_date', prevEndStr),
+        client.from('lingtin_meeting_records').select('restaurant_id, meeting_date').in('restaurant_id', restaurantIds).eq('meeting_type', 'daily_review').gte('meeting_date', prevStartStr).lte('meeting_date', prevEndStr),
+        client.from('lingtin_action_items').select('restaurant_id, status, resolved_at').in('restaurant_id', restaurantIds).neq('status', 'dismissed').gte('created_at', prevStartStr).lte('created_at', prevEndStr + 'T23:59:59'),
+      );
+    }
+
+    const results = await Promise.all(queries);
+    for (const r of results) {
+      if (r.error) throw r.error;
+    }
+
+    const visitsRes = results[0] as { data: Array<{ restaurant_id: string; feedbacks: unknown }> | null };
+    const sessionsRes = results[1] as { data: Array<{ restaurant_id: string }> | null };
+    const meetingsRes = results[2] as { data: Array<{ restaurant_id: string; meeting_date: string; duration_seconds: number | null }> | null };
+    const actionsRes = results[3] as { data: Array<{ restaurant_id: string; priority: string; status: string; created_at: string; resolved_at: string | null }> | null };
+
+    // Previous period aggregation (only if multi-day)
+    let prevVisitsCount: Map<string, number> | null = null;
+    let prevSessionsCount: Map<string, number> | null = null;
+    let prevMeetingDays: Map<string, number> | null = null;
+    let prevResolvedRate: Map<string, number> | null = null;
+
+    if (isMultiDay) {
+      const pVisits = results[4] as { data: Array<{ restaurant_id: string }> | null };
+      const pSessions = results[5] as { data: Array<{ restaurant_id: string }> | null };
+      const pMeetings = results[6] as { data: Array<{ restaurant_id: string; meeting_date: string }> | null };
+      const pActions = results[7] as { data: Array<{ restaurant_id: string; status: string; resolved_at: string | null }> | null };
+
+      prevVisitsCount = new Map<string, number>();
+      for (const v of (pVisits.data || [])) {
+        prevVisitsCount.set(v.restaurant_id, (prevVisitsCount.get(v.restaurant_id) || 0) + 1);
+      }
+      prevSessionsCount = new Map<string, number>();
+      for (const s of (pSessions.data || [])) {
+        prevSessionsCount.set(s.restaurant_id, (prevSessionsCount.get(s.restaurant_id) || 0) + 1);
+      }
+      prevMeetingDays = new Map<string, number>();
+      const seenMeetingKeys = new Set<string>();
+      for (const m of (pMeetings.data || [])) {
+        const key = `${m.restaurant_id}|${m.meeting_date}`;
+        if (!seenMeetingKeys.has(key)) {
+          seenMeetingKeys.add(key);
+          prevMeetingDays.set(m.restaurant_id, (prevMeetingDays.get(m.restaurant_id) || 0) + 1);
+        }
+      }
+      prevResolvedRate = new Map<string, number>();
+      const prevActionsByRest = new Map<string, { total: number; resolved: number }>();
+      for (const a of (pActions.data || [])) {
+        const entry = prevActionsByRest.get(a.restaurant_id) || { total: 0, resolved: 0 };
+        entry.total++;
+        if (a.status === 'resolved') entry.resolved++;
+        prevActionsByRest.set(a.restaurant_id, entry);
+      }
+      for (const [rid, entry] of prevActionsByRest) {
+        prevResolvedRate.set(rid, entry.total > 0 ? Math.round((entry.resolved / entry.total) * 100) : 0);
+      }
+    }
+
+    // Aggregate per restaurant
+    const visitsByRest = new Map<string, { count: number; negative: number }>();
+    for (const v of (visitsRes.data || [])) {
+      const entry = visitsByRest.get(v.restaurant_id) || { count: 0, negative: 0 };
+      entry.count++;
+      // Count negative feedbacks
+      const feedbacks = v.feedbacks as Array<{ sentiment?: string }> | null;
+      if (Array.isArray(feedbacks)) {
+        entry.negative += feedbacks.filter(f => f.sentiment === 'negative').length;
+      }
+      visitsByRest.set(v.restaurant_id, entry);
+    }
+
+    const sessionsByRest = new Map<string, number>();
+    for (const s of (sessionsRes.data || [])) {
+      sessionsByRest.set(s.restaurant_id, (sessionsByRest.get(s.restaurant_id) || 0) + 1);
+    }
+
+    const meetingsByRest = new Map<string, { dates: Set<string>; totalDuration: number; count: number }>();
+    for (const m of (meetingsRes.data || [])) {
+      const entry = meetingsByRest.get(m.restaurant_id) || { dates: new Set<string>(), totalDuration: 0, count: 0 };
+      entry.dates.add(m.meeting_date);
+      if (m.duration_seconds) entry.totalDuration += m.duration_seconds;
+      entry.count++;
+      meetingsByRest.set(m.restaurant_id, entry);
+    }
+
+    // Action items: filter to those relevant to current period
+    const actionsByRest = new Map<string, { total: number; resolved: number; highPriority: number }>();
+    for (const a of (actionsRes.data || [])) {
+      const createdDate = a.created_at ? a.created_at.slice(0, 10) : '';
+      const resolvedDate = a.resolved_at ? a.resolved_at.slice(0, 10) : null;
+      // Include if: created before endDate AND (still pending/acknowledged OR resolved within range)
+      const isPendingOrAcknowledged = a.status === 'pending' || a.status === 'acknowledged';
+      const resolvedInRange = a.status === 'resolved' && resolvedDate && resolvedDate >= startDate && resolvedDate <= endDate;
+      const createdBeforeEnd = createdDate <= endDate;
+
+      if (createdBeforeEnd && (isPendingOrAcknowledged || resolvedInRange)) {
+        const entry = actionsByRest.get(a.restaurant_id) || { total: 0, resolved: 0, highPriority: 0 };
+        entry.total++;
+        if (a.status === 'resolved') entry.resolved++;
+        if (a.priority === 'high' && isPendingOrAcknowledged) entry.highPriority++;
+        actionsByRest.set(a.restaurant_id, entry);
+      }
+    }
+
+    // Health thresholds
+    function visitHealth(coverageRate: number): string {
+      if (coverageRate >= 70) return 'green';
+      if (coverageRate >= 40) return 'yellow';
+      return 'red';
+    }
+    function reviewHealth(completionRate: number): string {
+      if (completionRate >= 80) return 'green';
+      if (completionRate >= 50) return 'yellow';
+      return 'red';
+    }
+    function actionHealth(highPriorityCount: number): string {
+      if (highPriorityCount === 0) return 'green';
+      if (highPriorityCount <= 2) return 'yellow';
+      return 'red';
+    }
+    function executionHealth(resolutionRate: number): string {
+      if (resolutionRate >= 70) return 'green';
+      if (resolutionRate >= 40) return 'yellow';
+      return 'red';
+    }
+    function trend(current: number, previous: number | undefined): string | undefined {
+      if (previous === undefined) return undefined;
+      if (current > previous) return 'up';
+      if (current < previous) return 'down';
+      return 'flat';
+    }
+
+    const result = restaurants.map(r => {
+      const visits = visitsByRest.get(r.id) || { count: 0, negative: 0 };
+      const openCount = sessionsByRest.get(r.id) || 0;
+      const coverageRate = openCount > 0 ? Math.round((visits.count / openCount) * 100) : 0;
+
+      const meetings = meetingsByRest.get(r.id);
+      const reviewDays = meetings ? meetings.dates.size : 0;
+      const completionRate = rangeDays > 0 ? Math.round((reviewDays / rangeDays) * 100) : 0;
+      const avgDuration = meetings && meetings.count > 0 ? Math.round(meetings.totalDuration / meetings.count) : null;
+
+      const actions = actionsByRest.get(r.id) || { total: 0, resolved: 0, highPriority: 0 };
+      const resolutionRate = actions.total > 0 ? Math.round((actions.resolved / actions.total) * 100) : 100;
+
+      // Trend calculation
+      const prevCoverage = isMultiDay && prevSessionsCount
+        ? ((prevVisitsCount?.get(r.id) || 0) / Math.max(prevSessionsCount.get(r.id) || 1, 1)) * 100
+        : undefined;
+      const prevCompletion = isMultiDay && prevMeetingDays
+        ? ((prevMeetingDays.get(r.id) || 0) / rangeDays) * 100
+        : undefined;
+      const prevResolution = isMultiDay ? prevResolvedRate?.get(r.id) : undefined;
+
+      return {
+        restaurant_id: r.id,
+        restaurant_name: r.restaurant_name,
+        brand_id: r.brand_id,
+        visit: {
+          visit_count: visits.count,
+          open_count: openCount,
+          coverage_rate: coverageRate,
+          negative_count: visits.negative,
+          health: visitHealth(coverageRate),
+          ...(isMultiDay && { trend: trend(coverageRate, prevCoverage) }),
+        },
+        review: {
+          review_days: reviewDays,
+          total_days: rangeDays,
+          completion_rate: completionRate,
+          avg_duration_seconds: avgDuration,
+          health: reviewHealth(completionRate),
+          ...(isMultiDay && { trend: trend(completionRate, prevCompletion) }),
+        },
+        action: {
+          total_items: actions.total,
+          high_priority_count: actions.highPriority,
+          health: actionHealth(actions.highPriority),
+        },
+        execution: {
+          total_items: actions.total,
+          resolved_count: actions.resolved,
+          resolution_rate: resolutionRate,
+          health: executionHealth(resolutionRate),
+          ...(isMultiDay && { trend: trend(resolutionRate, prevResolution) }),
+        },
+      };
+    });
+
+    return { restaurants: result };
+  }
 }
