@@ -15,6 +15,7 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -107,11 +108,14 @@ export class MeetingController {
         keyDecisions: result.keyDecisions,
       };
     } catch (error) {
-      if (error instanceof Error && error.message.includes('already')) {
-        this.logger.warn(`◀ Duplicate request: ${error.message}`);
-        throw new ConflictException(error.message);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (message.includes('already')) {
+        this.logger.warn(`◀ Duplicate request: ${message}`);
+        throw new ConflictException(message);
       }
-      throw error;
+      // Preserve real error message instead of letting NestJS wrap as generic 500
+      this.logger.error(`◀ Process failed: ${message}`);
+      throw new InternalServerErrorException(message);
     }
   }
 

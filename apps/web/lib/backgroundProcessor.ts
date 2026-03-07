@@ -625,14 +625,20 @@ export async function processMeetingInBackground(
       return;
     }
 
-    try {
-      await fetchWithTimeout(getApiUrl(`api/meeting/${id}/status`), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ status: 'error', error_message: message }),
-      }, 5000);
-    } catch (updateError) {
-      logError(`Failed to update meeting error status for ${id}`, updateError);
+    // Backend saveErrorStatus already persisted the real error message.
+    // Only PATCH if the error happened before backend processing (e.g. upload phase).
+    const isPreProcessError = message.includes('upload') || message.includes('Upload') ||
+                               message.includes('Both') || message === '处理失败';
+    if (isPreProcessError) {
+      try {
+        await fetchWithTimeout(getApiUrl(`api/meeting/${id}/status`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ status: 'error', error_message: message }),
+        }, 5000);
+      } catch (updateError) {
+        logError(`Failed to update meeting error status for ${id}`, updateError);
+      }
     }
 
     callbacks.onError(id, message);
