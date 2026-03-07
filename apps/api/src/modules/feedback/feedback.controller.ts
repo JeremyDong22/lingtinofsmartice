@@ -22,6 +22,7 @@ import { FeedbackAiService } from './feedback-ai.service';
 import { XunfeiSttService } from '../audio/xunfei-stt.service';
 import { DashScopeSttService } from '../audio/dashscope-stt.service';
 import { SttModel } from '../../common/types/stt';
+import { Public } from '../auth/public.decorator';
 
 const multerOptions = {
   storage: memoryStorage(),
@@ -146,6 +147,7 @@ export class FeedbackController {
 
   // POST /api/feedback/auto-resolve - AI match feedbacks against changelog
   // NOTE: Must be before :id routes to avoid param capture
+  @Public()
   @Post('auto-resolve')
   async autoResolve(
     @Body('changelog_text') changelogText: string,
