@@ -24,10 +24,10 @@ export function UserMenu() {
   const [hasUnreadGuide, setHasUnreadGuide] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Poll for unread feedback replies (60s interval, non-admin only)
+  // Poll for unread feedback replies (60s interval, all roles)
   const isAdmin = user?.roleCode === 'administrator';
   const { data: feedbackData } = useSWR<{ data: Array<{ admin_reply: string | null; reply_read_at: string | null }> }>(
-    user && !isAdmin ? `/api/feedback/mine?employee_id=${user.id}` : null,
+    user ? `/api/feedback/mine?employee_id=${user.id}` : null,
     { refreshInterval: 60_000 },
   );
   const hasUnreadReply = feedbackData?.data?.some(
