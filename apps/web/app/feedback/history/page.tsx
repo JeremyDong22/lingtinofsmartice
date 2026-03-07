@@ -1,11 +1,15 @@
-// Feedback History Page - View submitted feedback with status and admin replies
+// Feedback History Page - View submitted feedback with status, admin replies, and unread notifications
+// v1.1 - Added unread reply banner, card highlighting, version badge, IntersectionObserver auto-read
 
 'use client';
 
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAuthHeaders } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/layout/UserMenu';
+import { getApiUrl } from '@/lib/api';
 import useSWR from 'swr';
+import { useRef, useEffect, useCallback } from 'react';
 
 interface FeedbackItem {
   id: string;
@@ -19,6 +23,8 @@ interface FeedbackItem {
   status: string;
   admin_reply: string | null;
   admin_reply_at: string | null;
+  reply_read_at: string | null;
+  resolved_version: string | null;
   created_at: string;
 }
 
@@ -48,15 +54,148 @@ function formatTime(dateStr: string) {
   return `${month}/${day} ${hour}:${min}`;
 }
 
+function FeedbackCard({
+  fb,
+  isUnread,
+  onRead,
+}: {
+  fb: FeedbackItem;
+  isUnread: boolean;
+  onRead: (id: string) => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const statusInfo = STATUS_MAP[fb.status] || STATUS_MAP.pending;
+
+  // IntersectionObserver: mark as read when card is visible for 500ms
+  useEffect(() => {
+    if (!isUnread || !cardRef.current) return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          timer = setTimeout(() => onRead(fb.id), 500);
+        } else {
+          clearTimeout(timer);
+        }
+      },
+      { threshold: 0.5 },
+    );
+
+    observer.observe(cardRef.current);
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [isUnread, fb.id, onRead]);
+
+  return (
+    <div
+      ref={cardRef}
+      className={`glass-card rounded-xl p-4 space-y-2 ${
+        isUnread ? 'border-l-4 border-primary-500' : ''
+      }`}
+    >
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-0.5 rounded-full ${statusInfo.color}`}>
+            {statusInfo.label}
+          </span>
+          {fb.category && (
+            <span className="text-xs text-gray-400">
+              {CATEGORY_LABELS[fb.category] || fb.category}
+            </span>
+          )}
+        </div>
+        <span className="text-xs text-gray-400">{formatTime(fb.created_at)}</span>
+      </div>
+
+      {/* Content */}
+      <p className="text-sm text-gray-800 line-clamp-3">
+        {fb.content_text || fb.ai_summary || '(语音反馈处理中...)'}
+      </p>
+
+      {/* Tags */}
+      {fb.tags && fb.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {fb.tags.map((tag, i) => (
+            <span key={i} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Voice indicator */}
+      {fb.input_type === 'voice' && fb.audio_url && (
+        <div className="flex items-center gap-1 text-xs text-gray-400">
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+          </svg>
+          语音反馈
+        </div>
+      )}
+
+      {/* Admin reply */}
+      {fb.admin_reply && (
+        <div className="mt-2 bg-primary-50 rounded-lg p-3 space-y-1">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-primary-700">管理层回复</p>
+            {fb.resolved_version && (
+              <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                v{fb.resolved_version} 已修复
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-primary-800">{fb.admin_reply}</p>
+          {fb.admin_reply_at && (
+            <p className="text-[10px] text-primary-400">{formatTime(fb.admin_reply_at)}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FeedbackHistoryPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  const { data, isLoading } = useSWR<{ data: FeedbackItem[] }>(
+  const { data, isLoading, mutate } = useSWR<{ data: FeedbackItem[] }>(
     user ? `/api/feedback/mine?employee_id=${user.id}` : null
   );
 
   const feedbacks = data?.data ?? [];
+  const unreadReplies = feedbacks.filter(f => f.admin_reply && !f.reply_read_at);
+
+  // Mark reply as read - optimistic update
+  const markRead = useCallback(async (feedbackId: string) => {
+    if (!user) return;
+
+    // Optimistic update
+    mutate(
+      prev => prev ? {
+        ...prev,
+        data: prev.data.map(f =>
+          f.id === feedbackId ? { ...f, reply_read_at: new Date().toISOString() } : f
+        ),
+      } : prev,
+      false,
+    );
+
+    try {
+      await fetch(getApiUrl(`/api/feedback/${feedbackId}/read-reply`), {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: user.id }),
+      });
+    } catch {
+      // Revert on failure
+      mutate();
+    }
+  }, [user, mutate]);
 
   if (!user) return null;
 
@@ -79,6 +218,16 @@ export default function FeedbackHistoryPage() {
       </header>
 
       <div className="px-4 py-4 max-w-lg mx-auto space-y-3 island-page-top island-page-bottom">
+        {/* Unread replies banner */}
+        {unreadReplies.length > 0 && (
+          <div className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <span className="text-lg">💬</span>
+            <p className="text-sm text-primary-700 font-medium">
+              你有 {unreadReplies.length} 条反馈收到了回复
+            </p>
+          </div>
+        )}
+
         {isLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
@@ -103,65 +252,14 @@ export default function FeedbackHistoryPage() {
           </div>
         )}
 
-        {feedbacks.map((fb) => {
-          const statusInfo = STATUS_MAP[fb.status] || STATUS_MAP.pending;
-          return (
-            <div key={fb.id} className="glass-card rounded-xl p-4 space-y-2">
-              {/* Header row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusInfo.color}`}>
-                    {statusInfo.label}
-                  </span>
-                  {fb.category && (
-                    <span className="text-xs text-gray-400">
-                      {CATEGORY_LABELS[fb.category] || fb.category}
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-gray-400">{formatTime(fb.created_at)}</span>
-              </div>
-
-              {/* Content */}
-              <p className="text-sm text-gray-800 line-clamp-3">
-                {fb.content_text || fb.ai_summary || '(语音反馈处理中...)'}
-              </p>
-
-              {/* Tags */}
-              {fb.tags && fb.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {fb.tags.map((tag, i) => (
-                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Voice indicator */}
-              {fb.input_type === 'voice' && fb.audio_url && (
-                <div className="flex items-center gap-1 text-xs text-gray-400">
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                  </svg>
-                  语音反馈
-                </div>
-              )}
-
-              {/* Admin reply */}
-              {fb.admin_reply && (
-                <div className="mt-2 bg-primary-50 rounded-lg p-3 space-y-1">
-                  <p className="text-xs font-medium text-primary-700">管理层回复</p>
-                  <p className="text-sm text-primary-800">{fb.admin_reply}</p>
-                  {fb.admin_reply_at && (
-                    <p className="text-[10px] text-primary-400">{formatTime(fb.admin_reply_at)}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {feedbacks.map((fb) => (
+          <FeedbackCard
+            key={fb.id}
+            fb={fb}
+            isUnread={!!fb.admin_reply && !fb.reply_read_at}
+            onRead={markRead}
+          />
+        ))}
 
         {/* FAB to submit new feedback */}
         <div className="fixed bottom-6 right-6">
