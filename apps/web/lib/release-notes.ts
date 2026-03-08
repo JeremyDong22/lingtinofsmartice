@@ -20,6 +20,42 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.4.1',
+    date: '2026-03-08',
+    roles: ['administrator'],
+    title: '品牌 KPI 指标栏 + 暖色系统一',
+    items: [
+      {
+        title: '品牌 KPI 指标栏',
+        howToUse: '总览页展开品牌行，下方新增 4 个核心指标（满意度/老客占比/复盘率/解决率），大号数字直观展示品牌健康度。',
+        value: '不用逐店翻数据，品牌整体表现一目了然。',
+      },
+      {
+        title: '品牌看板暖色系配色统一',
+        howToUse: '趋势图、问题分布、行动老化统一使用暖色系（珊瑚→桃→杏→沙），视觉风格更协调。',
+        value: '界面更整洁统一，看数据更舒适。',
+      },
+    ],
+  },
+  {
+    version: '2.4.0',
+    date: '2026-03-07',
+    roles: ['administrator'],
+    title: '品牌可视化看板',
+    items: [
+      {
+        title: '品牌级趋势图',
+        howToUse: '总览页展开品牌行，查看满意度和解决率的 30 天趋势图，直观了解品牌数据走势。',
+        value: '不用问 AI，看一眼就知道品牌趋势是向好还是变差。',
+      },
+      {
+        title: '问题分类分布 + 行动老化',
+        howToUse: '品牌看板下方展示各类问题（菜品/服务/态度/环境）占比和行动项的处理时效分布。',
+        value: '快速定位品牌主要问题类型，跟踪行动项是否及时处理。',
+      },
+    ],
+  },
+  {
     version: '2.3.0',
     date: '2026-03-07',
     roles: ['manager'],

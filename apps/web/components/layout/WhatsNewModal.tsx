@@ -26,6 +26,12 @@ export function WhatsNewModal() {
 
       const found = getLatestNoteForRole(APP_VERSION, user.roleCode);
       if (!found) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[WhatsNewModal] release-notes.ts 缺少 v${APP_VERSION} 的条目！` +
+            ` 弹窗和使用指南红点将不会显示。请在 apps/web/lib/release-notes.ts 中添加该版本的 release note。`
+          );
+        }
         localStorage.setItem(LS_KEY, APP_VERSION);
         return;
       }
