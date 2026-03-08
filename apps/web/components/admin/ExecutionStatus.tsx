@@ -100,6 +100,10 @@ function getStoreStatusColor(r: { review_done: boolean; pending_actions: number 
   return { dot: 'bg-green-500', order: 2 };
 }
 
+function calcReviewRate(summary: { reviewed_count: number; total_count: number }): number | null {
+  return summary.total_count > 0 ? (summary.reviewed_count / summary.total_count) * 100 : null;
+}
+
 // Chevron icon
 function Chevron({ expanded, className = '' }: { expanded: boolean; className?: string }) {
   return (
@@ -199,7 +203,11 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
           // Single brand: skip brand layer, show stores directly
           <>
             {sortedBrands[0].brand_id != null && (
-              <BrandCharts brandId={sortedBrands[0].brand_id} managedIdsParam={managedIdsParam} />
+              <BrandCharts
+                brandId={sortedBrands[0].brand_id}
+                managedIdsParam={managedIdsParam}
+                reviewRate={calcReviewRate(sortedBrands[0].summary)}
+              />
             )}
             {sortStores(sortedBrands[0].restaurants).map(store => (
             <StoreRow
@@ -221,7 +229,6 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
           // Multiple brands: brand → store → problems
           sortedBrands.map(brand => {
             const brandExpanded = expandedBrands.has(brand.brand_id);
-            const allReviewed = brand.summary.reviewed_count === brand.summary.total_count;
             return (
               <Fragment key={brand.brand_id ?? 'other'}>
                 {/* Brand row */}
@@ -234,20 +241,17 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
                     <span className="text-sm font-semibold text-gray-900">{brand.brand_name}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs flex-shrink-0">
-                    <span className={allReviewed ? 'text-green-600' : 'text-amber-600'}>
-                      {t('execution.reviewCount', brand.summary.reviewed_count, brand.summary.total_count)}
-                    </span>
-                    {brand.summary.total_pending > 0 ? (
-                      <span className="text-red-500 font-medium">{brand.summary.total_pending}条</span>
-                    ) : (
-                      <span className="text-gray-300">0条</span>
-                    )}
+                    <span className="text-gray-400">{brand.restaurants.length}店</span>
                   </div>
                 </div>
 
                 {/* Brand charts (always visible below brand header) */}
                 {brand.brand_id != null && (
-                  <BrandCharts brandId={brand.brand_id} managedIdsParam={managedIdsParam} />
+                  <BrandCharts
+                    brandId={brand.brand_id}
+                    managedIdsParam={managedIdsParam}
+                    reviewRate={calcReviewRate(brand.summary)}
+                  />
                 )}
 
                 {/* Expanded stores */}

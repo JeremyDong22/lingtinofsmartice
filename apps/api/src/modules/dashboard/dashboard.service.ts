@@ -2192,10 +2192,10 @@ export class DashboardService {
 
     // Parallel queries
     const [visitRecords, actionItems] = await Promise.all([
-      // 1. Visit records for satisfaction trend + problem distribution
+      // 1. Visit records for satisfaction trend + problem distribution + repeat ratio
       client
         .from('lingtin_visit_records')
-        .select('visit_date, sentiment_score, feedbacks, restaurant_id')
+        .select('visit_date, sentiment_score, feedbacks, restaurant_id, visit_frequency')
         .in('restaurant_id', restaurantIds)
         .gte('visit_date', startStr)
         .lte('visit_date', endStr)
@@ -2286,9 +2286,25 @@ export class DashboardService {
       });
     }
 
-    // === Problem distribution (from feedbacks) ===
+    // === Problem distribution (from feedbacks) + repeat ratio ===
     const problemCounts: Record<string, number> = {};
+    let repeatAndRegular = 0;
+    let withFreqData = 0;
+    let sumSentiment = 0, countSentiment = 0;
     for (const record of visitRecords) {
+      // Sentiment for summary KPI (running sum instead of array)
+      if (record.sentiment_score != null) {
+        sumSentiment += record.sentiment_score;
+        countSentiment++;
+      }
+      // Repeat ratio
+      if (record.visit_frequency && ['first', 'repeat', 'regular', 'unknown'].includes(record.visit_frequency)) {
+        withFreqData++;
+        if (record.visit_frequency === 'repeat' || record.visit_frequency === 'regular') {
+          repeatAndRegular++;
+        }
+      }
+      // Problem distribution
       const feedbacks = record.feedbacks;
       if (!feedbacks || !Array.isArray(feedbacks)) continue;
       for (const fb of feedbacks) {
@@ -2299,11 +2315,25 @@ export class DashboardService {
       }
     }
 
+    // Summary KPIs
+    const avgSentiment = countSentiment > 0
+      ? Math.round(sumSentiment / countSentiment)
+      : null;
+    const repeatRatio = withFreqData > 0 ? Math.round((repeatAndRegular / withFreqData) * 100) : null;
+    const lastResolutionRate = resolutionTrend.length > 0
+      ? resolutionTrend[resolutionTrend.length - 1].resolution_rate
+      : null;
+
     return {
       satisfaction_trend: satisfactionTrend,
       resolution_trend: resolutionTrend,
       problem_distribution: problemCounts,
       action_aging: { under3, days3to7, over7 },
+      summary_kpi: {
+        avg_sentiment: avgSentiment,
+        repeat_ratio: repeatRatio,
+        resolution_rate: lastResolutionRate,
+      },
     };
   }
 }
