@@ -2164,4 +2164,146 @@ export class DashboardService {
 
     return { restaurants: result };
   }
+
+  // Get brand-level KPI data: satisfaction trend, resolution trend, problem distribution, action aging
+  async getBrandKpi(brandId: number, days: number, managedIds: string[] | null = null) {
+    const client = this.supabase.getClient();
+
+    // Get restaurants belonging to this brand (scoped by managedIds)
+    const restaurants = await this.getVisibleRestaurants(managedIds);
+    const brandRestaurants = restaurants.filter(r => r.brand_id === brandId);
+    const restaurantIds = brandRestaurants.map(r => r.id);
+
+    if (restaurantIds.length === 0) {
+      return {
+        satisfaction_trend: [],
+        resolution_trend: [],
+        problem_distribution: {},
+        action_aging: { under3: 0, days3to7: 0, over7: 0 },
+      };
+    }
+
+    // Date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days + 1);
+    const startStr = toChinaDateString(startDate);
+    const endStr = toChinaDateString(endDate);
+
+    // Parallel queries
+    const [visitRecords, actionItems] = await Promise.all([
+      // 1. Visit records for satisfaction trend + problem distribution
+      client
+        .from('lingtin_visit_records')
+        .select('visit_date, sentiment_score, feedbacks, restaurant_id')
+        .in('restaurant_id', restaurantIds)
+        .gte('visit_date', startStr)
+        .lte('visit_date', endStr)
+        .eq('status', 'processed')
+        .then(({ data, error }) => {
+          if (error) throw error;
+          return data || [];
+        }),
+
+      // 2. Action items for resolution trend + aging (limit to last 90 days for performance)
+      client
+        .from('lingtin_action_items')
+        .select('restaurant_id, status, created_at')
+        .in('restaurant_id', restaurantIds)
+        .neq('status', 'dismissed')
+        .gte('created_at', new Date(startDate.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString())
+        .then(({ data, error }) => {
+          if (error) throw error;
+          return data || [];
+        }),
+    ]);
+
+    // === Satisfaction trend (daily avg across brand) ===
+    const sentimentByDate = new Map<string, number[]>();
+    for (const record of visitRecords) {
+      if (record.sentiment_score == null) continue;
+      const scores = sentimentByDate.get(record.visit_date) || [];
+      scores.push(record.sentiment_score);
+      sentimentByDate.set(record.visit_date, scores);
+    }
+    const satisfactionTrend = Array.from(sentimentByDate.entries())
+      .map(([date, scores]) => ({
+        date,
+        avg_sentiment: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10,
+        count: scores.length,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // === Action items: single-pass for resolution trend + aging ===
+    const actionsByCreatedDate = new Map<string, { total: number; resolved: number }>();
+    const now = new Date();
+    let cumTotal = 0;
+    let cumResolved = 0;
+    let under3 = 0, days3to7 = 0, over7 = 0;
+
+    for (const item of actionItems) {
+      const createdStr = typeof item.created_at === 'string'
+        ? item.created_at
+        : new Date(item.created_at).toISOString();
+      const createdDate = createdStr.slice(0, 10);
+
+      // Resolution trend: bucket by date
+      if (createdDate >= startStr && createdDate <= endStr) {
+        const entry = actionsByCreatedDate.get(createdDate) || { total: 0, resolved: 0 };
+        entry.total++;
+        if (item.status === 'resolved') entry.resolved++;
+        actionsByCreatedDate.set(createdDate, entry);
+      } else if (createdDate < startStr) {
+        // Pre-window cumulative baseline
+        cumTotal++;
+        if (item.status === 'resolved') cumResolved++;
+      }
+
+      // Aging: open items only
+      if (item.status !== 'resolved') {
+        const ageDays = Math.floor((now.getTime() - new Date(createdStr).getTime()) / (1000 * 60 * 60 * 24));
+        if (ageDays < 3) under3++;
+        else if (ageDays <= 7) days3to7++;
+        else over7++;
+      }
+    }
+
+    // Build cumulative resolution by date
+    const allDates = new Set<string>([...sentimentByDate.keys(), ...actionsByCreatedDate.keys()]);
+    const sortedDates = Array.from(allDates).sort();
+    const resolutionTrend: { date: string; resolution_rate: number; resolved: number; total: number }[] = [];
+    for (const date of sortedDates) {
+      const dayItems = actionsByCreatedDate.get(date);
+      if (dayItems) {
+        cumTotal += dayItems.total;
+        cumResolved += dayItems.resolved;
+      }
+      resolutionTrend.push({
+        date,
+        resolution_rate: cumTotal > 0 ? Math.round((cumResolved / cumTotal) * 100) : 100,
+        resolved: cumResolved,
+        total: cumTotal,
+      });
+    }
+
+    // === Problem distribution (from feedbacks) ===
+    const problemCounts: Record<string, number> = {};
+    for (const record of visitRecords) {
+      const feedbacks = record.feedbacks;
+      if (!feedbacks || !Array.isArray(feedbacks)) continue;
+      for (const fb of feedbacks) {
+        if (fb && typeof fb === 'object' && fb.sentiment === 'negative' && fb.category) {
+          const cat = fb.category as string;
+          problemCounts[cat] = (problemCounts[cat] || 0) + 1;
+        }
+      }
+    }
+
+    return {
+      satisfaction_trend: satisfactionTrend,
+      resolution_trend: resolutionTrend,
+      problem_distribution: problemCounts,
+      action_aging: { under3, days3to7, over7 },
+    };
+  }
 }
