@@ -27,4 +27,12 @@ export class DailySummaryController {
       date || getChinaDateString(),
     );
   }
+
+  /** Called by pg_cron via pg_net — generates summaries for all restaurants with visits today */
+  @Post('cron-trigger')
+  async cronTrigger(@Query('date') date?: string) {
+    return this.dailySummaryService.triggerAllSummaries(
+      date || getChinaDateString(),
+    );
+  }
 }
