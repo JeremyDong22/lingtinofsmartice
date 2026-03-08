@@ -57,9 +57,9 @@ export class DailySummaryController {
       );
       return { success: true, result };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
       const stack = err instanceof Error ? err.stack : undefined;
-      return { success: false, error: msg, stack };
+      return { success: false, error: msg, stack, raw: err };
     }
   }
 }
