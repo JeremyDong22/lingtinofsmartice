@@ -34,43 +34,55 @@ export class DailySummaryService {
     private readonly supabase: SupabaseService,
   ) {}
 
-  // Cron: UTC 13:00 = Beijing 21:00
+  // NestJS in-process cron as fallback (may miss if container restarts)
   @Cron('0 0 13 * * *', { name: 'daily-summary-cron' })
   async handleDailySummaryCron() {
     this.logger.log('Cron: 每日总结定时任务触发 (21:00 UTC+8)');
-
     if (this.supabase.isMockMode()) {
       this.logger.log('Cron: Mock mode, skipping');
       return;
     }
+    await this.triggerAllSummaries(getChinaDateString());
+  }
 
-    const today = getChinaDateString();
-
-    // Get all restaurants that had visits today
+  /** Generate daily summaries for all restaurants with visits on given date */
+  async triggerAllSummaries(date: string) {
     const client = this.supabase.getClient();
     const { data: restaurants, error } = await client
       .from('lingtin_visit_records')
       .select('restaurant_id')
-      .eq('visit_date', today)
+      .eq('visit_date', date)
       .eq('status', 'processed');
 
     if (error) {
       this.logger.error(`Cron: Failed to query restaurants: ${error.message}`);
-      return;
+      return { success: false, error: error.message };
     }
 
     const uniqueIds = [...new Set((restaurants || []).map(r => r.restaurant_id))];
-    this.logger.log(`Cron: Found ${uniqueIds.length} restaurants with visits today`);
+    this.logger.log(`Cron: Found ${uniqueIds.length} restaurants with visits on ${date}`);
 
+    const results: { id: string; ok: boolean; error?: string }[] = [];
     for (const restaurantId of uniqueIds) {
       try {
-        await this.generateDailySummary(restaurantId, today);
+        await this.generateDailySummary(restaurantId, date);
         this.logger.log(`Cron: Generated summary for ${restaurantId}`);
+        results.push({ id: restaurantId, ok: true });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.error(`Cron: Failed for ${restaurantId}: ${msg}`);
+        results.push({ id: restaurantId, ok: false, error: msg });
       }
     }
+
+    return {
+      success: true,
+      date,
+      total: uniqueIds.length,
+      succeeded: results.filter(r => r.ok).length,
+      failed: results.filter(r => !r.ok).length,
+      details: results,
+    };
   }
 
   async getDailySummary(restaurantId: string, date: string) {
