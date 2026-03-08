@@ -1210,7 +1210,9 @@ export class DashboardService {
   // Detect feedback category from text and keywords
   private detectFeedbackCategory(text: string, keywords: string[]): BriefingCategory {
     const lower = text.toLowerCase();
-    const allText = [lower, ...keywords.map(k => k.toLowerCase())].join(' ');
+    const allText = keywords.length > 0
+      ? [lower, ...keywords.map(k => k.toLowerCase())].join(' ')
+      : lower;
 
     if (/慢|等了|催|久|速度|出菜/.test(allText)) return 'service_speed';
     if (/态度|不耐烦|冷淡|不理|脸色/.test(allText)) return 'staff_attitude';
@@ -2195,7 +2197,7 @@ export class DashboardService {
       // 1. Visit records for satisfaction trend + problem distribution + repeat ratio
       client
         .from('lingtin_visit_records')
-        .select('visit_date, sentiment_score, feedbacks, restaurant_id, visit_frequency')
+        .select('visit_date, sentiment_score, feedbacks, keywords, restaurant_id, visit_frequency')
         .in('restaurant_id', restaurantIds)
         .gte('visit_date', startStr)
         .lte('visit_date', endStr)
@@ -2304,12 +2306,13 @@ export class DashboardService {
           repeatAndRegular++;
         }
       }
-      // Problem distribution
+      // Problem distribution — feedbacks JSONB has no category field,
+      // so detect category from text using the same regex as briefing
       const feedbacks = record.feedbacks;
       if (!feedbacks || !Array.isArray(feedbacks)) continue;
       for (const fb of feedbacks) {
-        if (fb && typeof fb === 'object' && fb.sentiment === 'negative' && fb.category) {
-          const cat = fb.category as string;
+        if (fb && typeof fb === 'object' && fb.sentiment === 'negative' && fb.text) {
+          const cat = this.detectFeedbackCategory(fb.text as string, record.keywords || []);
           problemCounts[cat] = (problemCounts[cat] || 0) + 1;
         }
       }

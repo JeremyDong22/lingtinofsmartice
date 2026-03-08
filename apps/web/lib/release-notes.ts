@@ -20,6 +20,19 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.4.2',
+    date: '2026-03-08',
+    roles: ['administrator'],
+    title: '品牌看板数据修复',
+    items: [
+      {
+        title: '问题分布数据恢复',
+        howToUse: '总览页展开品牌行，问题分布区块现在正确展示菜品/服务/态度/环境各类问题的占比分布。',
+        value: '品牌看板数据完整了，一眼定位品牌主要问题类型。',
+      },
+    ],
+  },
+  {
     version: '2.4.1',
     date: '2026-03-08',
     roles: ['administrator'],

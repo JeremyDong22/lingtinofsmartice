@@ -32,7 +32,7 @@ export function WhatsNewModal() {
             ` 弹窗和使用指南红点将不会显示。请在 apps/web/lib/release-notes.ts 中添加该版本的 release note。`
           );
         }
-        localStorage.setItem(LS_KEY, APP_VERSION);
+        // Do NOT mark as seen — notes may be added in a later deployment
         return;
       }
 
