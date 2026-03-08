@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-03-08
+
+### 修复 (Fixed)
+- **版本弹窗修复** — 修复 WhatsNewModal 在 release notes 缺失时错误标记版本为"已读"，导致后续补充 notes 后弹窗不再显示的问题
+- **问题分布修复** — 修复品牌看板问题分布为空的问题，feedbacks JSONB 无 category 字段，改用 detectFeedbackCategory 从文本正则检测分类
+
 ## [2.4.1] - 2026-03-08
 
 ### 新增 (Added)
