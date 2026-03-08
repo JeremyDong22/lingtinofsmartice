@@ -245,16 +245,7 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
                   </div>
                 </div>
 
-                {/* Brand charts (always visible below brand header) */}
-                {brand.brand_id != null && (
-                  <BrandCharts
-                    brandId={brand.brand_id}
-                    managedIdsParam={managedIdsParam}
-                    reviewRate={calcReviewRate(brand.summary)}
-                  />
-                )}
-
-                {/* Expanded stores */}
+                {/* Expanded stores (directly below brand name) */}
                 {brandExpanded && (
                   <div className="bg-gray-50/30">
                     {sortStores(brand.restaurants).map(store => (
@@ -273,6 +264,15 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
                       />
                     ))}
                   </div>
+                )}
+
+                {/* Brand charts (always visible, below stores) */}
+                {brand.brand_id != null && (
+                  <BrandCharts
+                    brandId={brand.brand_id}
+                    managedIdsParam={managedIdsParam}
+                    reviewRate={calcReviewRate(brand.summary)}
+                  />
                 )}
               </Fragment>
             );
