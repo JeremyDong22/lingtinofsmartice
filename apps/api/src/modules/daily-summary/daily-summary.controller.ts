@@ -42,4 +42,24 @@ export class DailySummaryController {
     });
     return { accepted: true, date: targetDate };
   }
+
+  /** Sync test endpoint — generates for one restaurant and returns result/error */
+  @Public()
+  @Post('test-generate')
+  async testGenerate(
+    @Query('restaurant_id') restaurantId: string,
+    @Query('date') date?: string,
+  ) {
+    try {
+      const result = await this.dailySummaryService.generateDailySummary(
+        restaurantId,
+        date || getChinaDateString(),
+      );
+      return { success: true, result };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      return { success: false, error: msg, stack };
+    }
+  }
 }
