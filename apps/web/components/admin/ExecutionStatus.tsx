@@ -9,6 +9,7 @@ import { useT } from '@/lib/i18n';
 import { FeedbackLoopCards } from './FeedbackLoopCards';
 import type { FeedbackLoopRestaurant } from './FeedbackLoopCards';
 import { ActionItemsDrillDown } from './ActionItemsDrillDown';
+import { BrandCharts } from './BrandCharts';
 
 // --- Types ---
 interface BriefingEvidence {
@@ -90,6 +91,7 @@ interface ExecutionStatusProps {
   onAudioToggle: (key: string, url: string) => void;
   playingKey: string | null;
   feedbackLoopData?: FeedbackLoopResponse;
+  managedIdsParam?: string;
 }
 
 function getStoreStatusColor(r: { review_done: boolean; pending_actions: number }): { dot: string; order: number } {
@@ -110,7 +112,7 @@ function Chevron({ expanded, className = '' }: { expanded: boolean; className?: 
   );
 }
 
-export function ExecutionStatus({ executionData, problems, overviewData, onAudioToggle, playingKey, feedbackLoopData }: ExecutionStatusProps) {
+export function ExecutionStatus({ executionData, problems, overviewData, onAudioToggle, playingKey, feedbackLoopData, managedIdsParam = '' }: ExecutionStatusProps) {
   const { t } = useT();
   const router = useRouter();
 
@@ -237,6 +239,11 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
                     )}
                   </div>
                 </div>
+
+                {/* Brand charts (always visible below brand header) */}
+                {brand.brand_id != null && (
+                  <BrandCharts brandId={brand.brand_id} managedIdsParam={managedIdsParam} />
+                )}
 
                 {/* Expanded stores */}
                 {brandExpanded && (

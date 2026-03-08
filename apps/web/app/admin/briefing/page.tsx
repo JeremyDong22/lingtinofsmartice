@@ -94,13 +94,6 @@ interface ExecutionOverview {
   summary: { reviewed_count: number; total_count: number; total_pending: number };
 }
 
-function getSatisfactionDisplay(score: number | null): { color: string; bg: string; label: string } {
-  if (score === null) return { color: 'text-gray-400', bg: 'bg-gray-100', label: 'none' };
-  if (score >= 70) return { color: 'text-green-600', bg: 'bg-green-100', label: 'positive' };
-  if (score >= 50) return { color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'neutral' };
-  return { color: 'text-red-600', bg: 'bg-red-100', label: 'negative' };
-}
-
 export default function AdminBriefingPage() {
   const { user } = useAuth();
   const { isScoped, managedIdsParam, storeCount } = useManagedScope();
@@ -145,10 +138,6 @@ export default function AdminBriefingPage() {
   const { data, isLoading } = useSWR<BriefingResponse>(`/api/dashboard/briefing?${dateRangeParams(dateRange)}${managedIdsParam}`);
   // Fetch overview data (keywords + store grid)
   const { data: overviewData } = useSWR<OverviewResponse>(`/api/dashboard/restaurants-overview?${dateRangeParams(dateRange)}${managedIdsParam}`);
-  // Fetch customer profile data
-  const { data: profileData } = useSWR<{
-    summary: { repeat_ratio: number | null; data_coverage: number };
-  }>(`/api/dashboard/customer-profile?${dateRangeParams(dateRange)}${managedIdsParam}`);
 
   // Fetch execution overview (always yesterday, independent of date picker)
   const { data: executionData } = useSWR<ExecutionOverview>(
@@ -168,10 +157,6 @@ export default function AdminBriefingPage() {
   const greeting = greetingMap[data?.greeting || ''] || data?.greeting || t('briefing.greetingMorning');
   const problems = data?.problems || [];
   const restaurantCount = data?.restaurant_count ?? 0;
-  const avgSentiment = data?.avg_sentiment;
-  const avgReviewCompletion = data?.avg_review_completion ?? 0;
-
-  const summary = overviewData?.summary;
 
   return (
     <div className="min-h-screen">
@@ -222,68 +207,10 @@ export default function AdminBriefingPage() {
           onAudioToggle={handleAudioToggle}
           playingKey={playingKey}
           feedbackLoopData={feedbackLoopData}
+          managedIdsParam={managedIdsParam}
         />
 
-        {/* Compact metrics grid (2×2) */}
-        {!isLoading && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.satisfaction')}</div>
-              <div className={`text-xl font-bold ${getSatisfactionDisplay(avgSentiment ?? null).color}`}>
-                {avgSentiment != null ? t('briefing.score', Math.round(avgSentiment)) : '--'}
-              </div>
-              <div className="text-xs text-gray-400">
-                {t('briefing.visits', summary?.total_visits ?? 0)}
-              </div>
-            </div>
-            <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.coverage')}</div>
-              <div className={`text-xl font-bold ${
-                (data?.avg_coverage ?? 0) >= 60 ? 'text-green-600' :
-                (data?.avg_coverage ?? 0) >= 30 ? 'text-yellow-600' :
-                data?.avg_coverage != null ? 'text-red-600' :
-                'text-gray-400'
-              }`}>
-                {data?.avg_coverage != null ? `${Math.round(data.avg_coverage)}%` : '--'}
-              </div>
-              <div className="text-xs text-gray-400">
-                {t('briefing.stores', restaurantCount)}
-              </div>
-            </div>
-            <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.reviewCompletion')}</div>
-              <div className={`text-xl font-bold ${
-                avgReviewCompletion >= 80 ? 'text-green-600' :
-                avgReviewCompletion >= 50 ? 'text-yellow-600' :
-                avgReviewCompletion >= 0 && data?.avg_review_completion != null ? 'text-red-600' :
-                'text-gray-400'
-              }`}>
-                {data?.avg_review_completion != null ? `${Math.round(avgReviewCompletion)}%` : '--'}
-              </div>
-              <div className="text-xs text-gray-400">&nbsp;</div>
-            </div>
-            <div className="glass-card rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-500 mb-0.5">{t('briefing.repeatCustomer')}</div>
-              {(() => {
-                const ratio = profileData?.summary?.repeat_ratio;
-                const coverage = profileData?.summary?.data_coverage ?? 0;
-                const color = ratio == null ? 'text-gray-400'
-                  : ratio >= 40 ? 'text-green-600'
-                  : 'text-yellow-600';
-                return (
-                  <>
-                    <div className={`text-xl font-bold ${color}`}>
-                      {ratio != null ? `${ratio}%` : '--'}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {ratio != null && coverage < 80 ? t('briefing.basedOnData', coverage) : '\u00A0'}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
+        {/* Brand-level KPI charts are now inside ExecutionStatus per brand */}
 
         {/* Loading state */}
         {isLoading && (

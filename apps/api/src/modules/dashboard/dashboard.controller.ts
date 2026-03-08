@@ -247,4 +247,23 @@ export class DashboardController {
       managedIds,
     );
   }
+
+  // GET /api/dashboard/brand-kpi - Brand-level KPI: trends, problem distribution, action aging
+  @Get('brand-kpi')
+  async getBrandKpi(
+    @Query('brand_id') brandIdStr: string,
+    @Query('days') days?: string,
+    @Query('managed_ids') managedIdsStr?: string,
+  ) {
+    const brandId = parseInt(brandIdStr, 10);
+    if (isNaN(brandId)) {
+      throw new BadRequestException('brand_id is required and must be a number');
+    }
+    const managedIds = DashboardService.parseManagedIds(managedIdsStr);
+    return this.dashboardService.getBrandKpi(
+      brandId,
+      Math.min(parseInt(days || '30', 10), 90),
+      managedIds,
+    );
+  }
 }
