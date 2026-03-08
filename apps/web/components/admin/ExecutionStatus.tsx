@@ -197,7 +197,11 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
       <div className="divide-y divide-gray-50">
         {singleBrand ? (
           // Single brand: skip brand layer, show stores directly
-          sortStores(sortedBrands[0].restaurants).map(store => (
+          <>
+            {sortedBrands[0].brand_id != null && (
+              <BrandCharts brandId={sortedBrands[0].brand_id} managedIdsParam={managedIdsParam} />
+            )}
+            {sortStores(sortedBrands[0].restaurants).map(store => (
             <StoreRow
               key={store.id}
               store={store}
@@ -211,7 +215,8 @@ export function ExecutionStatus({ executionData, problems, overviewData, onAudio
               indent={false}
               router={router}
             />
-          ))
+          ))}
+          </>
         ) : (
           // Multiple brands: brand → store → problems
           sortedBrands.map(brand => {
