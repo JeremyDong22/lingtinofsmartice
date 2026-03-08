@@ -12,6 +12,7 @@ import { useManagedScope } from '@/hooks/useManagedScope';
 import { useT, getLocale } from '@/lib/i18n';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
+import { useAudioPlayback } from '@/components/shared/FeedbackWidgets';
 import { DatePicker, useAdminPresets } from '@/components/shared/DatePicker';
 import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
@@ -241,6 +242,7 @@ export default function AdminMeetingsPage() {
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingRecord | null>(null);
   const [showMyMeetings, setShowMyMeetings] = useState(true);
   const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
+  const { playingKey, stopAudio, handleAudioToggle } = useAudioPlayback();
 
   const { data: apiData, isLoading, error } = useSWR<AdminOverviewResponse>(
     `/api/meeting/admin-overview?${dateRangeParams(dateRange)}${user?.id ? `&employee_id=${user.id}` : ''}${managedIdsParam}`
@@ -392,7 +394,9 @@ export default function AdminMeetingsPage() {
       {/* Meeting Detail Bottom Sheet */}
       <MeetingDetail
         meeting={selectedMeeting}
-        onClose={() => setSelectedMeeting(null)}
+        onClose={() => { stopAudio(); setSelectedMeeting(null); }}
+        playingKey={playingKey}
+        onAudioToggle={handleAudioToggle}
       />
     </div>
   );

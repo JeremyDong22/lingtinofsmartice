@@ -15,6 +15,7 @@ import { RecordButton } from '@/components/recorder/RecordButton';
 import { WaveformVisualizer } from '@/components/recorder/WaveformVisualizer';
 import { MeetingHistory } from '@/components/recorder/MeetingHistory';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
+import { useAudioPlayback } from '@/components/shared/FeedbackWidgets';
 import type { MeetingRecord, MeetingType } from '@/hooks/useMeetingStore';
 
 // --- Types ---
@@ -62,6 +63,7 @@ export default function AdminMeetingRecordPage() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const meetingType: MeetingType = selectedStoreId ? 'one_on_one' : 'cross_store_review';
+  const { playingKey, stopAudio, handleAudioToggle } = useAudioPlayback();
 
   // Fetch restaurants for store dropdown (scoped by managed restaurants)
   const { data: restaurantsData } = useSWR<RestaurantsResponse>(`/api/dashboard/restaurants?_=1${managedIdsParam}`);
@@ -383,7 +385,9 @@ export default function AdminMeetingRecordPage() {
       {/* Meeting Detail Bottom Sheet */}
       <MeetingDetail
         meeting={selectedMeeting}
-        onClose={() => setSelectedMeeting(null)}
+        onClose={() => { stopAudio(); setSelectedMeeting(null); }}
+        playingKey={playingKey}
+        onAudioToggle={handleAudioToggle}
       />
 
       {/* Toast */}

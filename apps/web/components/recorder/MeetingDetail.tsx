@@ -4,10 +4,13 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { MeetingRecord, MeetingType } from '@/hooks/useMeetingStore';
+import { AudioButton } from '@/components/shared/FeedbackWidgets';
 
 interface MeetingDetailProps {
   meeting: MeetingRecord | null;
   onClose: () => void;
+  playingKey?: string | null;
+  onAudioToggle?: (key: string, url: string) => void;
 }
 
 const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
@@ -37,7 +40,7 @@ function formatDuration(seconds: number): string {
   return `${seconds}秒`;
 }
 
-export function MeetingDetail({ meeting, onClose }: MeetingDetailProps) {
+export function MeetingDetail({ meeting, onClose, playingKey, onAudioToggle }: MeetingDetailProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -76,11 +79,21 @@ export function MeetingDetail({ meeting, onClose }: MeetingDetailProps) {
       <div className="relative w-full max-h-[90vh] bg-white rounded-t-2xl overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">{typeLabel}纪要</h2>
-            <p className="text-xs text-gray-400">
-              {formatDateTime(meeting.timestamp)} · {formatDuration(meeting.duration)}
-            </p>
+          <div className="flex items-center gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{typeLabel}纪要</h2>
+              <p className="text-xs text-gray-400">
+                {formatDateTime(meeting.timestamp)} · {formatDuration(meeting.duration)}
+              </p>
+            </div>
+            {meeting.audioUrl && onAudioToggle && (
+              <AudioButton
+                audioKey={`meeting-${meeting.id}`}
+                audioUrl={meeting.audioUrl}
+                playingKey={playingKey ?? null}
+                onToggle={onAudioToggle}
+              />
+            )}
           </div>
           <button
             onClick={onClose}
