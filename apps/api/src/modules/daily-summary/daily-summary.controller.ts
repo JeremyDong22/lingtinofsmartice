@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Query } from '@nestjs/common';
 import { DailySummaryService } from './daily-summary.service';
 import { getChinaDateString } from '../../common/utils/date';
+import { Public } from '../auth/public.decorator';
 
 @Controller('daily-summary')
 export class DailySummaryController {
@@ -29,6 +30,7 @@ export class DailySummaryController {
   }
 
   /** Called by pg_cron via pg_net — generates summaries for all restaurants with visits today */
+  @Public()
   @Post('cron-trigger')
   async cronTrigger(@Query('date') date?: string) {
     return this.dailySummaryService.triggerAllSummaries(
