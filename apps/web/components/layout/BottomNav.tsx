@@ -50,8 +50,8 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-                isActive ? 'text-primary-600' : 'text-gray-400 hover:text-gray-600'
+              className={`flex flex-col items-center justify-center flex-1 h-full transition-all touch-manipulation ${
+                isActive ? 'text-primary-600' : 'text-gray-400 active:scale-90 active:opacity-60'
               }`}
             >
               {item.icon(isActive)}
