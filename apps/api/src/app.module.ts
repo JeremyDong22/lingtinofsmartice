@@ -17,6 +17,7 @@ import { FeedbackModule } from './modules/feedback/feedback.module';
 import { RegionModule } from './modules/region/region.module';
 import { HotwordModule } from './modules/hotword/hotword.module';
 import { ActivityModule } from './modules/activity/activity.module';
+import { HealthModule } from './modules/health/health.module';
 import { AuthModule, JwtAuthGuard } from './modules/auth';
 import { SupabaseModule } from './common/supabase/supabase.module';
 
@@ -37,6 +38,7 @@ import { SupabaseModule } from './common/supabase/supabase.module';
     RegionModule,
     HotwordModule,
     ActivityModule,
+    HealthModule,
   ],
   providers: [
     // Apply JWT guard globally - all routes require auth by default

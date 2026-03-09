@@ -1,0 +1,9 @@
+name = "lingtin-health"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/5 * * * *", "0 1 * * *", "0 7 * * *"]
+# */5 = 每5分钟心跳
+# 01:00 UTC = 09:00 CST 全面巡检
+# 07:00 UTC = 15:00 CST 全面巡检

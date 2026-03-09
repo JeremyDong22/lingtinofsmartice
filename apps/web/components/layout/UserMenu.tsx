@@ -12,7 +12,7 @@ import useSWR from 'swr';
 import {
   ClipboardList, Map, BarChart3, Settings,
   MessageSquare, FileText, BookOpen, Languages,
-  Activity,
+  Activity, HeartPulse,
 } from 'lucide-react';
 
 const GUIDE_SEEN_KEY = 'lingtin_guide_seen_version';
@@ -182,6 +182,20 @@ export function UserMenu() {
             >
               <Activity className="w-4 h-4 text-gray-400" />
               用户活动
+            </button>
+          )}
+
+          {/* System Health (hr901027 only) */}
+          {user.username === 'hr901027' && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                router.push('/admin/health');
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <HeartPulse className="w-4 h-4 text-gray-400" />
+              系统健康
             </button>
           )}
 

@@ -1,0 +1,48 @@
+import {
+  Controller,
+  Get,
+  Query,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
+import { HealthService } from './health.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthUser } from '../auth/auth.service';
+
+@Controller('health')
+export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
+
+  constructor(private readonly healthService: HealthService) {}
+
+  private checkAccess(user: AuthUser) {
+    if (user.username !== 'hr901027') {
+      throw new ForbiddenException('Access denied');
+    }
+  }
+
+  @Get('latest')
+  async getLatest(@CurrentUser() user: AuthUser) {
+    this.checkAccess(user);
+    this.logger.log('▶ GET /health/latest');
+    return this.healthService.getLatest();
+  }
+
+  @Get('history')
+  async getHistory(
+    @CurrentUser() user: AuthUser,
+    @Query('days') daysStr?: string,
+  ) {
+    this.checkAccess(user);
+    const days = parseInt(daysStr || '7', 10) || 7;
+    this.logger.log(`▶ GET /health/history (days=${days})`);
+    return this.healthService.getHistory(days);
+  }
+
+  @Get('status')
+  async getHeartbeatStatus(@CurrentUser() user: AuthUser) {
+    this.checkAccess(user);
+    this.logger.log('▶ GET /health/status');
+    return this.healthService.getHeartbeatStatus();
+  }
+}
