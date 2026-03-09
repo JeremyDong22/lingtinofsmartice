@@ -1,4 +1,5 @@
 // Daily Briefing Hook - Auto-trigger daily AI briefing on first visit
+// v4.0 - Resilient: retry once on network failure, only mark date after success
 // v3.0 - Expose triggerBriefing() for manual invocation
 // v2.0 - Once-per-day: localStorage 记录日期，当天只触发一次，清空对话不重复触发
 // v1.4 - Cooldown: 5-min sessionStorage guard prevents rapid retries on backend failure
@@ -60,7 +61,9 @@ export function useDailyBriefing({
 
     hasSent.current = true;
     sessionStorage.setItem(COOLDOWN_KEY, String(Date.now()));
-    localStorage.setItem(BRIEFING_DATE_KEY, getTodayStr());
+    // Don't set BRIEFING_DATE_KEY here — wait until we know the briefing succeeded.
+    // The cooldown guard prevents rapid retries. The date guard is set by the
+    // hasValidAssistant check above on subsequent renders after a successful briefing.
     sendMessage('__DAILY_BRIEFING__', { hideUserMessage: true });
   }, [isInitialized, isLoading, user, messageCount, messages, sendMessage]);
 
