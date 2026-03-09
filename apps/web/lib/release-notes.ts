@@ -20,6 +20,24 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.4.3',
+    date: '2026-03-09',
+    roles: ['manager', 'administrator', 'head_chef'],
+    title: '导航体验优化',
+    items: [
+      {
+        title: '页面切换更流畅',
+        howToUse: '点击底部导航栏切换页面，现在会即刻显示过渡动画，不再出现"卡住"的情况。',
+        value: '页面切换响应更快，操作体验更顺畅。',
+      },
+      {
+        title: '触摸反馈更灵敏',
+        howToUse: '点击底部导航图标时，图标会有缩放反馈，让你确认点击已被识别。',
+        value: '操作更有确定感，尤其在 PWA 模式下体验明显提升。',
+      },
+    ],
+  },
+  {
     version: '2.4.2',
     date: '2026-03-08',
     roles: ['administrator'],
