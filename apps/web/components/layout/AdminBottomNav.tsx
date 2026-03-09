@@ -1,5 +1,5 @@
 // Admin Bottom Navigation Component - Navigation for boss/administrator role
-// v4.1 - Added i18n support
+// v4.3 - Removed activity tab (moved to UserMenu)
 
 'use client';
 
