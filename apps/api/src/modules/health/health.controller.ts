@@ -45,4 +45,22 @@ export class HealthController {
     this.logger.log('▶ GET /health/status');
     return this.healthService.getHeartbeatStatus();
   }
+
+  @Get('feedback-digest/latest')
+  async getLatestDigest(@CurrentUser() user: AuthUser) {
+    this.checkAccess(user);
+    this.logger.log('▶ GET /health/feedback-digest/latest');
+    return this.healthService.getLatestDigest();
+  }
+
+  @Get('feedback-digest/history')
+  async getDigestHistory(
+    @CurrentUser() user: AuthUser,
+    @Query('days') daysStr?: string,
+  ) {
+    this.checkAccess(user);
+    const days = parseInt(daysStr || '7', 10) || 7;
+    this.logger.log(`▶ GET /health/feedback-digest/history (days=${days})`);
+    return this.healthService.getDigestHistory(days);
+  }
 }

@@ -118,4 +118,44 @@ export class HealthService {
 
     return { data };
   }
+
+  async getLatestDigest() {
+    const client = this.supabase.getClient();
+
+    const { data, error } = await client
+      .from('lingtin_feedback_digests')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      if (error && error.code !== 'PGRST116') {
+        this.logger.error('Failed to fetch latest digest', error);
+      }
+      return { data: null };
+    }
+
+    return { data };
+  }
+
+  async getDigestHistory(days: number = 7) {
+    const client = this.supabase.getClient();
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const { data, error } = await client
+      .from('lingtin_feedback_digests')
+      .select('id,created_at,trigger_feedback_id,total_pending,summary,priorities')
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      this.logger.error('Failed to fetch digest history', error);
+      return { data: [] };
+    }
+
+    return { data: data || [] };
+  }
 }

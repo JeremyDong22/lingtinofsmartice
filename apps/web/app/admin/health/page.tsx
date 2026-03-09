@@ -4,7 +4,7 @@
 'use client';
 
 import { useState } from 'react';
-import { HeartPulse, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Wifi } from 'lucide-react';
+import { HeartPulse, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Wifi, MessageSquareText } from 'lucide-react';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -48,6 +48,23 @@ interface HistoryBatch {
   fail: number;
   timeout: number;
   checks: HealthCheck[];
+}
+
+interface DigestPriority {
+  title: string;
+  description: string;
+  category: string;
+  severity: 'high' | 'medium' | 'low';
+  feedback_ids: string[];
+}
+
+interface FeedbackDigest {
+  id: string;
+  created_at: string;
+  trigger_feedback_id: string | null;
+  total_pending: number;
+  summary: string;
+  priorities: DigestPriority[];
 }
 
 // --- Role display config ---
@@ -182,10 +199,18 @@ export default function HealthPage() {
   const { data: historyRes, isLoading: historyLoading } = useSWR<{ data: HistoryBatch[] }>(
     isAuthorized ? '/api/health/history?days=7' : null,
   );
+  const { data: digestRes, isLoading: digestLoading } = useSWR<{ data: FeedbackDigest | null }>(
+    isAuthorized ? '/api/health/feedback-digest/latest' : null,
+  );
+  const { data: digestHistoryRes } = useSWR<{ data: FeedbackDigest[] }>(
+    isAuthorized ? '/api/health/feedback-digest/history?days=7' : null,
+  );
 
   const latest = latestRes?.data;
   const statuses = statusRes?.data;
   const history = historyRes?.data;
+  const latestDigest = digestRes?.data;
+  const digestHistory = digestHistoryRes?.data;
 
   // Access guard
   if (user && !isAuthorized) {
@@ -403,6 +428,80 @@ export default function HealthPage() {
           ) : (
             <div className="glass-card rounded-2xl p-6 text-center">
               <div className="text-sm text-gray-400">暂无历史记录</div>
+            </div>
+          )}
+        </div>
+
+        {/* Section 5: Feedback Digest */}
+        <div>
+          <div className="text-xs font-semibold text-gray-400 px-1 mb-1.5 flex items-center gap-1.5">
+            <MessageSquareText size={12} />
+            反馈分析
+          </div>
+          {digestLoading ? (
+            <TableSkeleton />
+          ) : latestDigest ? (
+            <div className="space-y-2">
+              {/* Latest digest summary */}
+              <div className="glass-card rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold text-gray-900">最新分析</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <Clock size={10} />
+                    {relativeTime(latestDigest.created_at)}
+                  </div>
+                </div>
+                <div className="text-sm text-gray-700 mb-3">{latestDigest.summary}</div>
+                <div className="text-xs text-gray-500 mb-2">
+                  待处理 {latestDigest.total_pending} 条 · {latestDigest.priorities.length} 项建议
+                </div>
+                {/* Priority list */}
+                <div className="space-y-2">
+                  {latestDigest.priorities.map((p, i) => (
+                    <div key={i} className="rounded-xl bg-gray-50/80 p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${
+                          p.severity === 'high' ? 'bg-red-50 text-red-600' :
+                          p.severity === 'medium' ? 'bg-amber-50 text-amber-600' :
+                          'bg-gray-100 text-gray-500'
+                        }`}>
+                          {p.severity === 'high' ? '高' : p.severity === 'medium' ? '中' : '低'}
+                        </span>
+                        <span className="text-sm font-medium text-gray-900">{p.title}</span>
+                        <span className="text-[11px] text-gray-400 ml-auto">{p.category}</span>
+                      </div>
+                      <div className="text-xs text-gray-600 leading-relaxed">{p.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Digest history */}
+              {digestHistory && digestHistory.length > 1 && (
+                <div className="glass-card rounded-2xl overflow-hidden">
+                  <div className="px-3.5 py-2.5 text-xs font-medium text-gray-500 border-b border-gray-100">
+                    历史分析 (近 7 天)
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {digestHistory.slice(1).map((d) => (
+                      <div key={d.id} className="px-3.5 py-2.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-xs text-gray-500">{formatTime(d.created_at)}</div>
+                          <div className="text-[11px] text-gray-400">
+                            {d.total_pending} 条 · {d.priorities.length} 项
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-700 line-clamp-2">{d.summary}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="glass-card rounded-2xl p-6 text-center">
+              <MessageSquareText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <div className="text-sm text-gray-400">暂无反馈分析</div>
             </div>
           )}
         </div>
