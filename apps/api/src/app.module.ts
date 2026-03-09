@@ -1,9 +1,10 @@
 // Root Application Module
-// v1.5 - Added HotwordModule for DashScope vocabulary management
+// v1.6 - Added ActivityLoggerInterceptor for user activity tracking
 
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ActivityLoggerInterceptor } from './common/interceptors/activity-logger.interceptor';
 import { AudioModule } from './modules/audio/audio.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ChatModule } from './modules/chat/chat.module';
@@ -15,6 +16,7 @@ import { DailySummaryModule } from './modules/daily-summary/daily-summary.module
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { RegionModule } from './modules/region/region.module';
 import { HotwordModule } from './modules/hotword/hotword.module';
+import { ActivityModule } from './modules/activity/activity.module';
 import { AuthModule, JwtAuthGuard } from './modules/auth';
 import { SupabaseModule } from './common/supabase/supabase.module';
 
@@ -34,6 +36,7 @@ import { SupabaseModule } from './common/supabase/supabase.module';
     FeedbackModule,
     RegionModule,
     HotwordModule,
+    ActivityModule,
   ],
   providers: [
     // Apply JWT guard globally - all routes require auth by default
@@ -41,6 +44,11 @@ import { SupabaseModule } from './common/supabase/supabase.module';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Log all API requests for user activity tracking
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ActivityLoggerInterceptor,
     },
   ],
 })
