@@ -1,6 +1,7 @@
 import type { Env } from './types';
 import { runHeartbeat } from './heartbeat';
 import { runPatrol } from './patrol';
+import { runFeedbackDigest } from './feedback-digest';
 
 export default {
   async scheduled(
@@ -41,9 +42,21 @@ export default {
       });
     }
 
+    if (action === 'feedback-digest') {
+      const secret = request.headers.get('X-Worker-Secret');
+      if (env.WORKER_SECRET && secret !== env.WORKER_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      const feedbackId = url.searchParams.get('feedback_id') || undefined;
+      ctx.waitUntil(runFeedbackDigest(env, feedbackId));
+      return new Response(JSON.stringify({ ok: true, action: 'feedback-digest' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({
       service: 'lingtin-health',
-      usage: '?action=heartbeat or ?action=patrol',
+      usage: '?action=heartbeat|patrol|feedback-digest',
     }), {
       headers: { 'Content-Type': 'application/json' },
     });

@@ -9,12 +9,13 @@ export async function sendBark(
   title: string,
   body: string,
   sound: 'alert' | 'alarm' = 'alert',
+  group: string = 'lingtin-health',
 ): Promise<void> {
   const url =
     `https://api.day.app/${env.BARK_DEVICE_KEY}` +
     `/${encodeURIComponent(title)}` +
     `/${encodeURIComponent(body)}` +
-    `?group=lingtin-health&sound=${sound}`;
+    `?group=${group}&sound=${sound}`;
 
   try {
     const resp = await fetch(url);

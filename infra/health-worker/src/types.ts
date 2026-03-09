@@ -10,6 +10,8 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;
   BARK_DEVICE_KEY: string;
+  OPENROUTER_API_KEY: string;
+  WORKER_SECRET: string;
 }
 
 export type CheckStatus = 'ok' | 'timeout' | 'fail';

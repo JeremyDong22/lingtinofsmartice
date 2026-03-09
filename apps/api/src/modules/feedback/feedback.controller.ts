@@ -102,6 +102,7 @@ export class FeedbackController {
     );
 
     this.logger.log(`◀ Feedback created: ${data.id}`);
+    this.triggerDigest(data.id);
     return { data, message: '反馈已提交' };
   }
 
@@ -249,6 +250,7 @@ export class FeedbackController {
 
       const data = await this.feedbackService.processFeedback(id, transcript, classification, sttModel);
       this.logger.log(`◀ Process complete: ${data.id}`);
+      this.triggerDigest(data.id);
       return { data, message: '处理完成' };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -342,5 +344,19 @@ export class FeedbackController {
     const data = await this.feedbackService.markReplyRead(id, employeeId);
     this.logger.log(`◀ Reply marked as read`);
     return { data, message: '已标记为已读' };
+  }
+
+  /** Fire-and-forget: trigger Worker feedback digest analysis */
+  private triggerDigest(feedbackId: string) {
+    const workerUrl = process.env.HEALTH_WORKER_URL;
+    const secret = process.env.WORKER_SECRET;
+    if (!workerUrl) return;
+
+    const url = `${workerUrl}?action=feedback-digest&feedback_id=${feedbackId}`;
+    fetch(url, {
+      headers: secret ? { 'X-Worker-Secret': secret } : {},
+    }).catch((err) => {
+      this.logger.warn(`Digest trigger failed: ${err.message}`);
+    });
   }
 }
