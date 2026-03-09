@@ -15,7 +15,7 @@ export async function sendBark(
     `https://api.day.app/${env.BARK_DEVICE_KEY}` +
     `/${encodeURIComponent(title)}` +
     `/${encodeURIComponent(body)}` +
-    `?group=${group}&sound=${sound}`;
+    `?group=${group}&sound=${sound}&level=timeSensitive`;
 
   try {
     const resp = await fetch(url);
