@@ -1,6 +1,43 @@
 <svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="192" height="192" rx="32" fill="#DC2626"/>
-  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="bold">
-    LT
-  </text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="192" y2="192">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#4f46e5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="28" y1="28" x2="164" y2="164">
+      <stop offset="0%" stop-color="white" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0.01"/>
+    </linearGradient>
+    <linearGradient id="border" x1="28" y1="28" x2="164" y2="164">
+      <stop offset="0%" stop-color="white" stop-opacity="0.35"/>
+      <stop offset="40%" stop-color="white" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="topEdge" x1="44" y1="28" x2="148" y2="28">
+      <stop offset="0%" stop-color="white" stop-opacity="0"/>
+      <stop offset="20%" stop-color="white" stop-opacity="0.5"/>
+      <stop offset="80%" stop-color="white" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="leftEdge" x1="28" y1="44" x2="28" y2="148">
+      <stop offset="0%" stop-color="white" stop-opacity="0"/>
+      <stop offset="20%" stop-color="white" stop-opacity="0.25"/>
+      <stop offset="80%" stop-color="white" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="3" stdDeviation="6" flood-color="#0a0820" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="192" height="192" rx="40" fill="url(#bg)"/>
+  <rect width="192" height="192" rx="40" fill="url(#bgGlow)"/>
+  <rect x="28" y="28" width="136" height="136" rx="28" fill="url(#glass)" stroke="url(#border)" stroke-width="1" filter="url(#shadow)"/>
+  <line x1="44" y1="28.5" x2="148" y2="28.5" stroke="url(#topEdge)" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="28.5" y1="44" x2="28.5" y2="148" stroke="url(#leftEdge)" stroke-width="1" stroke-linecap="round"/>
+  <text x="94" y="80" text-anchor="middle" dominant-baseline="central" fill="white" font-family="'SF Pro Display', system-ui" font-size="52" font-weight="700" letter-spacing="4">SI</text>
+  <text x="96" y="124" text-anchor="middle" dominant-baseline="central" fill="white" fill-opacity="0.35" font-family="'SF Pro Display', system-ui" font-size="11" font-weight="400" letter-spacing="5">SMARTICE</text>
 </svg>
