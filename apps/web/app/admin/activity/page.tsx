@@ -1,5 +1,5 @@
 // Admin Activity Page - User activity tracking dashboard
-// v1.1 - Aligned with island/glass design system
+// v1.2 - Aligned color palette with admin design system (gray + primary)
 
 'use client';
 
@@ -52,20 +52,20 @@ interface TimelineResponse {
 
 // --- Resource type display config ---
 const RESOURCE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-  auth: { label: '认证', icon: '🔑', color: 'bg-amber-100 text-amber-700' },
-  dashboard: { label: '看板', icon: '📊', color: 'bg-primary-100 text-primary-700' },
-  audio: { label: '录音', icon: '🎙️', color: 'bg-pink-100 text-pink-700' },
-  'action-items': { label: '行动项', icon: '✅', color: 'bg-green-100 text-green-700' },
-  meeting: { label: '会议', icon: '📋', color: 'bg-indigo-100 text-indigo-700' },
-  chat: { label: '对话', icon: '💬', color: 'bg-purple-100 text-purple-700' },
-  feedback: { label: '反馈', icon: '📝', color: 'bg-yellow-100 text-yellow-700' },
-  staff: { label: '员工', icon: '👤', color: 'bg-gray-100 text-gray-700' },
-  'daily-summary': { label: '日报', icon: '📰', color: 'bg-orange-100 text-orange-700' },
-  'question-templates': { label: '问题模板', icon: '❓', color: 'bg-teal-100 text-teal-700' },
-  region: { label: '区域', icon: '🏢', color: 'bg-slate-100 text-slate-700' },
-  hotword: { label: '热词', icon: '🔤', color: 'bg-cyan-100 text-cyan-700' },
-  activity: { label: '活动', icon: '📈', color: 'bg-emerald-100 text-emerald-700' },
-  other: { label: '其他', icon: '⚙️', color: 'bg-gray-100 text-gray-700' },
+  auth: { label: '认证', icon: '🔑', color: 'bg-gray-100 text-gray-600' },
+  dashboard: { label: '看板', icon: '📊', color: 'bg-gray-100 text-gray-600' },
+  audio: { label: '录音', icon: '🎙️', color: 'bg-gray-100 text-gray-600' },
+  'action-items': { label: '行动项', icon: '✅', color: 'bg-gray-100 text-gray-600' },
+  meeting: { label: '会议', icon: '📋', color: 'bg-gray-100 text-gray-600' },
+  chat: { label: '对话', icon: '💬', color: 'bg-gray-100 text-gray-600' },
+  feedback: { label: '反馈', icon: '📝', color: 'bg-gray-100 text-gray-600' },
+  staff: { label: '员工', icon: '👤', color: 'bg-gray-100 text-gray-600' },
+  'daily-summary': { label: '日报', icon: '📰', color: 'bg-gray-100 text-gray-600' },
+  'question-templates': { label: '问题模板', icon: '❓', color: 'bg-gray-100 text-gray-600' },
+  region: { label: '区域', icon: '🏢', color: 'bg-gray-100 text-gray-600' },
+  hotword: { label: '热词', icon: '🔤', color: 'bg-gray-100 text-gray-600' },
+  activity: { label: '活动', icon: '📈', color: 'bg-gray-100 text-gray-600' },
+  other: { label: '其他', icon: '⚙️', color: 'bg-gray-100 text-gray-600' },
 };
 
 // Action type display
@@ -361,11 +361,11 @@ export default function ActivityPage() {
             </div>
             <div className="glass-card rounded-xl p-3 text-center">
               <div className="text-xs text-gray-500 mb-1">活跃</div>
-              <div className="text-xl font-bold text-emerald-600">{overview.active_users}</div>
+              <div className="text-xl font-bold text-primary-600">{overview.active_users}</div>
             </div>
             <div className="glass-card rounded-xl p-3 text-center">
               <div className="text-xs text-gray-500 mb-1">沉默</div>
-              <div className="text-xl font-bold text-red-500">{overview.inactive_users}</div>
+              <div className="text-xl font-bold text-gray-400">{overview.inactive_users}</div>
             </div>
           </div>
         )}
@@ -385,7 +385,6 @@ export default function ActivityPage() {
             {filteredUsers.map((u) => {
               const activityPct = Math.round((u.total_actions / maxActions) * 100);
               const isInactive = u.total_actions === 0;
-              const barClass = activityPct >= 60 ? 'bg-emerald-400' : activityPct >= 25 ? 'bg-amber-400' : 'bg-red-400';
 
               const topTags = Object.entries(u.breakdown)
                 .sort(([, a], [, b]) => b - a)
@@ -409,7 +408,7 @@ export default function ActivityPage() {
                             {u.employee_name || u.username}
                           </span>
                           {isInactive ? (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 font-medium">沉默</span>
+                            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400 font-medium">沉默</span>
                           ) : activityPct >= 60 ? (
                             <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600 font-medium">活跃</span>
                           ) : null}
@@ -434,9 +433,9 @@ export default function ActivityPage() {
                       <span>活跃度</span>
                       <span>{activityPct}%</span>
                     </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-gray-100/60 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${barClass}`}
+                        className="h-full rounded-full transition-all bg-primary-500"
                         style={{ width: `${Math.max(activityPct, 2)}%` }}
                       />
                     </div>
