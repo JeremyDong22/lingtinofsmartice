@@ -1,4 +1,5 @@
 // Chat Stream Hook - Handle streaming chat with in-memory state persistence
+// v4.1 - Network error detection: friendly Chinese message for fetch failures + retry hint
 // v4.0 - Module-level store: chat state survives SPA navigation (unmount/remount)
 //        Fetch continues in background when user navigates away, results preserved on return
 // v3.3 - Version-gated cache: clear stale messages on app update (fixes PWA stuck)
@@ -337,7 +338,10 @@ export function useChatStream(): UseChatStreamReturn {
         return;
       }
 
-      const errMsg = err instanceof Error ? err.message : tStatic('chat.error.unknown');
+      const isNetworkError = err instanceof TypeError && /fetch|network|failed/i.test(err.message);
+      const errMsg = isNetworkError
+        ? '网络连接失败，请检查网络后点击重试'
+        : err instanceof Error ? err.message : tStatic('chat.error.unknown');
       patchError(storageKey, errMsg);
       patchMessages(storageKey, p => p.map(m =>
         m.id === asstMsgId
