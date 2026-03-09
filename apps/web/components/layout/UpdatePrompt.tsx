@@ -1,5 +1,6 @@
 // Update Prompt Component - Detects SW updates and auto-reloads
-// v3.0 - Auto-reload on update detection + foreground check + periodic polling
+// v4.0 - Added network-based version check (version.json) for reliable update detection
+// Works for both PWA (service worker) and regular browser (fetch-based)
 
 'use client';
 
@@ -9,7 +10,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 export const APP_VERSION = '2.4.3';
 export const BUILD_DATE = '2026-03-09';
 
-const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 // Force clear all caches, unregister SW, and hard reload
 async function forceUpdateApp() {
@@ -37,86 +38,110 @@ async function forceUpdateApp() {
   window.location.reload();
 }
 
+// Fetch deployed version from server (cache-busted) and compare with compiled-in version
+async function checkVersionFromNetwork(): Promise<boolean> {
+  try {
+    const res = await fetch(`/version.json?_t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.version && data.version !== APP_VERSION) {
+      console.log(`[Lingtin] Version mismatch: local=${APP_VERSION}, server=${data.version}`);
+      return true; // update needed
+    }
+  } catch {
+    // Network error — can't check, skip
+  }
+  return false;
+}
+
 export function UpdatePrompt() {
   const [updating, setUpdating] = useState(false);
   const [showVersion, setShowVersion] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUpdatingRef = useRef(false);
 
-  // Auto-reload: brief delay so user sees "正在更新..."
   const triggerAutoUpdate = useCallback((reason: string) => {
+    if (isUpdatingRef.current) return;
+    isUpdatingRef.current = true;
     console.log(`[Lingtin] Auto-update triggered: ${reason}`);
     setUpdating(true);
     setTimeout(() => forceUpdateApp(), 1000);
   }, []);
 
+  // --- Network-based version check (works for both PWA and browser) ---
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let interval: ReturnType<typeof setInterval>;
+
+    const doVersionCheck = async (trigger: string) => {
+      if (isUpdatingRef.current) return;
+      const needsUpdate = await checkVersionFromNetwork();
+      if (needsUpdate) {
+        triggerAutoUpdate(`version.json mismatch (${trigger})`);
+      }
+    };
+
+    // Check on mount (after brief delay to avoid blocking initial render)
+    const mountTimer = setTimeout(() => doVersionCheck('mount'), 3000);
+
+    // Periodic check
+    interval = setInterval(() => doVersionCheck('periodic'), VERSION_CHECK_INTERVAL);
+
+    // Check on foreground resume
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        doVersionCheck('foreground');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearTimeout(mountTimer);
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [triggerAutoUpdate]);
+
+  // --- Service Worker update detection (PWA only) ---
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
-    let updateCheckInterval: ReturnType<typeof setInterval>;
-    let isUpdating = false;
+    let swCheckInterval: ReturnType<typeof setInterval>;
 
-    const doAutoUpdate = (reason: string) => {
-      if (isUpdating) return;
-      isUpdating = true;
-      triggerAutoUpdate(reason);
-    };
-
-    // 1. controllerchange → new SW took over, page needs reload
-    const handleControllerChange = () => doAutoUpdate('controllerchange');
+    const handleControllerChange = () => triggerAutoUpdate('controllerchange');
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
     navigator.serviceWorker.ready.then((registration) => {
-      // 2. Already a waiting worker → update now
       if (registration.waiting) {
-        doAutoUpdate('waiting worker found');
+        triggerAutoUpdate('waiting worker found');
         return;
       }
 
-      // 3. New worker installed → update when ready
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            doAutoUpdate('new worker installed');
+            triggerAutoUpdate('new worker installed');
           }
         });
       });
 
-      // 4. Check for updates on page load (Safari workaround)
+      // Check for SW updates on page load
       registration.update().catch(() => {});
 
-      // 5. Periodic check every 30 minutes
-      updateCheckInterval = setInterval(() => {
-        console.log('[Lingtin] Periodic SW update check');
+      // Periodic SW check
+      swCheckInterval = setInterval(() => {
         registration.update().catch(() => {});
-      }, UPDATE_CHECK_INTERVAL);
-
-      // 6. Check on foreground resume (critical for mobile PWA)
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          console.log('[Lingtin] App foregrounded, checking for updates');
-          registration.update().catch(() => {});
-        }
-      };
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      // Store cleanup ref
-      (registration as unknown as Record<string, () => void>).__cleanupVisibility = () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
+      }, VERSION_CHECK_INTERVAL);
     });
 
     console.log(`[Lingtin] Version: ${APP_VERSION} (${BUILD_DATE})`);
 
     return () => {
       navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
-      clearInterval(updateCheckInterval);
-      // Clean up visibilitychange if registration was resolved
-      navigator.serviceWorker.ready.then((reg) => {
-        const cleanup = (reg as unknown as Record<string, () => void>).__cleanupVisibility;
-        cleanup?.();
-      });
+      clearInterval(swCheckInterval);
     };
   }, [triggerAutoUpdate]);
 
@@ -141,7 +166,6 @@ export function UpdatePrompt() {
 
   return (
     <>
-      {/* Auto-update overlay - shown briefly before reload */}
       {updating && (
         <div className="fixed inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center">
           <div className="text-center">
@@ -151,7 +175,6 @@ export function UpdatePrompt() {
         </div>
       )}
 
-      {/* Version indicator - tap to toggle, long-press to force update */}
       <button
         onClick={toggleVersion}
         onTouchStart={handleVersionTouchStart}

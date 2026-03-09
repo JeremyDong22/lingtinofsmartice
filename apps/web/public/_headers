@@ -5,3 +5,7 @@
 
 /workbox-*.js
   Cache-Control: no-cache, no-store, must-revalidate
+
+# Version file must never be cached — used for update detection
+/version.json
+  Cache-Control: no-cache, no-store, must-revalidate

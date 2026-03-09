@@ -3,8 +3,9 @@
 ## 版本号更新（每次迭代必做）
 
 1. `apps/web/components/layout/UpdatePrompt.tsx` — 递增 `APP_VERSION` + 更新 `BUILD_DATE`
-2. `CHANGELOG.md` — 对应版本区块记录变更（Added / Changed / Fixed / Removed）
-3. `apps/web/lib/release-notes.ts` — 添加对应版本条目（`WhatsNewModal` 弹窗 + 使用指南红点依赖此文件，缺失则弹窗不显示）
+2. `apps/web/public/version.json` — 同步更新 `version` 字段（网络版本检测依赖此文件，不同步则触发无限刷新）
+3. `CHANGELOG.md` — 对应版本区块记录变更（Added / Changed / Fixed / Removed）
+4. `apps/web/lib/release-notes.ts` — 添加对应版本条目（`WhatsNewModal` 弹窗 + 使用指南红点依赖此文件，缺失则弹窗不显示）
 
 ## 产品使用指南同步更新
 
