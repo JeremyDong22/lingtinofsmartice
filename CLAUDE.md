@@ -164,5 +164,5 @@ Discard: old exploration outputs, historical context, large git diffs (use `--st
 | 任务 | 状态 | 关键笔记 |
 |------|------|----------|
 | 反馈自动闭环通知 | ✅ 完成 | PR #92/#93/#94 已合并部署。DB 字段 `reply_read_at`/`resolved_version`，API `auto-resolve`+`read-reply`，前端红点+Banner+Observer 自动已读。部署流程 Memory 已更新步骤 7 |
-| 重跑缺 feedbacks 的记录 | ⏸️ 暂停 | 剩余 1247 条。`only_missing_feedbacks: true` + cutoff `2026-03-01`。检查：`SELECT COUNT(*) FROM lingtin_visit_records WHERE status='processed' AND (feedbacks IS NULL OR feedbacks::text='[]' OR feedbacks::text='null') AND raw_transcript IS NOT NULL AND LENGTH(raw_transcript) > 10` |
+| 重跑缺 feedbacks 的记录 | ✅ 完成 | 2,395 条成功处理（5 条失败）。修复了 `reanalyzeBatch` 过滤器无限循环 bug（PR #121）：`feedbacks.eq.[]` 会重选已分析记录，改为仅 `feedbacks.is.null`。剩余 1,919 条 `feedbacks=[]` 是合法空结果（短录音/无有效反馈） |
 | 重跑缺画像的记录 | 待评估 | `only_missing_profile: true` |

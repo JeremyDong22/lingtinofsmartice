@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { getChinaDateString } from '../../common/utils/date';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -32,6 +33,7 @@ export class DailySummaryService {
 
   constructor(
     private readonly supabase: SupabaseService,
+    private readonly knowledgeService: KnowledgeService,
   ) {}
 
   // NestJS in-process cron as fallback (may miss if container restarts)
@@ -205,7 +207,7 @@ export class DailySummaryService {
     });
 
     // Step 4: Call AI to generate agenda
-    const aiResult = await this.callAI(feedbackLines, totalVisits, avgSentiment);
+    const aiResult = await this.callAI(feedbackLines, totalVisits, avgSentiment, safeRestaurantId);
 
     // Step 5: Upsert into daily_summaries
     const record = {
@@ -238,6 +240,7 @@ export class DailySummaryService {
     feedbackLines: string[],
     totalVisits: number,
     avgSentiment: number | null,
+    restaurantId?: string,
   ): Promise<DailySummaryResult> {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) {
@@ -279,6 +282,19 @@ export class DailySummaryService {
 各桌反馈详情:
 ${feedbackLines.join('\n')}`;
 
+    // Enrich system prompt with knowledge store context
+    let enrichedPrompt = systemPrompt;
+    if (restaurantId) {
+      try {
+        enrichedPrompt = await this.knowledgeService.enrichPrompt(systemPrompt, {
+          restaurantId,
+          operation: 'summary',
+        });
+      } catch (e) {
+        // Non-blocking: use base prompt if enrichment fails
+      }
+    }
+
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
@@ -288,7 +304,7 @@ ${feedbackLines.join('\n')}`;
       body: JSON.stringify({
         model: 'deepseek/deepseek-chat-v3-0324',
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: enrichedPrompt },
           { role: 'user', content: userContent },
         ],
         temperature: 0.3,
