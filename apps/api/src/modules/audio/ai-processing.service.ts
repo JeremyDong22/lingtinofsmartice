@@ -179,7 +179,7 @@ export class AiProcessingService {
       const client = this.supabase.getClient();
       const { data, error } = await client
         .from('lingtin_visit_records')
-        .select('raw_transcript, stt_diarization_status')
+        .select('raw_transcript, stt_diarization_status, restaurant_id')
         .eq('id', recordingId)
         .single();
 
@@ -225,7 +225,7 @@ export class AiProcessingService {
         return { success: true, aiSummary: '语音内容无有效信息' };
       }
 
-      const aiResult = await this.processWithGemini(cleanedTranscript, diarizationStatus);
+      const aiResult = await this.processWithGemini(cleanedTranscript, diarizationStatus, data.restaurant_id);
       aiResult.correctedTranscript = rawTranscript;
 
       await this.saveResults(recordingId, { rawTranscript, ...aiResult });
