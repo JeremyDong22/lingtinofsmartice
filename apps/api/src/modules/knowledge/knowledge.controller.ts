@@ -371,10 +371,33 @@ export class KnowledgeController {
   @Post('worker/bootstrap')
   async triggerBootstrap(@CurrentUser() user: AuthUser) {
     this.assertKnowledgeAdmin(user);
-    const result = await this.bootstrapService.bootstrapAll();
+    if (this.bootstrapService.isRunning()) {
+      return {
+        data: { status: 'already_running' },
+        message: 'Bootstrap is already running',
+      };
+    }
+    // Fire-and-forget: run in background to avoid gateway timeout
+    this.bootstrapService.bootstrapAll().then(result => {
+      this.logger.log(
+        `Bootstrap finished: ${result.rulesCreated} rules, ${result.profilesCreated} profiles, ${result.errors.length} errors`,
+      );
+    }).catch(err => {
+      this.logger.error(`Bootstrap failed: ${err}`);
+    });
     return {
-      data: result,
-      message: `Bootstrap complete: ${result.rulesCreated} rules, ${result.profilesCreated} profiles across ${result.restaurants} restaurants`,
+      data: { status: 'started' },
+      message: 'Bootstrap started in background. Use GET /knowledge/worker/bootstrap-status to check progress.',
+    };
+  }
+
+  @Get('worker/bootstrap-status')
+  async getBootstrapStatus() {
+    return {
+      data: {
+        running: this.bootstrapService.isRunning(),
+        progress: this.bootstrapService.getProgress(),
+      },
     };
   }
 }
