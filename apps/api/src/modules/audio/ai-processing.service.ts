@@ -36,6 +36,8 @@ export class AiProcessingService {
   private readonly logger = new Logger(AiProcessingService.name);
   // In-memory lock to prevent concurrent processing of the same recording
   private processingLocks = new Set<string>();
+  private reanalyzeRunning = false;
+  private reanalyzeProgress = { processed: 0, failed: 0, total: 0, status: 'idle' as string };
 
   constructor(
     private readonly supabase: SupabaseService,
@@ -309,6 +311,72 @@ export class AiProcessingService {
 
     this.logger.log(`Reanalyze batch done: ${processed} ok, ${failed} failed out of ${total}`);
     return { total, processed, failed, errors };
+  }
+
+  /**
+   * Async full reanalysis — fire-and-forget with progress tracking.
+   * Processes ALL records matching the cutoff in chunks.
+   */
+  async startAsyncReanalysis(cutoffDate: string): Promise<boolean> {
+    if (this.reanalyzeRunning) return false;
+
+    this.reanalyzeRunning = true;
+    this.reanalyzeProgress = { processed: 0, failed: 0, total: 0, status: 'querying' };
+
+    const client = this.supabase.getClient();
+
+    // Get all eligible records
+    const { data: records, error } = await client
+      .from('lingtin_visit_records')
+      .select('id')
+      .eq('status', 'processed')
+      .not('raw_transcript', 'is', null)
+      .neq('raw_transcript', '')
+      .lt('processed_at', cutoffDate)
+      .order('processed_at', { ascending: true });
+
+    if (error || !records?.length) {
+      this.reanalyzeRunning = false;
+      this.reanalyzeProgress = { processed: 0, failed: 0, total: 0, status: 'no_records' };
+      return true;
+    }
+
+    this.reanalyzeProgress.total = records.length;
+    this.reanalyzeProgress.status = 'running';
+    this.logger.log(`Async reanalysis started: ${records.length} records`);
+
+    // Process in background
+    (async () => {
+      try {
+        for (let i = 0; i < records.length; i++) {
+          const result = await this.reanalyzeRecord(records[i].id);
+          if (result.success) {
+            this.reanalyzeProgress.processed++;
+          } else {
+            this.reanalyzeProgress.failed++;
+          }
+          // Rate limit: 500ms between records
+          if (i < records.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
+        this.reanalyzeProgress.status = 'complete';
+        this.logger.log(
+          `Async reanalysis complete: ${this.reanalyzeProgress.processed} ok, ${this.reanalyzeProgress.failed} failed`,
+        );
+      } catch (e) {
+        this.reanalyzeProgress.status = `error: ${e}`;
+        this.logger.error(`Async reanalysis crashed: ${e}`);
+      } finally {
+        this.reanalyzeRunning = false;
+      }
+    })();
+
+    return true;
+  }
+
+  getReanalyzeStatus() {
+    return { running: this.reanalyzeRunning, ...this.reanalyzeProgress };
   }
 
   /**
