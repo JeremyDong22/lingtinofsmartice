@@ -134,7 +134,7 @@ interface RetrievalConfig {
 const RETRIEVAL_CONFIG: Record<AIOperation, RetrievalConfig> = {
   analysis: {
     types: ['profile', 'example', 'rule'],
-    categories: ['dish', 'service', 'environment', 'customer'],
+    categories: ['dish', 'service', 'environment', 'customer', 'general'],
     maxTokens: 1500,
     freshnessWeight: 0.2,
   },
@@ -146,7 +146,7 @@ const RETRIEVAL_CONFIG: Record<AIOperation, RetrievalConfig> = {
   },
   summary: {
     types: ['profile', 'benchmark', 'pattern'],
-    categories: ['dish', 'service'],
+    categories: ['dish', 'service', 'general'],
     maxTokens: 1500,
     freshnessWeight: 0.5,
   },
