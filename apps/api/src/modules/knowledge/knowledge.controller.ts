@@ -21,6 +21,7 @@ import {
   AIOperation,
 } from './knowledge.service';
 import { LearningWorkerService } from './learning-worker.service';
+import { KnowledgeBootstrapService } from './knowledge-bootstrap.service';
 
 @Controller('knowledge')
 export class KnowledgeController {
@@ -29,6 +30,7 @@ export class KnowledgeController {
   constructor(
     private readonly knowledgeService: KnowledgeService,
     private readonly learningWorker: LearningWorkerService,
+    private readonly bootstrapService: KnowledgeBootstrapService,
   ) {}
 
   private assertKnowledgeAdmin(user: AuthUser) {
@@ -364,5 +366,15 @@ export class KnowledgeController {
     this.assertKnowledgeAdmin(user);
     await this.learningWorker.processRevisions();
     return { data: { processed: true }, message: 'Revisions processed' };
+  }
+
+  @Post('worker/bootstrap')
+  async triggerBootstrap(@CurrentUser() user: AuthUser) {
+    this.assertKnowledgeAdmin(user);
+    const result = await this.bootstrapService.bootstrapAll();
+    return {
+      data: result,
+      message: `Bootstrap complete: ${result.rulesCreated} rules, ${result.profilesCreated} profiles across ${result.restaurants} restaurants`,
+    };
   }
 }
