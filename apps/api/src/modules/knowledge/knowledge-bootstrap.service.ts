@@ -7,7 +7,7 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = 'deepseek/deepseek-chat-v3-0324';
 const SAMPLE_SIZE = 50;
 
-interface BootstrapProgress {
+export interface BootstrapProgress {
   step: string;
   restaurant?: string;
   processed: number;
@@ -20,11 +20,26 @@ interface BootstrapProgress {
 export class KnowledgeBootstrapService {
   private readonly logger = new Logger(KnowledgeBootstrapService.name);
   private running = false;
+  private progress: BootstrapProgress = {
+    step: 'idle',
+    processed: 0,
+    total: 0,
+    rulesExtracted: 0,
+    errors: [],
+  };
 
   constructor(
     private readonly supabase: SupabaseService,
     private readonly knowledgeService: KnowledgeService,
   ) {}
+
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  getProgress(): BootstrapProgress {
+    return { ...this.progress };
+  }
 
   /**
    * Full bootstrap pipeline:
@@ -47,19 +62,26 @@ export class KnowledgeBootstrapService {
     let rulesCreated = 0;
     let profilesCreated = 0;
     const errors: string[] = [];
+    this.progress = { step: 'starting', processed: 0, total: 0, rulesExtracted: 0, errors: [] };
 
     try {
       // Get all restaurants with data
       const restaurants = await this.getRestaurantsWithData();
       this.logger.log(`Bootstrap: ${restaurants.length} restaurants found`);
+      this.progress.total = restaurants.length;
 
-      for (const r of restaurants) {
+      for (let i = 0; i < restaurants.length; i++) {
+        const r = restaurants[i];
+        this.progress.step = `processing`;
+        this.progress.restaurant = r.restaurant_name;
+        this.progress.processed = i;
         this.logger.log(`── Restaurant: ${r.restaurant_name} (${r.restaurant_id})`);
 
         // Step 1: Proofread sample transcripts → extract STT rules
         try {
           const sttRules = await this.proofreadTranscripts(r.restaurant_id, r.restaurant_name);
           rulesCreated += sttRules;
+          this.progress.rulesExtracted = rulesCreated + profilesCreated;
           this.logger.log(`   STT rules extracted: ${sttRules}`);
         } catch (e) {
           const msg = `STT proofreading failed for ${r.restaurant_name}: ${e}`;
@@ -71,6 +93,7 @@ export class KnowledgeBootstrapService {
         try {
           const labelRules = await this.reviewFeedbackLabels(r.restaurant_id, r.restaurant_name);
           rulesCreated += labelRules;
+          this.progress.rulesExtracted = rulesCreated + profilesCreated;
           this.logger.log(`   Label rules extracted: ${labelRules}`);
         } catch (e) {
           const msg = `Feedback review failed for ${r.restaurant_name}: ${e}`;
@@ -82,6 +105,7 @@ export class KnowledgeBootstrapService {
         try {
           const profiles = await this.extractRestaurantProfile(r.restaurant_id, r.restaurant_name);
           profilesCreated += profiles;
+          this.progress.rulesExtracted = rulesCreated + profilesCreated;
           this.logger.log(`   Profiles/patterns created: ${profiles}`);
         } catch (e) {
           const msg = `Profile extraction failed for ${r.restaurant_name}: ${e}`;
@@ -94,6 +118,13 @@ export class KnowledgeBootstrapService {
       }
 
       this.logger.log(`Bootstrap complete: ${rulesCreated} rules, ${profilesCreated} profiles, ${errors.length} errors`);
+      this.progress = {
+        step: 'complete',
+        processed: restaurants.length,
+        total: restaurants.length,
+        rulesExtracted: rulesCreated + profilesCreated,
+        errors,
+      };
       return { restaurants: restaurants.length, rulesCreated, profilesCreated, errors };
     } finally {
       this.running = false;
