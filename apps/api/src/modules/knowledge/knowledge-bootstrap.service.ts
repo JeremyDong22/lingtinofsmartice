@@ -136,12 +136,16 @@ export class KnowledgeBootstrapService {
 3. **断句错误**（影响语义理解的错误断句）
 4. **菜品名称错误**（结合餐饮语境判断）
 
-只输出你发现的**系统性规律**（多次出现的模式），不要列单次偶发错误。
+**防假性规律要求（严格遵守）**：
+- 只报告在本批数据中**至少出现 2 次**的模式，单次偶发不算规律
+- 每条规律必须标注 "occurrences" 字段，说明在几条转录中观察到
+- 不要推测或编造数据中没有的模式
+- 如果不确定，宁可不报也不要误报
 
 输出格式（JSON 数组）：
 [
-  {"error_pattern": "碗豆尖", "correction": "豌豆尖", "context": "STT同音字，在多条转录中出现"},
-  {"error_pattern": "还可以→neutral", "correction": "还可以→positive", "context": "成都方言中'还可以'表示满意"}
+  {"error_pattern": "碗豆尖", "correction": "豌豆尖", "context": "STT同音字，在3条转录中出现", "occurrences": 3},
+  {"error_pattern": "还可以→neutral", "correction": "还可以→positive", "context": "成都方言中'还可以'表示满意", "occurrences": 5}
 ]
 
 如果没有发现系统性问题，输出空数组 []。
@@ -239,12 +243,16 @@ ${transcriptTexts}`;
 3. **是否遗漏了重要反馈点**
 4. **方言/口语导致的系统性误判**（如某个表达在当地方言中含义不同）
 
-只输出你发现的**系统性规律**（影响多条数据的模式），不要列个别误差。
+**防假性规律要求（严格遵守）**：
+- 只报告在本批数据中**至少出现 2 次**的系统性偏差，个别误差不算
+- 每条规律必须标注 "occurrences" 字段
+- 不要推测数据中没有直接证据的模式
+- 如果不确定某个表达的方言含义，标注 "confidence": "low"
 
 输出格式（JSON 数组）：
 [
-  {"pattern": "'还可以'被标为neutral", "issue": "在成都方言中'还可以'偏正面", "correction": "应标为positive，分数65-70"},
-  {"pattern": "建议类反馈分数偏低", "issue": "'能不能大一点'被打30分", "correction": "suggestion类建议分数应在45-55"}
+  {"pattern": "'还可以'被标为neutral", "issue": "在成都方言中'还可以'偏正面", "correction": "应标为positive，分数65-70", "occurrences": 4, "confidence": "high"},
+  {"pattern": "建议类反馈分数偏低", "issue": "'能不能大一点'被打30分", "correction": "suggestion类建议分数应在45-55", "occurrences": 3, "confidence": "medium"}
 ]
 
 如果没有系统性问题，输出空数组 []。
@@ -271,6 +279,8 @@ ${feedbackTexts}`;
     for (const rule of allRules) {
       const key = rule.pattern.toLowerCase();
       if (seen.has(key)) continue;
+      // Skip low-confidence rules
+      if ((rule as { confidence?: string }).confidence === 'low') continue;
       seen.add(key);
 
       const result = await this.knowledgeService.createKnowledge({
@@ -367,14 +377,20 @@ ${feedbackTexts}`;
 **反馈样本（前200条）：**
 ${sampleTexts}
 
+**防假性规律要求**：
+- top_complaints 和 top_praises 只列**至少出现 5 次**的问题，标注出现次数
+- dish_patterns 只列**至少被提及 3 次**的菜品
+- dialect_notes 只列你在样本中**确实多次观察到**的表达，不要推测
+- 所有条目需标注出现频次
+
 请输出以下 JSON：
 {
   "profile_summary": "一段 100 字以内的门店画像描述（特色、顾客群体、主要问题）",
-  "top_complaints": ["差评最频繁的3-5个具体问题"],
-  "top_praises": ["好评最频繁的3-5个具体方面"],
-  "dish_patterns": [{"dish": "菜品名", "feedback": "正面/负面趋势描述"}],
-  "service_patterns": ["服务相关的规律"],
-  "dialect_notes": ["该门店顾客常用的方言/口语表达及其真实含义"]
+  "top_complaints": [{"text": "具体问题", "count": 出现次数}],
+  "top_praises": [{"text": "具体方面", "count": 出现次数}],
+  "dish_patterns": [{"dish": "菜品名", "feedback": "正面/负面趋势描述", "mentions": 提及次数}],
+  "service_patterns": [{"text": "规律描述", "count": 出现次数}],
+  "dialect_notes": [{"expression": "方言表达", "meaning": "真实含义", "occurrences": 观察次数}]
 }`;
 
     let created = 0;
@@ -382,11 +398,11 @@ ${sampleTexts}
     try {
       const analysis = await this.callAI<{
         profile_summary: string;
-        top_complaints: string[];
-        top_praises: string[];
-        dish_patterns: Array<{ dish: string; feedback: string }>;
-        service_patterns: string[];
-        dialect_notes: string[];
+        top_complaints: Array<{ text: string; count: number }> | string[];
+        top_praises: Array<{ text: string; count: number }> | string[];
+        dish_patterns: Array<{ dish: string; feedback: string; mentions?: number }>;
+        service_patterns: Array<{ text: string; count: number }> | string[];
+        dialect_notes: Array<{ expression: string; meaning: string; occurrences?: number }> | string[];
       }>(prompt);
 
       if (!analysis) return 0;
@@ -461,14 +477,18 @@ ${sampleTexts}
       // Create dialect rules
       if (analysis.dialect_notes?.length) {
         for (const note of analysis.dialect_notes) {
+          const noteText = typeof note === 'string' ? note : `${note.expression} = ${note.meaning}`;
+          const noteContent = typeof note === 'string'
+            ? { dialect_note: note, rule_type: 'dialect' }
+            : { expression: note.expression, meaning: note.meaning, occurrences: note.occurrences, rule_type: 'dialect' };
           const dialectResult = await this.knowledgeService.createKnowledge({
             restaurant_id: restaurantId,
             scope: 'restaurant',
             knowledge_type: 'rule',
             category: 'customer',
             depth_level: 'L1',
-            title: `方言规则: ${note.slice(0, 30)}`,
-            content: { dialect_note: note, rule_type: 'dialect' },
+            title: `方言规则: ${noteText.slice(0, 30)}`,
+            content: noteContent,
             quality_score: 0.7,
             confidence: 0.7,
             source_type: 'auto',
