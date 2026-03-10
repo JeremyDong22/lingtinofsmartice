@@ -265,7 +265,8 @@ export class AiProcessingService {
       .limit(limit);
 
     if (onlyMissingFeedbacks) {
-      query = query.or('feedbacks.is.null,feedbacks.eq.[]');
+      // Only match NULL (never analyzed). Exclude '[]' which means "analyzed, no feedbacks found".
+      query = query.is('feedbacks', null);
     }
 
     if (onlyMissingProfile) {
