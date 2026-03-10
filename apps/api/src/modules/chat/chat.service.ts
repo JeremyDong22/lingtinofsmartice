@@ -9,6 +9,7 @@ import { Response } from 'express';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../../common/supabase/supabase.service';
 import { getChinaDateString } from '../../common/utils/date';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 
 // OpenRouter API Configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -549,7 +550,10 @@ interface ChatMessage {
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
 
-  constructor(private readonly supabase: SupabaseService) {
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly knowledgeService: KnowledgeService,
+  ) {
     this.logger.log(`Initializing with OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
   }
 
@@ -581,6 +585,17 @@ this.logger.log(`Role: ${roleCode}, User: ${userName}`);
       .replace('{{RESTAURANT_ID}}', restaurantId)
       .replace('{{CURRENT_DATE}}', currentDate)
       .replace('{{USER_NAME}}', userName || (useEnglish ? 'User' : '用户'));
+
+    // Enrich system prompt with knowledge store context
+    let enrichedSystemPrompt = systemPrompt;
+    try {
+      enrichedSystemPrompt = await this.knowledgeService.enrichPrompt(systemPrompt, {
+        restaurantId,
+        operation: 'chat',
+      });
+    } catch (e) {
+      this.logger.warn('Knowledge enrichment failed for chat, using base prompt');
+    }
 
     // Build messages array with conversation history
     const messages: ChatMessage[] = [];
@@ -627,7 +642,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
         res.write(`data: ${JSON.stringify({ type: 'thinking', content: useEnglish ? 'Generating today\'s briefing...' : '正在生成今日汇报...' })}\n\n`);
 
         // Stream directly from OpenRouter → client (real SSE streaming)
-        content = await this.streamBriefingResponse(systemPrompt, messages, res);
+        content = await this.streamBriefingResponse(enrichedSystemPrompt, messages, res);
         this.logger.log(`[Briefing] Streamed response length: ${content.length}`);
       } else {
         // === Regular chat: agentic loop with tool calls ===
@@ -652,7 +667,7 @@ this.logger.log(`Messages in context: ${messages.length}`);
             res.write(`data: ${JSON.stringify({ type: 'thinking', content: thinkingMessage })}\n\n`);
 
             const apiStart = Date.now();
-            const response = await this.callClaudeAPI(systemPrompt, messages);
+            const response = await this.callClaudeAPI(enrichedSystemPrompt, messages);
             const apiMs = Date.now() - apiStart;
 
             if (!response.choices || response.choices.length === 0) {

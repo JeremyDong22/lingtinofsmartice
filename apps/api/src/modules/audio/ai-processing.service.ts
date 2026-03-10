@@ -6,6 +6,7 @@ import { SupabaseService } from '../../common/supabase/supabase.service';
 import { XunfeiSttService } from './xunfei-stt.service';
 import { DashScopeSttService } from './dashscope-stt.service';
 import { DiarizationStatus, SttModel, SttResult } from '../../common/types/stt';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 
 // OpenRouter API Configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -40,6 +41,7 @@ export class AiProcessingService {
     private readonly supabase: SupabaseService,
     private readonly xunfeiStt: XunfeiSttService,
     private readonly dashScopeStt: DashScopeSttService,
+    private readonly knowledgeService: KnowledgeService,
   ) {}
 
   /**
@@ -126,7 +128,7 @@ export class AiProcessingService {
       }
 
       // Step 3: AI Tagging (Gemini) - 只做打标，不做纠偏
-      const aiResult = await this.processWithGemini(cleanedTranscript, diarizationStatus);
+      const aiResult = await this.processWithGemini(cleanedTranscript, diarizationStatus, restaurantId);
       // correctedTranscript 保留原始 STT 结果（用于调试对比）
       aiResult.correctedTranscript = rawTranscript;
       this.logger.log(`AI完成: ${aiResult.aiSummary}`);
@@ -562,6 +564,7 @@ export class AiProcessingService {
   private async processWithGemini(
     transcript: string,
     diarizationStatus: DiarizationStatus = 'unavailable',
+    restaurantId?: string,
   ): Promise<Omit<ProcessingResult, 'transcript'>> {
     // Read API key at runtime
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -694,6 +697,19 @@ ${speakerSection}
 输入："你好两位新年快乐，菜品有什么意见吗？噢好谢谢你们的肯定，祝用餐愉快。"
 输出：{"aiSummary":"店长问候，顾客未给具体反馈","feedbacks":[],"managerQuestions":["菜品有什么意见吗"],"customerAnswers":[],"customerSource":null,"visitFrequency":null}`;
 
+    // Enrich system prompt with knowledge store context
+    let enrichedPrompt = systemPrompt;
+    if (restaurantId) {
+      try {
+        enrichedPrompt = await this.knowledgeService.enrichPrompt(systemPrompt, {
+          restaurantId,
+          operation: 'analysis',
+        });
+      } catch (e) {
+        this.logger.warn('Knowledge enrichment failed, using base prompt', e);
+      }
+    }
+
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
@@ -703,7 +719,7 @@ ${speakerSection}
       body: JSON.stringify({
         model: 'deepseek/deepseek-chat-v3-0324',
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: enrichedPrompt },
           { role: 'user', content: `对话文本：\n${transcript}` },
         ],
         temperature: 0,
