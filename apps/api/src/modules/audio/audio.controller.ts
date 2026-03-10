@@ -286,4 +286,26 @@ export class AudioController {
       message: `Reanalyzed ${result.processed}/${result.total} records (${result.failed} failed)`,
     };
   }
+
+  // POST /api/audio/reanalyze-all - Async full reanalysis with knowledge enrichment
+  @Post('reanalyze-all')
+  async reanalyzeAll(
+    @Body('cutoff_date') cutoffDate?: string,
+  ) {
+    if (cutoffDate && !/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$/.test(cutoffDate)) {
+      throw new BadRequestException('cutoff_date must be a valid ISO date string');
+    }
+    const cutoff = cutoffDate || new Date().toISOString();
+    const started = await this.aiProcessingService.startAsyncReanalysis(cutoff);
+    if (!started) {
+      return { data: { status: 'already_running' }, message: 'Reanalysis is already running' };
+    }
+    return { data: { status: 'started' }, message: 'Async reanalysis started. Use GET /audio/reanalyze-status to check progress.' };
+  }
+
+  // GET /api/audio/reanalyze-status - Check async reanalysis progress
+  @Get('reanalyze-status')
+  getReanalyzeStatus() {
+    return { data: this.aiProcessingService.getReanalyzeStatus() };
+  }
 }
