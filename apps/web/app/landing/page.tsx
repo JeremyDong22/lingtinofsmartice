@@ -141,12 +141,12 @@ function HeroSection() {
           <span className="text-primary-600">智能决策中枢</span>
         </h1>
 
-        <p className="text-lg md:text-xl text-gray-500 max-w-3xl mx-auto mb-4 leading-relaxed">
+        <p className="text-lg md:text-xl text-gray-500 max-w-3xl mx-auto mb-4 leading-relaxed text-justify sm:text-center">
           当行业还在用表格管理门店，SmartIce 已经构建了
           <br className="hidden md:block" />
           自主学习、自主决策、自主验证的 AI Agent 架构
         </p>
-        <p className="text-sm md:text-base text-gray-400 max-w-2xl mx-auto mb-12">
+        <p className="text-sm md:text-base text-gray-400 max-w-2xl mx-auto mb-12 text-justify sm:text-center">
           重新定义餐饮运营范式：从经验驱动到智能驱动
         </p>
 
@@ -165,7 +165,7 @@ function HeroSection() {
           </a>
         </div>
 
-        <div className="mt-20 grid grid-cols-3 gap-8 max-w-md mx-auto">
+        <div className="mt-20 grid grid-cols-3 gap-4 sm:gap-8 max-w-md mx-auto">
           <div className="flex flex-col items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
               <svg className="w-5 h-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -228,11 +228,10 @@ function ProblemSection() {
             The Core Problem
           </span>
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            人驱动模式的结构性困境
+            人工驱动的结构性困境
           </h2>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
-            这不是管理能力问题，而是信息架构问题。<br />
-            当业务依赖人工传递信息，信息熵增就是必然结果。
+          <p className="text-gray-500 text-lg max-w-2xl mx-auto text-justify sm:text-center">
+            这不是管理能力问题，而是信息架构问题。当业务依赖人工传递信息，信息熵增就是必然结果。
           </p>
         </div>
 
@@ -250,7 +249,7 @@ function ProblemSection() {
                   </span>
                 </div>
                 <h3 className="text-lg font-bold text-gray-800 mb-2">信息{item.label}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{item.desc}</p>
+                <p className="text-sm text-gray-500 leading-relaxed text-justify">{item.desc}</p>
               </div>
               {/* Arrow connector (hidden on last item and on mobile) */}
               {i < entropy.length - 1 && (
@@ -274,9 +273,9 @@ function ProblemSection() {
                 </span>
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">
-                用产品驱动替代人力驱动
+                用智能驱动替代人力驱动
               </h3>
-              <p className="text-gray-600 text-[15px] leading-relaxed">
+              <p className="text-gray-600 text-[15px] leading-relaxed text-justify">
                 信息在产生的瞬间即被系统捕获、结构化、分析并分发至对应决策者。
                 无人工中转、无层级过滤、无记忆衰减——从源头消除信息熵增。
               </p>
@@ -312,28 +311,27 @@ function ParadigmSection() {
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             超越 SaaS 的范式
           </h2>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
-            传统 SaaS 是被动的信息容器——录入、存储、展示。<br />
-            SmartIce 是主动的决策中枢——感知、推理、执行、验证。
+          <p className="text-gray-500 text-lg max-w-2xl mx-auto text-justify sm:text-center">
+            传统 SaaS 是被动的信息容器——录入、存储、展示。SmartIce 是主动的决策中枢——感知、推理、执行、验证。
           </p>
         </div>
 
         <div className="mt-12 glass-card rounded-2xl overflow-hidden">
           {/* Table header */}
           <div className="grid grid-cols-3 text-sm font-semibold border-b border-gray-200/50">
-            <div className="px-5 py-4 text-gray-500"></div>
-            <div className="px-5 py-4 text-gray-400 text-center">传统 SaaS</div>
-            <div className="px-5 py-4 text-primary-600 text-center">SmartIce</div>
+            <div className="px-3 py-3 sm:px-5 sm:py-4 text-gray-500"></div>
+            <div className="px-3 py-3 sm:px-5 sm:py-4 text-gray-400 text-center">传统 SaaS</div>
+            <div className="px-3 py-3 sm:px-5 sm:py-4 text-primary-600 text-center">SmartIce</div>
           </div>
           {/* Table rows */}
           {COMPARISON.map((row, i) => (
             <div
               key={row.dimension}
-              className={`grid grid-cols-3 text-sm ${i < COMPARISON.length - 1 ? 'border-b border-gray-100/50' : ''}`}
+              className={`grid grid-cols-3 text-xs sm:text-sm ${i < COMPARISON.length - 1 ? 'border-b border-gray-100/50' : ''}`}
             >
-              <div className="px-5 py-4 font-medium text-gray-700">{row.dimension}</div>
-              <div className="px-5 py-4 text-gray-400 text-center">{row.saas}</div>
-              <div className="px-5 py-4 text-gray-800 text-center font-medium">{row.us}</div>
+              <div className="px-3 py-3 sm:px-5 sm:py-4 font-medium text-gray-700">{row.dimension}</div>
+              <div className="px-3 py-3 sm:px-5 sm:py-4 text-gray-400 text-justify sm:text-center">{row.saas}</div>
+              <div className="px-3 py-3 sm:px-5 sm:py-4 text-gray-800 text-justify sm:text-center font-medium">{row.us}</div>
             </div>
           ))}
         </div>
@@ -353,7 +351,7 @@ function CapabilitiesSection() {
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             核心技术架构
           </h2>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-500 text-lg max-w-2xl mx-auto text-justify sm:text-center">
             感知 · 蒸馏 · 闭环 · 协同——四层架构构成持续进化的智能经营系统
           </p>
         </div>
@@ -362,7 +360,7 @@ function CapabilitiesSection() {
           {CAPABILITIES.map((cap, i) => (
             <div
               key={cap.tag}
-              className="glass-card rounded-2xl p-7 hover:shadow-lg transition-shadow group"
+              className="glass-card rounded-2xl p-5 sm:p-7 hover:shadow-lg transition-shadow group"
             >
               <div className="flex items-center gap-3 mb-4">
                 <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary-50 text-primary-600 text-sm font-bold">
@@ -373,8 +371,8 @@ function CapabilitiesSection() {
                 </span>
               </div>
               <h3 className="text-lg font-semibold text-gray-800 mb-3">{cap.title}</h3>
-              <p className="text-gray-600 text-[15px] leading-relaxed mb-3">{cap.desc}</p>
-              <p className="text-xs text-gray-400 border-t border-gray-100/60 pt-3">{cap.detail}</p>
+              <p className="text-gray-600 text-[15px] leading-relaxed mb-3 text-justify">{cap.desc}</p>
+              <p className="text-xs text-gray-400 border-t border-gray-100/60 pt-3 text-justify">{cap.detail}</p>
             </div>
           ))}
         </div>
@@ -394,7 +392,7 @@ function RolesSection() {
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             按角色分层的决策引擎
           </h2>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-500 text-lg max-w-2xl mx-auto text-justify sm:text-center">
             不同层级获得与其职责匹配的洞察与行动建议，而非同一张通用报表
           </p>
         </div>
@@ -403,7 +401,7 @@ function RolesSection() {
           {ROLES.map((role) => (
             <div
               key={role.title}
-              className="glass-card rounded-2xl p-7 hover:shadow-lg transition-shadow"
+              className="glass-card rounded-2xl p-5 sm:p-7 hover:shadow-lg transition-shadow"
             >
               <div className="flex items-center gap-3 mb-5">
                 <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-primary-50 text-primary-600 text-[11px] font-bold tracking-wider uppercase">
@@ -415,7 +413,7 @@ function RolesSection() {
                 </div>
               </div>
               <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-red-50/60 border border-red-100/80">
-                <p className="text-sm text-red-700/70 leading-relaxed">
+                <p className="text-sm text-red-700/70 leading-relaxed text-justify">
                   <span className="font-medium text-red-600/80">传统痛点：</span>{role.pain}
                 </p>
               </div>
@@ -527,7 +525,7 @@ function SignupSection() {
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             申请内测合作
           </h2>
-          <p className="text-gray-500 text-lg">
+          <p className="text-gray-500 text-lg text-justify sm:text-center">
             名额有限，我们将优先邀请与产品方向最匹配的品牌伙伴
           </p>
         </div>
@@ -538,7 +536,7 @@ function SignupSection() {
             <FormField label="品类" required value={form.category} onChange={(v) => updateField('category', v)} placeholder="例：火锅、川菜" />
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormField label="姓名" required value={form.name} onChange={(v) => updateField('name', v)} placeholder="您的姓名" />
             <FormField label="职位" required value={form.position} onChange={(v) => updateField('position', v)} placeholder="例：品牌总监" />
             <FormField label="年龄" value={form.age} onChange={(v) => updateField('age', v)} placeholder="选填" type="number" />
