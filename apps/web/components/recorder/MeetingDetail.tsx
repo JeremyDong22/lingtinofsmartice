@@ -4,13 +4,16 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { MeetingRecord, MeetingType } from '@/hooks/useMeetingStore';
-import { AudioButton } from '@/components/shared/FeedbackWidgets';
+import { AudioPlayerInline } from '@/components/shared/FeedbackWidgets';
 
 interface MeetingDetailProps {
   meeting: MeetingRecord | null;
   onClose: () => void;
   playingKey?: string | null;
+  currentTime?: number;
+  duration?: number;
   onAudioToggle?: (key: string, url: string) => void;
+  onSeek?: (time: number) => void;
 }
 
 const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
@@ -40,7 +43,7 @@ function formatDuration(seconds: number): string {
   return `${seconds}秒`;
 }
 
-export function MeetingDetail({ meeting, onClose, playingKey, onAudioToggle }: MeetingDetailProps) {
+export function MeetingDetail({ meeting, onClose, playingKey, currentTime: ct, duration: dur, onAudioToggle, onSeek }: MeetingDetailProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -86,13 +89,18 @@ export function MeetingDetail({ meeting, onClose, playingKey, onAudioToggle }: M
                 {formatDateTime(meeting.timestamp)} · {formatDuration(meeting.duration)}
               </p>
             </div>
-            {meeting.audioUrl && onAudioToggle && (
-              <AudioButton
-                audioKey={`meeting-${meeting.id}`}
-                audioUrl={meeting.audioUrl}
-                playingKey={playingKey ?? null}
-                onToggle={onAudioToggle}
-              />
+            {meeting.audioUrl && onAudioToggle && onSeek && (
+              <div className="flex-1 min-w-0">
+                <AudioPlayerInline
+                  audioKey={`meeting-${meeting.id}`}
+                  audioUrl={meeting.audioUrl}
+                  playingKey={playingKey ?? null}
+                  currentTime={ct ?? 0}
+                  duration={dur ?? 0}
+                  onToggle={onAudioToggle}
+                  onSeek={onSeek}
+                />
+              </div>
             )}
           </div>
           <button

@@ -20,6 +20,7 @@ import { PreMealReminder } from '@/components/recorder/PreMealReminder';
 import { MeetingHistory } from '@/components/recorder/MeetingHistory';
 import { StealthOverlay } from '@/components/recorder/StealthOverlay';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
+import { useAudioPlayback } from '@/components/shared/FeedbackWidgets';
 import { MotivationBanner } from '@/components/recorder/MotivationBanner';
 import { ExecutionPanel } from '@/components/recorder/ExecutionPanel';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -77,6 +78,7 @@ export default function RecorderPage() {
   // Meeting mode state
   const [meetingType, setMeetingType] = useState<MeetingType | ''>('');
   const [detailMeeting, setDetailMeeting] = useState<MeetingRecord | null>(null);
+  const { playingKey: detailPlayingKey, currentTime: detailCurrentTime, duration: detailDuration, stopAudio: detailStopAudio, handleAudioToggle: detailAudioToggle, seekTo: detailSeekTo } = useAudioPlayback();
 
   // Refs
   const processingIdsRef = useRef<Set<string>>(new Set());
@@ -374,7 +376,15 @@ export default function RecorderPage() {
       <StealthOverlay visible={stealthMode} onDismiss={() => setStealthMode(false)} />
 
       {/* Meeting Detail Bottom Sheet */}
-      <MeetingDetail meeting={detailMeeting} onClose={() => setDetailMeeting(null)} />
+      <MeetingDetail
+        meeting={detailMeeting}
+        onClose={() => { detailStopAudio(); setDetailMeeting(null); }}
+        playingKey={detailPlayingKey}
+        currentTime={detailCurrentTime}
+        duration={detailDuration}
+        onAudioToggle={detailAudioToggle}
+        onSeek={detailSeekTo}
+      />
 
       {/* Header */}
       <header className="island-header glass-nav px-[1.125rem] py-3 flex items-center justify-between">

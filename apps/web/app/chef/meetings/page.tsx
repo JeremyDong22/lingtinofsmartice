@@ -12,6 +12,7 @@ import { WaveformVisualizer } from '@/components/recorder/WaveformVisualizer';
 import { RecordButton } from '@/components/recorder/RecordButton';
 import { MeetingHistory } from '@/components/recorder/MeetingHistory';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
+import { useAudioPlayback } from '@/components/shared/FeedbackWidgets';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { processMeetingInBackground } from '@/lib/backgroundProcessor';
 import { getApiUrl } from '@/lib/api';
@@ -298,6 +299,7 @@ export default function ChefMeetingsPage() {
 
   // Meeting detail modal
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingRecord | null>(null);
+  const { playingKey, currentTime, duration: audioDuration, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
 
   // Pending action items (cross-day unfinished)
   const [pendingCollapsed, setPendingCollapsed] = useState(false);
@@ -546,7 +548,12 @@ export default function ChefMeetingsPage() {
       {/* Meeting Detail Modal */}
       <MeetingDetail
         meeting={selectedMeeting}
-        onClose={() => setSelectedMeeting(null)}
+        onClose={() => { stopAudio(); setSelectedMeeting(null); }}
+        playingKey={playingKey}
+        currentTime={currentTime}
+        duration={audioDuration}
+        onAudioToggle={handleAudioToggle}
+        onSeek={seekTo}
       />
 
       {/* Toast */}

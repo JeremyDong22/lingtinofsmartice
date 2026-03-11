@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Recording, RecordingStatus } from '@/hooks/useRecordingStore';
 import { SmilePlus, Meh, Frown, CheckCircle, Loader, XCircle } from 'lucide-react';
+import { useAudioPlayback, AudioPlayerInline } from '@/components/shared/FeedbackWidgets';
 
 interface RecordingHistoryProps {
   recordings: Recording[];
@@ -204,42 +205,8 @@ export function RecordingHistory({
   onDelete,
   title = '今日录音',
 }: RecordingHistoryProps) {
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Handle audio playback toggle
-  const handlePlayToggle = (recording: Recording) => {
-    if (playingId === recording.id) {
-      // Stop current playback
-      audioRef.current?.pause();
-      setPlayingId(null);
-    } else {
-      // Stop previous playback
-      audioRef.current?.pause();
-
-      // Get audio source (prefer audioUrl, fallback to audioData)
-      const audioSrc = recording.audioUrl || recording.audioData;
-      if (!audioSrc) return;
-
-      // Create new audio element
-      const audio = new Audio(audioSrc);
-      audioRef.current = audio;
-
-      audio.onended = () => setPlayingId(null);
-      audio.onerror = () => setPlayingId(null);
-
-      audio.play().catch(() => setPlayingId(null));
-      setPlayingId(recording.id);
-    }
-  };
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-    };
-  }, []);
+  const { playingKey: playingId, currentTime, duration, handleAudioToggle, seekTo } = useAudioPlayback();
 
   if (recordings.length === 0) {
     return (
@@ -324,19 +291,25 @@ export function RecordingHistory({
                     </span>
                   </div>
                   <div className="mt-0.5">
-                    <MiniWaveform />
+                    {(recording.audioUrl || recording.audioData) ? (
+                      <AudioPlayerInline
+                        audioKey={recording.id}
+                        audioUrl={recording.audioUrl || recording.audioData || ''}
+                        playingKey={playingId}
+                        currentTime={currentTime}
+                        duration={duration}
+                        onToggle={handleAudioToggle}
+                        onSeek={seekTo}
+                      />
+                    ) : (
+                      <MiniWaveform />
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Right: Play button, Status and sentiment */}
+              {/* Right: Status and sentiment */}
               <div className="flex items-center gap-2">
-                <PlayButton
-                  audioUrl={recording.audioUrl}
-                  audioData={recording.audioData}
-                  isPlaying={playingId === recording.id}
-                  onToggle={() => handlePlayToggle(recording)}
-                />
                 <SatisfactionIcon score={recording.sentimentScore} />
                 <StatusBadge status={recording.status} />
                 {/* Expand indicator */}
