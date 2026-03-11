@@ -1,10 +1,11 @@
 // Landing Page - Public product introduction + beta signup
-// v2.0 - Paradigm shift narrative: intelligence-driven operations
+// v2.1 - Added analytics tracking + share button for PMF validation
 
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useRef, FormEvent } from 'react';
 import { getApiUrl } from '@/lib/api';
+import { useLandingAnalytics } from './use-landing-analytics';
 
 // ─── Form Types ───
 
@@ -433,11 +434,12 @@ function RolesSection() {
   );
 }
 
-function SignupSection() {
+function SignupSection({ track }: { track: (type: 'form_start' | 'form_submit', payload?: Record<string, unknown>) => void }) {
   const [form, setForm] = useState<SignupForm>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const formStartedRef = useRef(false);
 
   const updateField = (field: keyof SignupForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -486,6 +488,7 @@ function SignupSection() {
       }
 
       setSubmitted(true);
+      track('form_submit');
     } catch (err) {
       setError(err instanceof Error ? err.message : '网络错误，请稍后重试');
     } finally {
@@ -530,7 +533,12 @@ function SignupSection() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 md:p-8 space-y-5">
+        <form onSubmit={handleSubmit} onFocus={() => {
+          if (!formStartedRef.current) {
+            formStartedRef.current = true;
+            track('form_start');
+          }
+        }} className="glass-card rounded-2xl p-6 md:p-8 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="品牌名称" required value={form.brand} onChange={(v) => updateField('brand', v)} placeholder="例：海底捞" />
             <FormField label="品类" required value={form.category} onChange={(v) => updateField('category', v)} placeholder="例：火锅、川菜" />
@@ -646,9 +654,70 @@ function Footer() {
   );
 }
 
+// ─── Share Button ───
+
+function ShareButton({ onShare }: { onShare: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    onShare();
+
+    // Detect WeChat (ua contains MicroMessenger)
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+    if (isWeChat) {
+      // WeChat blocks Web Share API — show a toast guiding user to use the built-in share
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+      return;
+    }
+
+    // Try Web Share API first, then fallback to clipboard
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'SmartIce - 餐饮经营的智能决策中枢',
+          url: window.location.href,
+        });
+        return;
+      } catch {
+        // User cancelled or API failed — fall through to clipboard
+      }
+    }
+
+    // Clipboard fallback
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Ignore clipboard failures
+    }
+  };
+
+  return (
+    <button
+      onClick={handleShare}
+      className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-primary-600 text-white shadow-lg shadow-primary-600/30 flex items-center justify-center hover:bg-primary-700 transition-colors"
+      aria-label="分享"
+    >
+      {copied ? (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      ) : (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 // ─── Page ───
 
 export default function LandingPage() {
+  const { track } = useLandingAnalytics();
+
   return (
     <main className="min-h-screen">
       <HeroSection />
@@ -656,8 +725,9 @@ export default function LandingPage() {
       <ParadigmSection />
       <CapabilitiesSection />
       <RolesSection />
-      <SignupSection />
+      <SignupSection track={track} />
       <Footer />
+      <ShareButton onShare={() => track('share_click')} />
     </main>
   );
 }

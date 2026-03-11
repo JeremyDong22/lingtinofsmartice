@@ -20,6 +20,7 @@ import { ActivityModule } from './modules/activity/activity.module';
 import { HealthModule } from './modules/health/health.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { BetaSignupModule } from './modules/beta-signup/beta-signup.module';
+import { LandingAnalyticsModule } from './modules/landing-analytics/landing-analytics.module';
 import { AuthModule, JwtAuthGuard } from './modules/auth';
 import { SupabaseModule } from './common/supabase/supabase.module';
 
@@ -43,6 +44,7 @@ import { SupabaseModule } from './common/supabase/supabase.module';
     HealthModule,
     KnowledgeModule,
     BetaSignupModule,
+    LandingAnalyticsModule,
   ],
   providers: [
     // Apply JWT guard globally - all routes require auth by default
