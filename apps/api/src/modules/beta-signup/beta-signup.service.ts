@@ -22,14 +22,12 @@ export class BetaSignupService {
 
   constructor(private readonly supabase: SupabaseService) {}
 
-  async create(data: BetaSignupData): Promise<{ id: string }> {
+  async create(data: BetaSignupData): Promise<void> {
     const client = this.supabase.getClient();
 
-    const { data: result, error } = await client
+    const { error } = await client
       .from('lingtin_beta_signups')
-      .insert(data)
-      .select('id')
-      .single();
+      .insert(data);
 
     if (error) {
       // Postgres 23505 = unique constraint violation (duplicate phone)
@@ -41,6 +39,5 @@ export class BetaSignupService {
     }
 
     this.logger.log(`New beta signup: ${data.brand} - ${data.name}`);
-    return { id: result.id };
   }
 }

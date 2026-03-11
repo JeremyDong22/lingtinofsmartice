@@ -50,7 +50,7 @@ export class BetaSignupController {
       body.age = age;
     }
 
-    const result = await this.betaSignupService.create({
+    await this.betaSignupService.create({
       brand: body.brand.trim(),
       category: body.category.trim(),
       name: body.name.trim(),
@@ -63,6 +63,6 @@ export class BetaSignupController {
       help_text: body.help_text?.trim(),
     });
 
-    return { data: result, message: '报名成功' };
+    return { data: null, message: '报名成功' };
   }
 }
