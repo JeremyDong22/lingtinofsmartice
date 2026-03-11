@@ -203,9 +203,9 @@ export function DailyReviewCard({ restaurantId, date, negativeCount }: DailyRevi
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
                     {CATEGORY_LABELS[item.category] || item.category}
                   </span>
-                  {item.assigned_role && (
+                  {(item.assigned_role || item.assignee) && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
-                      {ROLE_LABELS[item.assigned_role] || item.assigned_role}
+                      {ROLE_LABELS[item.assigned_role || ''] || item.assignee || item.assigned_role}
                     </span>
                   )}
                   <span className={`ml-auto text-xs ${STATUS_CONFIG[item.status]?.color || 'text-gray-500'}`}>
