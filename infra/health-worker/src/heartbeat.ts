@@ -3,6 +3,7 @@ import { HEARTBEAT_ENDPOINTS, HEARTBEAT_TIMEOUT_MS } from './config';
 import { checkEndpoint } from './check';
 import { getHealthStatuses, upsertHealthStatus, insertHealthChecks } from './db';
 import { sendBark } from './notify';
+import { triggerRemediation } from './remediate';
 
 /** Run heartbeat checks every 5 minutes */
 export async function runHeartbeat(env: Env): Promise<void> {
@@ -53,6 +54,17 @@ export async function runHeartbeat(env: Env): Promise<void> {
       await sendBark(env, '✅ 服务恢复', `${result.description} (${result.endpoint}) 已恢复正常`, 'alert');
     } else if (newFailures >= 3 && newFailures % 3 === 0) {
       await sendBark(env, '🔴 紧急', `${result.description} (${result.endpoint}) 已连续 ${newFailures * 5} 分钟无响应`, 'alarm');
+    }
+
+    // Trigger auto-remediation on first threshold hit (3 consecutive failures)
+    if (newFailures === 3 && env.GITHUB_TOKEN) {
+      await triggerRemediation(env, {
+        endpoint: result.endpoint,
+        error_message: result.error_message ?? 'Unknown error',
+        http_status: result.http_status,
+        consecutive_failures: newFailures,
+        trigger_type: 'heartbeat',
+      });
     }
   }
 

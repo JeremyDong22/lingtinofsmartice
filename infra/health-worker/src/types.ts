@@ -12,6 +12,7 @@ export interface Env {
   BARK_DEVICE_KEY: string;
   OPENROUTER_API_KEY: string;
   WORKER_SECRET: string;
+  GITHUB_TOKEN: string;
 }
 
 export type CheckStatus = 'ok' | 'timeout' | 'fail';
