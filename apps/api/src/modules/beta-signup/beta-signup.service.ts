@@ -22,6 +22,21 @@ export class BetaSignupService {
 
   constructor(private readonly supabase: SupabaseService) {}
 
+  async findAll() {
+    const client = this.supabase.getClient();
+    const { data, error } = await client
+      .from('lingtin_beta_signups')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      this.logger.error('Beta signup query failed', error);
+      throw error;
+    }
+
+    return data;
+  }
+
   async create(data: BetaSignupData): Promise<void> {
     const client = this.supabase.getClient();
 

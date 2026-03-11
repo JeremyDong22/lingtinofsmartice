@@ -1,6 +1,6 @@
 // Beta Signup Controller - Public endpoint for landing page registration
 
-import { Controller, Post, Body, BadRequestException, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, BadRequestException, Logger } from '@nestjs/common';
 import { Public } from '../auth/public.decorator';
 import { BetaSignupService } from './beta-signup.service';
 
@@ -24,6 +24,12 @@ export class BetaSignupController {
   private readonly logger = new Logger(BetaSignupController.name);
 
   constructor(private readonly betaSignupService: BetaSignupService) {}
+
+  @Get()
+  async findAll() {
+    const data = await this.betaSignupService.findAll();
+    return { data, message: '查询成功' };
+  }
 
   @Public()
   @Post()
