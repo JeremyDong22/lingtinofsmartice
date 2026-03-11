@@ -1,9 +1,10 @@
 // Admin Beta Signups Page - View and manage landing page registrations
+// v2.0 - Added landing analytics dashboard for PMF validation
 
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ArrowLeft, Search, Users, CalendarPlus, Tag, Phone, MapPin, Store, DollarSign, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Search, Users, CalendarPlus, Tag, Phone, MapPin, Store, DollarSign, ChevronDown, ChevronUp, MessageSquare, Eye, Clock, MousePointerClick, Share2, TrendingUp } from 'lucide-react';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -66,6 +67,127 @@ function isToday(iso: string): boolean {
   return d.toDateString() === now.toDateString();
 }
 
+// ─── Landing Analytics Types ───
+
+interface LandingStats {
+  total_views: number;
+  unique_visitors: number;
+  avg_dwell_seconds: number;
+  scroll_75_pct: number;
+  form_started: number;
+  form_submitted: number;
+  share_clicks: number;
+  daily_trend: { day: string; views: number; visitors: number }[];
+}
+
+interface StatsResponse {
+  data: LandingStats;
+  message: string;
+}
+
+// ─── Analytics Dashboard Component ───
+
+function AnalyticsDashboard({ stats }: { stats: LandingStats }) {
+  const conversionRate = stats.unique_visitors > 0
+    ? ((stats.form_submitted / stats.unique_visitors) * 100).toFixed(1)
+    : '0';
+
+  // Funnel data: use actual metrics from backend
+  const scroll75Count = Math.round(stats.unique_visitors * (stats.scroll_75_pct / 100));
+  const funnelSteps = [
+    { label: '访问', value: stats.unique_visitors, color: 'bg-blue-500' },
+    { label: '深度阅读', value: scroll75Count, color: 'bg-cyan-500' },
+    { label: '开始填表', value: stats.form_started, color: 'bg-amber-500' },
+    { label: '提交报名', value: stats.form_submitted, color: 'bg-green-500' },
+  ];
+  const funnelMax = Math.max(...funnelSteps.map(s => s.value), 1);
+
+  // Daily trend
+  const trendMax = Math.max(...(stats.daily_trend?.map(d => d.views) || []), 1);
+
+  return (
+    <div className="space-y-4">
+      {/* Section Title */}
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-primary-500" />
+        <h2 className="text-sm font-semibold text-gray-700">落地页分析 <span className="text-xs text-gray-400 font-normal">最近 7 天</span></h2>
+      </div>
+
+      {/* Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <MetricCard icon={<Eye className="w-3.5 h-3.5" />} label="页面访问" value={`${stats.total_views}`} sub={`${stats.unique_visitors} 独立访客`} />
+        <MetricCard icon={<Clock className="w-3.5 h-3.5" />} label="平均停留" value={`${stats.avg_dwell_seconds}s`} />
+        <MetricCard icon={<MousePointerClick className="w-3.5 h-3.5" />} label="深度阅读率" value={`${stats.scroll_75_pct}%`} sub="滚动超 75%" />
+        <MetricCard icon={<Users className="w-3.5 h-3.5" />} label="表单转化率" value={`${conversionRate}%`} sub={`${stats.form_submitted} / ${stats.unique_visitors}`} highlight />
+        <MetricCard icon={<Share2 className="w-3.5 h-3.5" />} label="分享次数" value={`${stats.share_clicks}`} />
+        <MetricCard icon={<CalendarPlus className="w-3.5 h-3.5" />} label="开始填表" value={`${stats.form_started}`} />
+      </div>
+
+      {/* Conversion Funnel */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <h3 className="text-xs font-semibold text-gray-500 mb-3">转化漏斗</h3>
+        <div className="space-y-2">
+          {funnelSteps.map((step) => (
+            <div key={step.label} className="flex items-center gap-3">
+              <span className="text-xs text-gray-500 w-16 shrink-0">{step.label}</span>
+              <div className="flex-1 h-6 bg-gray-50 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${step.color} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                  style={{ width: `${Math.max((step.value / funnelMax) * 100, 8)}%` }}
+                >
+                  <span className="text-[10px] text-white font-medium">{step.value}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Daily Trend */}
+      {stats.daily_trend && stats.daily_trend.length > 0 && (
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <h3 className="text-xs font-semibold text-gray-500 mb-3">每日趋势</h3>
+          <div className="flex items-end gap-1.5 h-24">
+            {stats.daily_trend.map((day) => {
+              const heightPct = (day.views / trendMax) * 100;
+              const dateLabel = new Date(day.day).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+              return (
+                <div key={day.day} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[10px] text-gray-500">{day.views}</span>
+                  <div className="w-full flex flex-col items-center" style={{ height: '60px' }}>
+                    <div className="w-full mt-auto">
+                      <div
+                        className="w-full bg-primary-400 rounded-t transition-all duration-300"
+                        style={{ height: `${Math.max(heightPct * 0.6, 2)}px` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-gray-400">{dateLabel}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MetricCard({ icon, label, value, sub, highlight }: {
+  icon: React.ReactNode; label: string; value: string; sub?: string; highlight?: boolean;
+}) {
+  return (
+    <div className={`rounded-xl p-3 shadow-sm border ${highlight ? 'bg-primary-50 border-primary-100' : 'bg-white border-gray-100'}`}>
+      <div className="flex items-center gap-1.5 text-gray-500 text-xs mb-1">
+        {icon}
+        {label}
+      </div>
+      <p className={`text-lg font-bold ${highlight ? 'text-primary-600' : 'text-gray-900'}`}>{value}</p>
+      {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
 export default function SignupsPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -76,6 +198,10 @@ export default function SignupsPage() {
 
   const { data: resp, isLoading } = useSWR<SignupsResponse>(
     isAuthorized ? '/api/beta-signup' : null,
+  );
+
+  const { data: statsResp } = useSWR<StatsResponse>(
+    isAuthorized ? '/api/landing-analytics/stats?days=7' : null,
   );
 
   const signups = resp?.data ?? [];
@@ -140,6 +266,17 @@ export default function SignupsPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        {/* Landing Analytics Dashboard */}
+        {statsResp?.data && <AnalyticsDashboard stats={statsResp.data} />}
+
+        {/* Divider */}
+        {statsResp?.data && (
+          <div className="flex items-center gap-2 pt-2">
+            <Users className="w-4 h-4 text-gray-400" />
+            <h2 className="text-sm font-semibold text-gray-700">报名记录</h2>
+          </div>
+        )}
+
         {/* Stat Cards */}
         {!isLoading && signups.length > 0 && (
           <div className="grid grid-cols-3 gap-3">
