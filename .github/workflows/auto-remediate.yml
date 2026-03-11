@@ -1,0 +1,97 @@
+name: Auto-Remediate
+
+on:
+  repository_dispatch:
+    types: [auto-remediate]
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: 'Failing endpoint path (e.g., /api/audio/stt-health)'
+        required: true
+        type: string
+      error_message:
+        description: 'Error message from health check'
+        required: true
+        type: string
+      http_status:
+        description: 'HTTP status code (0 for timeout)'
+        required: false
+        default: '500'
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install remediation dependencies
+        working-directory: infra/remediation
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Install API dependencies (for build verification)
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Setup git identity
+        run: |
+          git config user.name "Lingtin Auto-Fix"
+          git config user.email "autofix@lingtin.smartice.ai"
+
+      - name: Setup GitHub CLI
+        run: |
+          gh auth status || echo "Using GITHUB_TOKEN for gh CLI"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare payload (repository_dispatch)
+        if: github.event_name == 'repository_dispatch'
+        uses: jsdaniell/create-json@v1.2.3
+        with:
+          name: "payload.json"
+          json: ${{ toJson(github.event.client_payload) }}
+
+      - name: Prepare payload (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          node -e "
+            const payload = {
+              endpoint: process.argv[1],
+              error_message: process.argv[2],
+              http_status: parseInt(process.argv[3]) || 500,
+              consecutive_failures: 3,
+              trigger_type: 'manual'
+            };
+            require('fs').writeFileSync('payload.json', JSON.stringify(payload));
+          " '${{ inputs.endpoint }}' '${{ inputs.error_message }}' '${{ inputs.http_status }}'
+
+      - name: Run auto-remediation
+        working-directory: infra/remediation
+        env:
+          REMEDIATION_PAYLOAD_FILE: ${{ github.workspace }}/payload.json
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          BARK_DEVICE_KEY: ${{ secrets.BARK_DEVICE_KEY }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx tsx src/index.ts
