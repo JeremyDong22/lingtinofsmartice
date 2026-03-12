@@ -20,6 +20,19 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.5.1',
+    date: '2026-03-12',
+    roles: ['manager', 'administrator', 'head_chef'],
+    title: '音频播放器体验优化',
+    items: [
+      {
+        title: '音频播放器滑块优化',
+        howToUse: '在录音详情中播放音频，滑块更易拖动，未播放时也可查看录音总时长。',
+        value: '操作更顺手，无需点播放也能快速了解录音时长。',
+      },
+    ],
+  },
+  {
     version: '2.5.0',
     date: '2026-03-12',
     roles: ['administrator'],
