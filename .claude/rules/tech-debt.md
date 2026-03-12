@@ -2,6 +2,12 @@
 
 > 目标：**稳定的 STT 转录服务** + **稳定的文本打标（AI 分析）服务**
 
+## 基础设施
+
+| 优先级 | 债务 | 状态 |
+|--------|------|------|
+| ✅ | `@nestjs/schedule@6+` 在 Node.js 18 崩溃（`crypto is not defined`） | 已修复（PR #70）：`main.ts` 加 `node:crypto.webcrypto` polyfill |
+
 ## STT 转录层
 
 | 优先级 | 债务 | 状态 |

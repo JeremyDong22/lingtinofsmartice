@@ -20,6 +20,29 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.5.0',
+    date: '2026-03-12',
+    roles: ['administrator'],
+    title: '知识引擎管理 + Landing Page',
+    items: [
+      {
+        title: '知识引擎管理看板',
+        howToUse: '点击头像菜单「知识引擎」，进入看板页查看知识条目总量、分类分布和审核状态，支持按分类筛选。',
+        value: '掌握 AI 学到了哪些运营知识，确保知识质量可控。',
+      },
+      {
+        title: '知识审核页增强',
+        howToUse: '在知识引擎页面点击「审核」Tab，通过分类标签快速切换，查看来源标签和详情后一键审核通过或拒绝。',
+        value: '高效审核 AI 提炼的知识，保证输出给店长的建议准确可靠。',
+      },
+      {
+        title: 'Beta 注册管理',
+        howToUse: '管理端新增 Beta 注册管理页面，查看落地页提交的注册申请，跟踪潜在客户。',
+        value: '了解市场反馈，跟进潜在客户转化。',
+      },
+    ],
+  },
+  {
     version: '2.4.4',
     date: '2026-03-12',
     roles: ['manager', 'administrator', 'head_chef'],

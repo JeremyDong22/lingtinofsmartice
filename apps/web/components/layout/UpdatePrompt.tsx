@@ -7,7 +7,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 
 // Build version - updated on each deployment
-export const APP_VERSION = '2.4.4';
+export const APP_VERSION = '2.5.0';
 export const BUILD_DATE = '2026-03-12';
 
 const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
