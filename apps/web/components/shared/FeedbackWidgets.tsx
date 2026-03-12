@@ -185,12 +185,12 @@ export function AudioPlayerInline({ audioKey, audioUrl, playingKey, currentTime,
           onChange={(e) => onSeek(parseFloat(e.target.value))}
           onTouchStart={(e) => e.stopPropagation()}
           disabled={!isPlaying}
-          className="w-full h-1 rounded-full appearance-none bg-gray-200 cursor-pointer accent-primary-500 disabled:cursor-default disabled:opacity-50 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500 [&::-webkit-slider-thumb]:appearance-none"
+          className="w-full h-1.5 rounded-full appearance-none bg-gray-200 cursor-pointer disabled:cursor-default disabled:opacity-60 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full"
           style={{ touchAction: 'none', ...(isPlaying ? { background: `linear-gradient(to right, rgb(var(--color-primary-500)) ${progress}%, #e5e7eb ${progress}%)` } : {}) }}
         />
         <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
           <span>{isPlaying ? formatTime(currentTime) : '0:00'}</span>
-          <span>{isPlaying && duration > 0 ? formatTime(duration) : '--:--'}</span>
+          <span>{duration > 0 ? formatTime(duration) : '--:--'}</span>
         </div>
       </div>
     </div>
