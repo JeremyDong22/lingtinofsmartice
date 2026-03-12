@@ -65,23 +65,28 @@ export function ChevronDown({ expanded, className = '' }: { expanded: boolean; c
   );
 }
 
-// --- Audio playback hook (with progress tracking) ---
+// --- Audio playback hook (with progress tracking + buffering resilience) ---
 export function useAudioPlayback() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isBuffering, setIsBuffering] = useState(false);
 
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.ontimeupdate = null;
       audioRef.current.onloadedmetadata = null;
+      audioRef.current.ondurationchange = null;
+      audioRef.current.onwaiting = null;
+      audioRef.current.onplaying = null;
       audioRef.current = null;
     }
     setPlayingKey(null);
     setCurrentTime(0);
     setDuration(0);
+    setIsBuffering(false);
   }, []);
 
   const seekTo = useCallback((time: number) => {
@@ -99,13 +104,20 @@ export function useAudioPlayback() {
       }
       stopAudio();
       const audio = new Audio(audioUrl);
-      audio.preload = 'metadata';
+      audio.crossOrigin = 'anonymous';
+      audio.preload = 'auto';
       audio.onloadedmetadata = () => {
         if (isFinite(audio.duration)) setDuration(audio.duration);
       };
+      // Some streaming sources update duration progressively
+      audio.ondurationchange = () => {
+        if (isFinite(audio.duration)) setDuration(audio.duration);
+      };
       audio.ontimeupdate = () => setCurrentTime(audio.currentTime);
-      audio.onended = () => { setPlayingKey(null); setCurrentTime(0); setDuration(0); audioRef.current = null; };
-      audio.onerror = () => { setPlayingKey(null); setCurrentTime(0); setDuration(0); audioRef.current = null; };
+      audio.onwaiting = () => setIsBuffering(true);
+      audio.onplaying = () => setIsBuffering(false);
+      audio.onended = () => { setPlayingKey(null); setCurrentTime(0); setDuration(0); setIsBuffering(false); audioRef.current = null; };
+      audio.onerror = () => { setPlayingKey(null); setCurrentTime(0); setDuration(0); setIsBuffering(false); audioRef.current = null; };
       audio.play().catch(() => { setPlayingKey(null); audioRef.current = null; });
       audioRef.current = audio;
       setPlayingKey(key);
@@ -123,7 +135,7 @@ export function useAudioPlayback() {
     };
   }, []);
 
-  return { playingKey, currentTime, duration, stopAudio, handleAudioToggle, seekTo };
+  return { playingKey, currentTime, duration, isBuffering, stopAudio, handleAudioToggle, seekTo };
 }
 
 // --- Inline audio player with progress bar ---
@@ -134,7 +146,7 @@ function formatTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-export function AudioPlayerInline({ audioKey, audioUrl, playingKey, currentTime, duration, onToggle, onSeek }: {
+export function AudioPlayerInline({ audioKey, audioUrl, playingKey, currentTime, duration, onToggle, onSeek, isBuffering }: {
   audioKey: string;
   audioUrl: string;
   playingKey: string | null;
@@ -142,6 +154,7 @@ export function AudioPlayerInline({ audioKey, audioUrl, playingKey, currentTime,
   duration: number;
   onToggle: (key: string, url: string) => void;
   onSeek: (time: number) => void;
+  isBuffering?: boolean;
 }) {
   const isPlaying = playingKey === audioKey;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -154,7 +167,9 @@ export function AudioPlayerInline({ audioKey, audioUrl, playingKey, currentTime,
           isPlaying ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-600 hover:text-primary-600 hover:bg-primary-50'
         }`}
       >
-        {isPlaying ? (
+        {isBuffering && isPlaying ? (
+          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+        ) : isPlaying ? (
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
         ) : (
           <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
@@ -168,9 +183,10 @@ export function AudioPlayerInline({ audioKey, audioUrl, playingKey, currentTime,
           step={0.1}
           value={isPlaying ? currentTime : 0}
           onChange={(e) => onSeek(parseFloat(e.target.value))}
+          onTouchStart={(e) => e.stopPropagation()}
           disabled={!isPlaying}
-          className="w-full h-1 rounded-full appearance-none bg-gray-200 cursor-pointer accent-primary-500 disabled:cursor-default disabled:opacity-50 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500 [&::-webkit-slider-thumb]:appearance-none"
-          style={isPlaying ? { background: `linear-gradient(to right, rgb(var(--color-primary-500)) ${progress}%, #e5e7eb ${progress}%)` } : undefined}
+          className="w-full h-1 rounded-full appearance-none bg-gray-200 cursor-pointer accent-primary-500 disabled:cursor-default disabled:opacity-50 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500 [&::-webkit-slider-thumb]:appearance-none"
+          style={{ touchAction: 'none', ...(isPlaying ? { background: `linear-gradient(to right, rgb(var(--color-primary-500)) ${progress}%, #e5e7eb ${progress}%)` } : {}) }}
         />
         <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
           <span>{isPlaying ? formatTime(currentTime) : '0:00'}</span>

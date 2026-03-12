@@ -299,7 +299,7 @@ export default function ChefMeetingsPage() {
 
   // Meeting detail modal
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingRecord | null>(null);
-  const { playingKey, currentTime, duration: audioDuration, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
+  const { playingKey, currentTime, duration: audioDuration, isBuffering, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
 
   // Pending action items (cross-day unfinished)
   const [pendingCollapsed, setPendingCollapsed] = useState(false);
@@ -552,6 +552,7 @@ export default function ChefMeetingsPage() {
         playingKey={playingKey}
         currentTime={currentTime}
         duration={audioDuration}
+        isBuffering={isBuffering}
         onAudioToggle={handleAudioToggle}
         onSeek={seekTo}
       />

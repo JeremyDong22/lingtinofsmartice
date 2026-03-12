@@ -78,7 +78,7 @@ export default function RecorderPage() {
   // Meeting mode state
   const [meetingType, setMeetingType] = useState<MeetingType | ''>('');
   const [detailMeeting, setDetailMeeting] = useState<MeetingRecord | null>(null);
-  const { playingKey: detailPlayingKey, currentTime: detailCurrentTime, duration: detailDuration, stopAudio: detailStopAudio, handleAudioToggle: detailAudioToggle, seekTo: detailSeekTo } = useAudioPlayback();
+  const { playingKey: detailPlayingKey, currentTime: detailCurrentTime, duration: detailDuration, isBuffering: detailIsBuffering, stopAudio: detailStopAudio, handleAudioToggle: detailAudioToggle, seekTo: detailSeekTo } = useAudioPlayback();
 
   // Refs
   const processingIdsRef = useRef<Set<string>>(new Set());
@@ -382,6 +382,7 @@ export default function RecorderPage() {
         playingKey={detailPlayingKey}
         currentTime={detailCurrentTime}
         duration={detailDuration}
+        isBuffering={detailIsBuffering}
         onAudioToggle={detailAudioToggle}
         onSeek={detailSeekTo}
       />

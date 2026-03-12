@@ -206,7 +206,7 @@ export function RecordingHistory({
   title = '今日录音',
 }: RecordingHistoryProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const { playingKey: playingId, currentTime, duration, handleAudioToggle, seekTo } = useAudioPlayback();
+  const { playingKey: playingId, currentTime, duration, isBuffering, handleAudioToggle, seekTo } = useAudioPlayback();
 
   if (recordings.length === 0) {
     return (
@@ -300,6 +300,7 @@ export function RecordingHistory({
                         duration={duration}
                         onToggle={handleAudioToggle}
                         onSeek={seekTo}
+                        isBuffering={isBuffering}
                       />
                     ) : (
                       <MiniWaveform />

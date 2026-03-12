@@ -242,7 +242,7 @@ export default function AdminMeetingsPage() {
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingRecord | null>(null);
   const [showMyMeetings, setShowMyMeetings] = useState(true);
   const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
-  const { playingKey, currentTime, duration, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
+  const { playingKey, currentTime, duration, isBuffering, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
 
   const { data: apiData, isLoading, error } = useSWR<AdminOverviewResponse>(
     `/api/meeting/admin-overview?${dateRangeParams(dateRange)}${user?.id ? `&employee_id=${user.id}` : ''}${managedIdsParam}`
@@ -398,6 +398,7 @@ export default function AdminMeetingsPage() {
         playingKey={playingKey}
         currentTime={currentTime}
         duration={duration}
+        isBuffering={isBuffering}
         onAudioToggle={handleAudioToggle}
         onSeek={seekTo}
       />
