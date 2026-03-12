@@ -7,6 +7,7 @@ import { XunfeiSttService } from './xunfei-stt.service';
 import { DashScopeSttService } from './dashscope-stt.service';
 import { DiarizationStatus, SttModel, SttResult } from '../../common/types/stt';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { KnowledgeExtractorService } from '../knowledge/knowledge-extractor.service';
 
 // OpenRouter API Configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -44,6 +45,7 @@ export class AiProcessingService {
     private readonly xunfeiStt: XunfeiSttService,
     private readonly dashScopeStt: DashScopeSttService,
     private readonly knowledgeService: KnowledgeService,
+    private readonly knowledgeExtractor: KnowledgeExtractorService,
   ) {}
 
   /**
@@ -142,6 +144,17 @@ export class AiProcessingService {
         diarizationStatus,
         ...aiResult,
       });
+
+      // Step 5: Extract business knowledge (fire-and-forget)
+      this.knowledgeExtractor.extractFromVisit(recordingId, restaurantId, {
+        feedbacks: aiResult.feedbacks,
+        customerSource: aiResult.customerSource,
+        visitFrequency: aiResult.visitFrequency,
+        managerQuestions: aiResult.managerQuestions,
+        customerAnswers: aiResult.customerAnswers,
+        aiSummary: aiResult.aiSummary,
+        tableId,
+      }).catch(e => this.logger.warn('Knowledge extraction failed (non-fatal)', e));
 
       const totalTime = Date.now() - startTime;
       this.logger.log(`Pipeline: ${tableId} 完成 (${(totalTime / 1000).toFixed(1)}s)`);

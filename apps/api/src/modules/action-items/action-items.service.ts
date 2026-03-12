@@ -3,6 +3,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../common/supabase/supabase.service';
+import { KnowledgeExtractorService } from '../knowledge/knowledge-extractor.service';
 
 const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -11,7 +12,10 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 export class ActionItemsService {
   private readonly logger = new Logger(ActionItemsService.name);
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly knowledgeExtractor: KnowledgeExtractorService,
+  ) {}
 
   // Get action items for a restaurant on a given date
   async getActionItems(restaurantId: string, date: string) {
@@ -178,6 +182,19 @@ export class ActionItemsService {
       .single();
 
     if (error) throw error;
+
+    // Extract experience knowledge when resolved with a note
+    if (status === 'resolved' && note && data) {
+      this.knowledgeExtractor.extractFromActionResolution(
+        id,
+        data.restaurant_id,
+        {
+          suggestion: data.suggestion_text || '',
+          category: data.category || 'other',
+          resolvedNote: note,
+        },
+      ).catch(e => this.logger.warn('Action resolution extraction failed (non-fatal)', e));
+    }
 
     return { action: data };
   }

@@ -35,6 +35,7 @@ export type ReviewStatus =
   | 'revision_requested'
   | 'rejected';
 export type SourceType = 'auto' | 'manual' | 'promoted' | 'distilled';
+export type SourceRecordType = 'visit_record' | 'meeting_record' | 'action_item';
 export type AIOperation =
   | 'analysis'
   | 'summary'
@@ -119,6 +120,8 @@ export interface KnowledgeCreateInput {
   source_signal?: string | null;
   source_type?: SourceType;
   source_data?: Record<string, unknown> | null;
+  source_record_id?: string | null;
+  source_record_type?: SourceRecordType | null;
   auto_approve?: boolean;
 }
 
@@ -139,19 +142,19 @@ const RETRIEVAL_CONFIG: Record<AIOperation, RetrievalConfig> = {
     freshnessWeight: 0.2,
   },
   chat: {
-    types: ['profile', 'pattern', 'best_practice', 'benchmark'],
+    types: ['profile', 'pattern', 'best_practice', 'benchmark', 'example'],
     categories: 'all',
     maxTokens: 2000,
     freshnessWeight: 0.4,
   },
   summary: {
-    types: ['profile', 'benchmark', 'pattern'],
-    categories: ['dish', 'service', 'general'],
+    types: ['profile', 'benchmark', 'pattern', 'best_practice', 'example'],
+    categories: 'all',
     maxTokens: 1500,
     freshnessWeight: 0.5,
   },
   action: {
-    types: ['best_practice', 'pattern', 'benchmark'],
+    types: ['best_practice', 'pattern', 'benchmark', 'example'],
     categories: 'all',
     maxTokens: 1000,
     freshnessWeight: 0.3,
@@ -368,6 +371,8 @@ export class KnowledgeService {
         source_signal: input.source_signal || null,
         source_type: input.source_type || 'auto',
         source_data: input.source_data || null,
+        source_record_id: input.source_record_id || null,
+        source_record_type: input.source_record_type || null,
         status,
         review_status: reviewStatus,
         auto_approve: shouldAutoApprove,
