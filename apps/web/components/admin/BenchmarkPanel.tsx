@@ -75,7 +75,23 @@ export function BenchmarkPanel({ managedIdsParam }: BenchmarkPanelProps) {
     `/api/dashboard/benchmark?days=7${managedIdsParam}`
   );
 
-  if (isLoading || !data) return null;
+  // Loading skeleton - reserve space to prevent layout shift
+  if (isLoading || !data) {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium text-gray-700">区域对比</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="glass-card rounded-xl p-3 animate-pulse">
+              <div className="h-3 bg-gray-200 rounded w-1/2 mb-2 mx-auto" />
+              <div className="h-5 bg-gray-200 rounded w-2/3 mb-1 mx-auto" />
+              <div className="h-3 bg-gray-100 rounded w-3/4 mx-auto" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const { comparison, alerts, highlights } = data;
 

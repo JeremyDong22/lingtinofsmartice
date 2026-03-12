@@ -1,11 +1,13 @@
 // Bottom Navigation Component - Navigation between main pages
-// v1.1 - Added i18n support
+// v1.2 - Added prefetching on hover/touch for faster navigation
 
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/lib/i18n';
+import { prefetchDashboard, prefetchRecorder, prefetchChat } from '@/lib/prefetch';
 
 const NAV_ITEMS = [
   {
@@ -40,6 +42,25 @@ const NAV_ITEMS = [
 export function BottomNav() {
   const pathname = usePathname();
   const { t } = useT();
+  const { user } = useAuth();
+  const restaurantId = user?.restaurantId || '';
+
+  // Prefetch handlers for each route
+  const handlePrefetch = (href: string) => {
+    if (!restaurantId) return;
+
+    switch (href) {
+      case '/dashboard':
+        prefetchDashboard(restaurantId);
+        break;
+      case '/recorder':
+        prefetchRecorder(restaurantId);
+        break;
+      case '/chat':
+        prefetchChat(restaurantId);
+        break;
+    }
+  };
 
   return (
     <nav className="island-bottom-nav glass-nav">
@@ -53,6 +74,8 @@ export function BottomNav() {
               className={`flex flex-col items-center justify-center flex-1 h-full transition-all touch-manipulation ${
                 isActive ? 'text-primary-600' : 'text-gray-400 active:scale-90 active:opacity-60'
               }`}
+              onMouseEnter={() => handlePrefetch(item.href)}
+              onTouchStart={() => handlePrefetch(item.href)}
             >
               {item.icon(isActive)}
               <span className="text-xs mt-1 font-medium">{t(item.labelKey)}</span>

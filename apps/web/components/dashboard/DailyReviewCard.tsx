@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { getApiUrl } from '@/lib/api';
 import { getAuthHeaders } from '@/contexts/AuthContext';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 import { useT } from '@/lib/i18n';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
 import { CATEGORY_LABELS, PRIORITY_CONFIG, STATUS_CONFIG, ROLE_LABELS } from '@/lib/action-item-constants';
@@ -46,9 +47,11 @@ export function DailyReviewCard({ restaurantId, date, negativeCount }: DailyRevi
   const params = new URLSearchParams({ restaurant_id: restaurantId, date }).toString();
   const { data: meetingData, isLoading: meetingLoading } = useSWR<MeetingResponse>(
     `/api/meeting/today?${params}`,
+    { ...getCacheConfig('realtime') }
   );
   const { data: actionData, isLoading: actionsLoading, mutate } = useSWR<ActionItemsResponse>(
     `/api/action-items?${params}`,
+    { ...getCacheConfig('statistics') }
   );
 
   const meetings = meetingData?.records ?? [];
@@ -57,23 +60,41 @@ export function DailyReviewCard({ restaurantId, date, negativeCount }: DailyRevi
   const isLoading = meetingLoading || actionsLoading;
   const hasReview = !!reviewMeeting && reviewMeeting.status === 'processed';
 
-  // Update action item status via PATCH
+  // Update action item status via PATCH with optimistic UI
   const handleUpdateStatus = async (id: string, status: string, note?: string) => {
     setUpdatingId(id);
-    try {
-      const res = await fetch(
-        getApiUrl(`api/action-items/${id}`),
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
+
+    // Optimistic update: immediately update UI
+    mutate(
+      async () => {
+        const res = await fetch(
+          getApiUrl(`api/action-items/${id}`),
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders(),
+            },
+            body: JSON.stringify({ status, note }),
           },
-          body: JSON.stringify({ status, note }),
-        },
-      );
-      if (!res.ok) throw new Error('Update failed');
-      await mutate();
+        );
+        if (!res.ok) throw new Error('Update failed');
+        return actionData;  // Return current data, will revalidate
+      },
+      {
+        optimisticData: actionData ? {
+          ...actionData,
+          actions: actionData.actions.map(item =>
+            item.id === id ? { ...item, status: status as ActionItem['status'], response_note: note || item.response_note } : item
+          ),
+        } : undefined,
+        rollbackOnError: true,
+        populateCache: false,
+        revalidate: true,
+      }
+    );
+
+    try {
       if (status === 'resolved') {
         setResolvingId(null);
         setResolveNotes(prev => {

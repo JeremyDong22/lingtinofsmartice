@@ -8,6 +8,7 @@ import { CheckCircle } from 'lucide-react';
 import useSWR from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { useManagedScope } from '@/hooks/useManagedScope';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { BenchmarkPanel } from '@/components/admin/BenchmarkPanel';
 import { ExecutionStatus } from '@/components/admin/ExecutionStatus';
@@ -134,18 +135,26 @@ export default function AdminBriefingPage() {
     [playingKey, stopAudio],
   );
 
-  // Fetch briefing data (scoped by managed restaurants)
-  const { data, isLoading } = useSWR<BriefingResponse>(`/api/dashboard/briefing?${dateRangeParams(dateRange)}${managedIdsParam}`);
-  // Fetch overview data (keywords + store grid)
-  const { data: overviewData } = useSWR<OverviewResponse>(`/api/dashboard/restaurants-overview?${dateRangeParams(dateRange)}${managedIdsParam}`);
-
-  // Fetch execution overview (always yesterday, independent of date picker)
-  const { data: executionData } = useSWR<ExecutionOverview>(
-    `/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`
+  // Fetch briefing data (scoped by managed restaurants) - historical data, 5min cache
+  const { data, isLoading } = useSWR<BriefingResponse>(
+    `/api/dashboard/briefing?${dateRangeParams(dateRange)}${managedIdsParam}`,
+    { ...getCacheConfig('historical') }
   );
-  // Fetch feedback loop metrics (linked to date picker)
+  // Fetch overview data (keywords + store grid) - historical data, 5min cache
+  const { data: overviewData } = useSWR<OverviewResponse>(
+    `/api/dashboard/restaurants-overview?${dateRangeParams(dateRange)}${managedIdsParam}`,
+    { ...getCacheConfig('historical') }
+  );
+
+  // Fetch execution overview (always yesterday, independent of date picker) - statistics, 10min cache
+  const { data: executionData } = useSWR<ExecutionOverview>(
+    `/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`,
+    { ...getCacheConfig('statistics') }
+  );
+  // Fetch feedback loop metrics (linked to date picker) - statistics, 10min cache
   const { data: feedbackLoopData } = useSWR<FeedbackLoopResponse>(
-    `/api/dashboard/feedback-loop?${dateRangeParams(dateRange)}${managedIdsParam}`
+    `/api/dashboard/feedback-loop?${dateRangeParams(dateRange)}${managedIdsParam}`,
+    { ...getCacheConfig('statistics') }
   );
 
   const userName = user?.employeeName || user?.username || (locale === 'en' ? 'there' : '您');
@@ -182,38 +191,29 @@ export default function AdminBriefingPage() {
       </header>
 
       <div className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
-        {/* Greeting banner */}
-        <div>
+        {/* Greeting banner - fixed height to prevent layout shift */}
+        <div className="min-h-[60px]">
           <h2 className="text-xl font-bold text-gray-900">
             {greeting}{locale === 'en' ? ', ' : '，'}{userName.slice(0, 3)}
           </h2>
-          {!isLoading && problems.length > 0 && (
-            <p className="text-sm text-gray-500 mt-0.5">
-              {t('briefing.storesAttention', restaurantCount, problems.length)}
-            </p>
-          )}
-          {!isLoading && problems.length === 0 && restaurantCount > 0 && (
-            <p className="text-sm text-gray-500 mt-0.5">
-              {t('briefing.storesHealthy', restaurantCount)}
-            </p>
-          )}
+          {/* Always reserve space for subtitle */}
+          <div className="min-h-[20px] mt-0.5">
+            {isLoading ? (
+              <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse" />
+            ) : problems.length > 0 ? (
+              <p className="text-sm text-gray-500">
+                {t('briefing.storesAttention', restaurantCount, problems.length)}
+              </p>
+            ) : restaurantCount > 0 ? (
+              <p className="text-sm text-gray-500">
+                {t('briefing.storesHealthy', restaurantCount)}
+              </p>
+            ) : null}
+          </div>
         </div>
 
-        {/* 3-level ExecutionStatus (brand → store → problems) */}
-        <ExecutionStatus
-          executionData={executionData}
-          problems={problems}
-          overviewData={overviewData}
-          onAudioToggle={handleAudioToggle}
-          playingKey={playingKey}
-          feedbackLoopData={feedbackLoopData}
-          managedIdsParam={managedIdsParam}
-        />
-
-        {/* Brand-level KPI charts are now inside ExecutionStatus per brand */}
-
-        {/* Loading state */}
-        {isLoading && (
+        {/* Loading state - show skeleton only on initial load */}
+        {isLoading && !data && (
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
               <div key={i} className="bg-white rounded-xl p-4 animate-pulse">
@@ -224,6 +224,21 @@ export default function AdminBriefingPage() {
             ))}
           </div>
         )}
+
+        {/* 3-level ExecutionStatus with loading overlay when revalidating */}
+        <div className={`transition-opacity duration-200 ${isLoading && data ? 'opacity-60' : ''}`}>
+          <ExecutionStatus
+            executionData={executionData}
+            problems={problems}
+            overviewData={overviewData}
+            onAudioToggle={handleAudioToggle}
+            playingKey={playingKey}
+            feedbackLoopData={feedbackLoopData}
+            managedIdsParam={managedIdsParam}
+          />
+        </div>
+
+        {/* Brand-level KPI charts are now inside ExecutionStatus per brand */}
 
         {/* Empty state - all healthy (only when no execution data either) */}
         {!isLoading && !executionData && restaurantCount > 0 && (

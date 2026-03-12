@@ -83,7 +83,7 @@ interface MotivationBannerProps {
 }
 
 export function MotivationBanner({ restaurantId, userName }: MotivationBannerProps) {
-  const { data } = useSWR<MotivationStats>(
+  const { data, isLoading } = useSWR<MotivationStats>(
     restaurantId ? `/api/dashboard/motivation-stats?restaurant_id=${restaurantId}` : null,
     { dedupingInterval: 300000 }, // cache 5 min, uses global fetcher + localStorage persistence
   );
@@ -101,16 +101,28 @@ export function MotivationBanner({ restaurantId, userName }: MotivationBannerPro
         {greeting}
       </p>
 
-      {/* Stats row */}
-      {data && (data.total_visits > 0 || data.positive_count > 0 || data.resolved_issues > 0) && (
-        <div className="flex items-center gap-4 mt-2.5">
-          <StatItem value={data.total_visits} label="次桌访" />
-          <div className="w-px h-6 bg-gray-200" />
-          <StatItem value={data.positive_count} label="次满意" />
-          <div className="w-px h-6 bg-gray-200" />
-          <StatItem value={data.resolved_issues} label="已改善" />
-        </div>
-      )}
+      {/* Stats row - always reserve space to prevent layout shift */}
+      <div className="flex items-center gap-4 mt-2.5 min-h-[32px]">
+        {isLoading ? (
+          // Loading skeleton
+          <>
+            <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+            <div className="w-px h-6 bg-gray-200" />
+            <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+            <div className="w-px h-6 bg-gray-200" />
+            <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+          </>
+        ) : data && (data.total_visits > 0 || data.positive_count > 0 || data.resolved_issues > 0) ? (
+          // Actual stats
+          <>
+            <StatItem value={data.total_visits} label="次桌访" />
+            <div className="w-px h-6 bg-gray-200" />
+            <StatItem value={data.positive_count} label="次满意" />
+            <div className="w-px h-6 bg-gray-200" />
+            <StatItem value={data.resolved_issues} label="已改善" />
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

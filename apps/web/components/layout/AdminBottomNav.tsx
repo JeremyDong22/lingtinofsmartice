@@ -1,11 +1,13 @@
 // Admin Bottom Navigation Component - Navigation for boss/administrator role
-// v4.3 - Removed activity tab (moved to UserMenu)
+// v4.4 - Added prefetching on hover/touch for faster navigation
 
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useManagedScope } from '@/hooks/useManagedScope';
 import { useT } from '@/lib/i18n';
+import { prefetchAdminBriefing, prefetchAdminInsights, prefetchAdminMeetings, prefetchChat } from '@/lib/prefetch';
 
 const NAV_ITEMS = [
   {
@@ -51,6 +53,26 @@ const NAV_ITEMS = [
 export function AdminBottomNav() {
   const pathname = usePathname();
   const { t } = useT();
+  const { managedIdsParam } = useManagedScope();
+
+  // Prefetch handlers for each route
+  const handlePrefetch = (href: string) => {
+    switch (href) {
+      case '/admin/briefing':
+        prefetchAdminBriefing(managedIdsParam);
+        break;
+      case '/admin/insights':
+        prefetchAdminInsights(managedIdsParam);
+        break;
+      case '/admin/meetings':
+        prefetchAdminMeetings(managedIdsParam);
+        break;
+      case '/admin/chat':
+        // Chat doesn't need restaurant ID for admin
+        prefetchChat('');
+        break;
+    }
+  };
 
   return (
     <nav className="island-bottom-nav glass-nav">
@@ -66,6 +88,8 @@ export function AdminBottomNav() {
               className={`flex flex-col items-center justify-center flex-1 h-full transition-all touch-manipulation ${
                 isActive ? 'text-primary-600' : 'text-gray-400 active:scale-90 active:opacity-60'
               }`}
+              onMouseEnter={() => handlePrefetch(item.href)}
+              onTouchStart={() => handlePrefetch(item.href)}
             >
               {item.icon(!!isActive)}
               <span className="text-xs mt-1 font-medium">{t(item.labelKey)}</span>

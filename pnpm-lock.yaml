@@ -126,6 +126,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@piotr-cz/swr-idb-cache':
+        specifier: ^1.1.2
+        version: 1.1.2(react@18.3.1)(swr@2.3.8(react@18.3.1))
       '@supabase/ssr':
         specifier: ^0.5.0
         version: 0.5.2(@supabase/supabase-js@2.91.1)
@@ -963,6 +966,12 @@ packages:
     resolution: {integrity: sha512-um0xL3fO7Mf4fDxcqx9KryrB7zgRM5JSlvGN5AGkP6JLM5XEKyjeAiPbNxdXVXQ16isuAhYpvP88NgL2BGd6aA==}
     engines: {node: '>=8.0.0', npm: '>=5.0.0'}
     hasBin: true
+
+  '@piotr-cz/swr-idb-cache@1.1.2':
+    resolution: {integrity: sha512-30JFSCUtuEpazU1qHsX06qdTq+64PjggaROe8pKXgy7ZVHmpU5Ir1ItbhVBYZq/27U5xlGX+xmL+I44Pp9pIOQ==}
+    peerDependencies:
+      react: ^16.11.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      swr: ^2.0.0-beta.3
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -5266,6 +5275,12 @@ snapshots:
       node-fetch: 2.7.0
     transitivePeerDependencies:
       - encoding
+
+  '@piotr-cz/swr-idb-cache@1.1.2(react@18.3.1)(swr@2.3.8(react@18.3.1))':
+    dependencies:
+      idb: 7.1.1
+      react: 18.3.1
+      swr: 2.3.8(react@18.3.1)
 
   '@pkgjs/parseargs@0.11.0':
     optional: true

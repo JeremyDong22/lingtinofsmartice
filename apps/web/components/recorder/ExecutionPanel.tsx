@@ -24,11 +24,21 @@ export function ExecutionPanel({ restaurantId, onGoReview }: ExecutionPanelProps
   const router = useRouter();
   const yesterday = getChinaYesterday();
 
-  const { data } = useSWR<ExecutionSummary>(
+  const { data, isLoading } = useSWR<ExecutionSummary>(
     restaurantId ? `/api/dashboard/execution-summary?restaurant_id=${restaurantId}&date=${yesterday}` : null,
   );
 
-  if (!data) return null;
+  // Loading skeleton - reserve space to prevent layout shift
+  if (isLoading || !data) {
+    return (
+      <div className="mb-4">
+        <div className="glass-card rounded-2xl p-4 animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+          <div className="h-3 bg-gray-100 rounded w-3/4" />
+        </div>
+      </div>
+    );
+  }
 
   const { review_done, pending_actions } = data;
   const allDone = review_done && pending_actions === 0;

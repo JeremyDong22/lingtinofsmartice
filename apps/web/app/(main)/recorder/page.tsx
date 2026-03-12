@@ -9,6 +9,7 @@ import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useRecordingStore } from '@/hooks/useRecordingStore';
 import { useMeetingStore, MeetingType } from '@/hooks/useMeetingStore';
 import { useAuth } from '@/contexts/AuthContext';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 import { TableSelector } from '@/components/recorder/TableSelector';
 import { WaveformVisualizer } from '@/components/recorder/WaveformVisualizer';
 import { RecordButton } from '@/components/recorder/RecordButton';
@@ -93,9 +94,10 @@ export default function RecorderPage() {
   const { isRecording, duration, audioBlob, error, analyserData } = recorderState;
   const { startRecording, stopRecording, resetRecording } = recorderActions;
 
-  // Fetch active question template
+  // Fetch active question template (static data, 30min cache)
   const { data: templateData } = useSWR<{ template: QuestionTemplate | null }>(
-    restaurantId ? `/api/question-templates/active?restaurant_id=${restaurantId}` : null
+    restaurantId ? `/api/question-templates/active?restaurant_id=${restaurantId}` : null,
+    { ...getCacheConfig('static') }
   );
   const activeQuestions = templateData?.template?.questions ?? [];
 

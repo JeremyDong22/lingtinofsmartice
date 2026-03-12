@@ -14,6 +14,7 @@ import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, useStorePresets } from '@/components/shared/DatePicker';
 import { FeedbackSection } from '@/components/dashboard/FeedbackSection';
 import { useT } from '@/lib/i18n';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 
 // Types for API responses
 interface CoveragePeriod {
@@ -100,18 +101,23 @@ export default function DashboardPage() {
     ? `restaurant_id=${restaurantId}&start_date=${yesterdayDate}&end_date=${yesterdayDate}`
     : null;
 
-  // SWR hooks for data fetching with stale-while-revalidate
+  // SWR hooks for data fetching with optimized cache strategies
+  // Today's data: 30s cache, historical: 5min, statistics: 10min
   const { data: coverageData, isLoading: coverageLoading } = useSWR<CoverageResponse>(
-    params ? `/api/dashboard/coverage?${params}` : null
+    params ? `/api/dashboard/coverage?${params}` : null,
+    { ...getCacheConfig('realtime') }
   );
   const { data: sentimentData, isLoading: sentimentLoading } = useSWR<SentimentSummary>(
-    params ? `/api/dashboard/sentiment-summary?${params}` : null
+    params ? `/api/dashboard/sentiment-summary?${params}` : null,
+    { ...getCacheConfig('realtime') }
   );
   const { data: yesterdaySentiment } = useSWR<SentimentSummary>(
-    yesterdayParams ? `/api/dashboard/sentiment-summary?${yesterdayParams}` : null
+    yesterdayParams ? `/api/dashboard/sentiment-summary?${yesterdayParams}` : null,
+    { ...getCacheConfig('historical') }
   );
   const { data: suggestionsData } = useSWR<SuggestionsResponse>(
-    restaurantId ? `/api/dashboard/suggestions?restaurant_id=${restaurantId}&days=7` : null
+    restaurantId ? `/api/dashboard/suggestions?restaurant_id=${restaurantId}&days=7` : null,
+    { ...getCacheConfig('statistics') }
   );
 
   // Kitchen action items (dish_quality category) — use endDate for single-day, today for range
@@ -120,7 +126,8 @@ export default function DashboardPage() {
     ? `restaurant_id=${restaurantId}&date=${kitchenActionsDate}`
     : null;
   const { data: kitchenActionsData } = useSWR<{ actions: { id: string; category: string; suggestion_text: string; status: string; response_note?: string | null; priority: string }[] }>(
-    kitchenActionsParams ? `/api/action-items?${kitchenActionsParams}` : null
+    kitchenActionsParams ? `/api/action-items?${kitchenActionsParams}` : null,
+    { ...getCacheConfig('statistics') }
   );
 
   // Derived data with defaults
@@ -148,8 +155,8 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-4 py-4 space-y-4 island-page-top island-page-bottom">
-        {/* Loading indicator */}
-        {loading && (
+        {/* Loading indicator - with keepPreviousData, show subtle overlay instead of skeleton */}
+        {loading && !coverageData && (
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
               <div key={i} className="glass-card rounded-2xl p-4 animate-pulse">
@@ -160,6 +167,9 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
+
+        {/* Content with loading overlay when revalidating */}
+        <div className={`space-y-4 transition-opacity duration-200 ${loading && coverageData ? 'opacity-60' : ''}`}>
 
         {/* Execution Data Card */}
         <div className="glass-card rounded-2xl p-4">
@@ -305,6 +315,7 @@ export default function DashboardPage() {
             negativeCount={sentiment?.negative_count ?? 0}
           />
         )}
+        </div>
       </main>
 
     </div>

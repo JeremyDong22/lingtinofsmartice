@@ -1,11 +1,14 @@
-// SWR Provider - Global data fetching configuration with localStorage persistence
+// SWR Provider - Global data fetching configuration with IndexedDB persistence
+// v1.6 - Cache: Migrated to IndexedDB for larger capacity (hundreds of MB vs 5-10MB)
+// v1.5 - Cache: smart staleTime by data type, revalidateIfStale: false for instant load
 // v1.4 - Cache: disable revalidateOnFocus, 30s periodic sync, 2MB limit, cross-day expiry
 // v1.3 - Added: Auto-logout on 401 (expired token) for all API calls
 
 'use client';
 
-import { SWRConfig, Cache, State } from 'swr';
-import { ReactNode, useEffect, useState } from 'react';
+import { SWRConfig, Cache, State, SWRConfiguration } from 'swr';
+import { ReactNode, useState } from 'react';
+import { useCacheProvider } from '@piotr-cz/swr-idb-cache';
 import { getApiUrl } from '@/lib/api';
 
 // Cache key for localStorage
@@ -167,34 +170,62 @@ export async function fetcher<T>(url: string): Promise<T> {
   return res.json();
 }
 
+// Cache strategy helper: returns SWR config based on data type
+export type CacheStrategy = 'realtime' | 'historical' | 'statistics' | 'static';
+
+export function getCacheConfig(strategy: CacheStrategy = 'realtime'): Partial<SWRConfiguration> {
+  const configs: Record<CacheStrategy, Partial<SWRConfiguration>> = {
+    // Real-time data (today's records): 30s freshness
+    realtime: {
+      dedupingInterval: 30_000,
+      revalidateIfStale: false,
+    },
+    // Historical data (yesterday and before): 5min freshness
+    historical: {
+      dedupingInterval: 300_000,
+      revalidateIfStale: false,
+    },
+    // Statistics (7-day summaries, action items): 10min freshness
+    statistics: {
+      dedupingInterval: 600_000,
+      revalidateIfStale: false,
+    },
+    // Static data (templates, configs): 30min freshness
+    static: {
+      dedupingInterval: 1_800_000,
+      revalidateIfStale: false,
+    },
+  };
+  return configs[strategy];
+}
+
 interface SWRProviderProps {
   children: ReactNode;
 }
 
 export function SWRProvider({ children }: SWRProviderProps) {
-  // Start with an empty Map so SWRConfig wraps children from the very first render.
-  // This ensures useSWR hooks always have access to the fetcher — no "null provider" window.
-  const [provider, setProvider] = useState<CacheWithCleanup>(
-    () => new Map() as CacheWithCleanup,
-  );
+  // Use IndexedDB provider for better capacity and performance
+  const cacheProvider = useCacheProvider({
+    dbName: 'lingtin-swr-cache',
+    storeName: 'swr-data',
+  });
 
-  // Replace the placeholder Map with the real localStorage-backed cache on mount
-  useEffect(() => {
-    const cache = createLocalStorageProvider();
-    setProvider(cache);
-    return () => cache._cleanup?.();
-  }, []);
+  // Show loading state while IndexedDB initializes
+  if (!cacheProvider) {
+    return <div style={{ display: 'none' }}>Initializing cache...</div>;
+  }
 
   return (
     <SWRConfig
       value={{
-        provider: () => provider,
+        provider: cacheProvider,
         fetcher,
-        // Stale-while-revalidate: show cached data immediately, fetch in background
+        // Global defaults: show cached data immediately, no auto-revalidation
+        revalidateIfStale: false,
         revalidateOnFocus: false,
         revalidateOnReconnect: true,
-        // Deduplicate requests within 1 minute (prevents burst requests on navigation)
-        dedupingInterval: 60000,
+        // Default freshness: 30s (can be overridden per-hook with getCacheConfig)
+        dedupingInterval: 30_000,
         // Keep previous data while loading new data (smooth transitions)
         keepPreviousData: true,
         // Retry on error
