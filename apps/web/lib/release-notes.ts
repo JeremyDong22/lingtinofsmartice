@@ -20,6 +20,24 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.4.4',
+    date: '2026-03-12',
+    roles: ['manager', 'administrator', 'head_chef'],
+    title: '音频播放体验修复',
+    items: [
+      {
+        title: '会议进度条不再跳动',
+        howToUse: '在会议详情中播放录音，拖动进度条现在可以平滑拖动，不再出现页面抖动。',
+        value: '回听会议录音时操作更顺畅，不用反复点击。',
+      },
+      {
+        title: '长录音播放不再中断',
+        howToUse: '播放超过1分钟的录音时，现在可以完整播放。加载中会显示转圈提示。',
+        value: '完整回听长录音，不再需要反复点击续播。',
+      },
+    ],
+  },
+  {
     version: '2.4.3',
     date: '2026-03-09',
     roles: ['manager', 'administrator', 'head_chef'],

@@ -12,6 +12,7 @@ interface MeetingDetailProps {
   playingKey?: string | null;
   currentTime?: number;
   duration?: number;
+  isBuffering?: boolean;
   onAudioToggle?: (key: string, url: string) => void;
   onSeek?: (time: number) => void;
 }
@@ -43,7 +44,7 @@ function formatDuration(seconds: number): string {
   return `${seconds}秒`;
 }
 
-export function MeetingDetail({ meeting, onClose, playingKey, currentTime: ct, duration: dur, onAudioToggle, onSeek }: MeetingDetailProps) {
+export function MeetingDetail({ meeting, onClose, playingKey, currentTime: ct, duration: dur, isBuffering, onAudioToggle, onSeek }: MeetingDetailProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -81,36 +82,38 @@ export function MeetingDetail({ meeting, onClose, playingKey, currentTime: ct, d
       {/* Sheet */}
       <div className="relative w-full max-h-[90vh] bg-white rounded-t-2xl overflow-hidden animate-slide-up">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
-          <div className="flex items-center gap-2">
+        <div className="sticky top-0 bg-white border-b border-gray-100 z-10">
+          <div className="px-4 py-3 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{typeLabel}纪要</h2>
               <p className="text-xs text-gray-400">
                 {formatDateTime(meeting.timestamp)} · {formatDuration(meeting.duration)}
               </p>
             </div>
-            {meeting.audioUrl && onAudioToggle && onSeek && (
-              <div className="flex-1 min-w-0">
-                <AudioPlayerInline
-                  audioKey={`meeting-${meeting.id}`}
-                  audioUrl={meeting.audioUrl}
-                  playingKey={playingKey ?? null}
-                  currentTime={ct ?? 0}
-                  duration={dur ?? 0}
-                  onToggle={onAudioToggle}
-                  onSeek={onSeek}
-                />
-              </div>
-            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
+            >
+              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
-          >
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Audio player on its own row to prevent header reflow */}
+          {meeting.audioUrl && onAudioToggle && onSeek && (
+            <div className="px-4 pb-3" onTouchStart={(e) => e.stopPropagation()}>
+              <AudioPlayerInline
+                audioKey={`meeting-${meeting.id}`}
+                audioUrl={meeting.audioUrl}
+                playingKey={playingKey ?? null}
+                currentTime={ct ?? 0}
+                duration={dur ?? 0}
+                onToggle={onAudioToggle}
+                onSeek={onSeek}
+                isBuffering={isBuffering}
+              />
+            </div>
+          )}
         </div>
 
         {/* Content */}

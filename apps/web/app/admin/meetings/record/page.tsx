@@ -63,7 +63,7 @@ export default function AdminMeetingRecordPage() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const meetingType: MeetingType = selectedStoreId ? 'one_on_one' : 'cross_store_review';
-  const { playingKey, currentTime, duration: audioDuration, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
+  const { playingKey, currentTime, duration: audioDuration, isBuffering, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
 
   // Fetch restaurants for store dropdown (scoped by managed restaurants)
   const { data: restaurantsData } = useSWR<RestaurantsResponse>(`/api/dashboard/restaurants?_=1${managedIdsParam}`);
@@ -389,6 +389,7 @@ export default function AdminMeetingRecordPage() {
         playingKey={playingKey}
         currentTime={currentTime}
         duration={audioDuration}
+        isBuffering={isBuffering}
         onAudioToggle={handleAudioToggle}
         onSeek={seekTo}
       />
