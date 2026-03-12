@@ -8,6 +8,7 @@ import { DashScopeSttService } from '../audio/dashscope-stt.service';
 import { DailySummaryService } from '../daily-summary/daily-summary.service';
 import { getChinaDateString } from '../../common/utils/date';
 import { SttModel, SttResult } from '../../common/types/stt';
+import { KnowledgeExtractorService } from '../knowledge/knowledge-extractor.service';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const PRIMARY_MODEL = 'deepseek/deepseek-chat-v3-0324';
@@ -36,6 +37,7 @@ export class MeetingAiProcessingService {
     private readonly xunfeiStt: XunfeiSttService,
     private readonly dashScopeStt: DashScopeSttService,
     private readonly dailySummaryService: DailySummaryService,
+    private readonly knowledgeExtractor: KnowledgeExtractorService,
   ) {}
 
   async processMeeting(
@@ -154,6 +156,14 @@ export class MeetingAiProcessingService {
       if (aiResult.actionItems.length > 0) {
         await this.saveActionItems(recordingId, restaurantId, meetingType, aiResult.actionItems);
       }
+
+      // Step 5: Extract business knowledge (fire-and-forget)
+      this.knowledgeExtractor.extractFromMeeting(recordingId, restaurantId, {
+        aiSummary: aiResult.aiSummary,
+        actionItems: aiResult.actionItems,
+        keyDecisions: aiResult.keyDecisions,
+        meetingType,
+      }).catch(e => this.logger.warn('Meeting knowledge extraction failed (non-fatal)', e));
 
       const totalTime = Date.now() - startTime;
       this.logger.log(`Pipeline: ${meetingType} 完成 (${(totalTime / 1000).toFixed(1)}s)`);

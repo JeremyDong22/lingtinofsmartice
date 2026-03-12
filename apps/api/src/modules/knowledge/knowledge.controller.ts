@@ -400,4 +400,25 @@ export class KnowledgeController {
       },
     };
   }
+
+  @Post('worker/chat-analysis')
+  async triggerChatAnalysis(@CurrentUser() user: AuthUser) {
+    this.assertKnowledgeAdmin(user);
+    await this.learningWorker.analyzeChatPatterns();
+    return { data: { processed: true }, message: 'Chat analysis complete' };
+  }
+
+  @Post('worker/behavior-analysis')
+  async triggerBehaviorAnalysis(@CurrentUser() user: AuthUser) {
+    this.assertKnowledgeAdmin(user);
+    await this.learningWorker.analyzeUserBehavior();
+    return { data: { processed: true }, message: 'Behavior analysis complete' };
+  }
+
+  @Post('worker/impact-evaluation')
+  async triggerImpactEvaluation(@CurrentUser() user: AuthUser) {
+    this.assertKnowledgeAdmin(user);
+    await this.learningWorker.evaluateActionImpact();
+    return { data: { processed: true }, message: 'Impact evaluation complete' };
+  }
 }

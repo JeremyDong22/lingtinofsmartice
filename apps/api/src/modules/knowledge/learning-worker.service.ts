@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { KnowledgeService, KnowledgeEntry } from './knowledge.service';
+import { SupabaseService } from '../../common/supabase/supabase.service';
 
 const BARK_DEVICE_KEY = process.env.BARK_DEVICE_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -10,7 +11,10 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export class LearningWorkerService {
   private readonly logger = new Logger(LearningWorkerService.name);
 
-  constructor(private readonly knowledgeService: KnowledgeService) {}
+  constructor(
+    private readonly knowledgeService: KnowledgeService,
+    private readonly supabase: SupabaseService,
+  ) {}
 
   // ─── Scheduled Tasks ──────────────────────────────────────────────
 
@@ -71,6 +75,134 @@ export class LearningWorkerService {
     this.logger.log('Running weekly exploratory distillation...');
     const result = await this.runExploratoryDistillation();
     this.logger.log(`Exploratory distillation complete: ${result.discovered} discoveries`);
+  }
+
+  /**
+   * Daily auto-distillation: L1→L2 vertical, L2→L3 horizontal, L3→L4 action.
+   * Runs at 04:30 UTC (12:30 CST), after revisions processing.
+   */
+  @Cron('30 4 * * *')
+  async runAutoDistill() {
+    this.logger.log('Running daily auto-distillation...');
+    const result = await this.triggerDistillation();
+    const total = result.vertical + result.horizontal + result.action;
+    if (total > 0) {
+      this.logger.log(`Auto-distillation complete: ${total} total`);
+    }
+  }
+
+  /**
+   * Daily action item impact evaluation.
+   * Checks resolved items 3-7 days ago and evaluates sentiment change.
+   * Runs at 06:00 UTC (14:00 CST).
+   */
+  @Cron('0 6 * * *')
+  async evaluateActionImpact() {
+    this.logger.log('Evaluating action item impact...');
+    try {
+      const client = this.supabase.getClient();
+
+      // Find resolved action items 3-7 days ago that haven't been tracked
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+
+      const { data: items, error } = await client
+        .from('lingtin_action_items')
+        .select('id, restaurant_id, category, resolved_at, resolved_note, suggestion_text')
+        .eq('status', 'resolved')
+        .eq('impact_tracked', false)
+        .gte('resolved_at', sevenDaysAgo)
+        .lte('resolved_at', threeDaysAgo)
+        .limit(50);
+
+      if (error || !items?.length) {
+        this.logger.log(`No action items to evaluate impact for`);
+        return;
+      }
+
+      let tracked = 0;
+      for (const item of items) {
+        try {
+          // Compare sentiment before and after resolution
+          const resolvedDate = new Date(item.resolved_at);
+          const beforeStart = new Date(resolvedDate.getTime() - 7 * 86400000).toISOString();
+          const afterEnd = new Date().toISOString();
+
+          const { data: beforeVisits } = await client
+            .from('lingtin_visit_records')
+            .select('sentiment_score')
+            .eq('restaurant_id', item.restaurant_id)
+            .gte('created_at', beforeStart)
+            .lt('created_at', item.resolved_at)
+            .not('sentiment_score', 'is', null);
+
+          const { data: afterVisits } = await client
+            .from('lingtin_visit_records')
+            .select('sentiment_score')
+            .eq('restaurant_id', item.restaurant_id)
+            .gte('created_at', item.resolved_at)
+            .lte('created_at', afterEnd)
+            .not('sentiment_score', 'is', null);
+
+          const avgBefore = beforeVisits?.length
+            ? beforeVisits.reduce((s, v) => s + v.sentiment_score, 0) / beforeVisits.length
+            : null;
+          const avgAfter = afterVisits?.length
+            ? afterVisits.reduce((s, v) => s + v.sentiment_score, 0) / afterVisits.length
+            : null;
+
+          const impactResult = {
+            avg_sentiment_before: avgBefore,
+            avg_sentiment_after: avgAfter,
+            delta: avgBefore !== null && avgAfter !== null ? avgAfter - avgBefore : null,
+            before_count: beforeVisits?.length || 0,
+            after_count: afterVisits?.length || 0,
+            evaluated_at: new Date().toISOString(),
+          };
+
+          await client
+            .from('lingtin_action_items')
+            .update({ impact_tracked: true, impact_result: impactResult })
+            .eq('id', item.id);
+
+          // If positive improvement > 5 points, mark related experience knowledge as verified
+          if (impactResult.delta !== null && impactResult.delta > 5) {
+            const { data: relatedKnowledge } = await client
+              .from('lingtin_knowledge_store')
+              .select('id, content')
+              .eq('source_record_id', item.id)
+              .eq('source_record_type', 'action_item')
+              .limit(1)
+              .single();
+
+            if (relatedKnowledge) {
+              const updatedContent = {
+                ...relatedKnowledge.content as Record<string, unknown>,
+                impact_verified: true,
+                impact_delta: impactResult.delta,
+                impact_evaluated_at: impactResult.evaluated_at,
+              };
+              await client
+                .from('lingtin_knowledge_store')
+                .update({
+                  content: updatedContent,
+                  quality_score: 0.85,
+                  confidence: 0.9,
+                })
+                .eq('id', relatedKnowledge.id);
+            }
+          }
+
+          tracked++;
+        } catch (e) {
+          this.logger.warn(`Impact evaluation failed for action ${item.id}`, e);
+        }
+      }
+
+      this.logger.log(`Impact evaluation complete: ${tracked}/${items.length} tracked`);
+    } catch (e) {
+      this.logger.error('evaluateActionImpact failed', e);
+    }
   }
 
   // ─── Manual Triggers ──────────────────────────────────────────────
@@ -261,7 +393,7 @@ ${entrySummaries}
     if (!parsed) return false;
 
     // Get brand_id from the first entry's restaurant
-    const client = (this.knowledgeService as any).supabase.getClient();
+    const client = this.supabase.getClient();
     const { data: restaurant } = await client
       .from('master_restaurant')
       .select('brand_id')
@@ -625,6 +757,273 @@ ${entry.reviewer_note}
   }
 
   // ─── Bark Notification ────────────────────────────────────────────
+
+  /**
+   * Weekly chat pattern analysis — discover knowledge gaps from user questions.
+   * Runs at 07:00 UTC every Monday (15:00 CST).
+   */
+  @Cron('0 7 * * 1')
+  async analyzeChatPatterns() {
+    this.logger.log('Running weekly chat pattern analysis...');
+    try {
+      const client = this.supabase.getClient();
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+      // Get user messages from past week, grouped by restaurant
+      const { data: messages } = await client
+        .from('lingtin_chat_history')
+        .select('restaurant_id, content, created_at')
+        .eq('role', 'user')
+        .gte('created_at', weekAgo)
+        .order('created_at', { ascending: true });
+
+      if (!messages?.length) {
+        this.logger.log('No chat messages to analyze');
+        return;
+      }
+
+      // Group by restaurant, only analyze restaurants with 5+ messages
+      const byRestaurant = new Map<string, string[]>();
+      for (const m of messages) {
+        const rid = m.restaurant_id || 'unknown';
+        if (!byRestaurant.has(rid)) byRestaurant.set(rid, []);
+        byRestaurant.get(rid)!.push(m.content);
+      }
+
+      let gapsCreated = 0;
+
+      for (const [restaurantId, msgs] of byRestaurant) {
+        if (msgs.length < 5) continue;
+
+        // Use Gemini Flash to identify repeated question themes
+        const sampleMsgs = msgs.slice(0, 50).map((m, i) => `${i + 1}. ${m}`).join('\n');
+        const prompt = `你是餐饮SaaS产品分析师。以下是某门店店长/管理者在智库对话中提出的问题（最近一周）。
+
+请归纳出反复出现的问题主题，这些主题代表系统知识库的缺口——用户需要但系统目前没有主动提供的信息。
+
+用户问题：
+${sampleMsgs}
+
+要求：
+1. 只提取被反复问到的主题（2+次相似问题）
+2. 忽略一次性问题和闲聊
+3. 如果没有重复主题，输出空数组 []
+
+输出JSON格式（只输出JSON）：
+[
+  {
+    "theme": "主题名称（如'菜品备货量'）",
+    "frequency": 出现次数,
+    "example_questions": ["代表性问题1", "代表性问题2"],
+    "gap_description": "知识缺口描述：系统应该主动提供什么信息来减少这类咨询"
+  }
+]`;
+
+        const result = await this.callGeminiFlash(prompt);
+        if (!result) continue;
+
+        const gaps = this.parseJSON(result);
+        if (!Array.isArray(gaps) || !gaps.length) continue;
+
+        for (const gap of gaps) {
+          if (!gap.theme || gap.frequency < 2) continue;
+
+          await this.knowledgeService.createKnowledge({
+            restaurant_id: restaurantId === 'unknown' ? null : restaurantId,
+            scope: restaurantId === 'unknown' ? 'global' : 'restaurant',
+            knowledge_type: 'pattern',
+            category: 'operation',
+            depth_level: 'L1',
+            title: `知识缺口: 店长频繁询问「${gap.theme}」相关问题`,
+            content: {
+              theme: gap.theme,
+              frequency: gap.frequency,
+              example_questions: gap.example_questions,
+              gap_description: gap.gap_description,
+              analysis_period: `${weekAgo.split('T')[0]} ~ ${new Date().toISOString().split('T')[0]}`,
+              total_messages: msgs.length,
+            },
+            source_type: 'auto',
+            source_signal: 'chat_analysis',
+            auto_approve: false,
+          });
+          gapsCreated++;
+        }
+      }
+
+      this.logger.log(`Chat analysis complete: ${gapsCreated} knowledge gaps identified`);
+
+      if (gapsCreated > 0) {
+        await this.sendBark(
+          '🔍 对话分析完成',
+          `发现 ${gapsCreated} 条知识缺口，请审核`,
+        );
+      }
+    } catch (e) {
+      this.logger.error('analyzeChatPatterns failed', e);
+    }
+  }
+
+  /**
+   * Weekly user behavior analysis.
+   * Analyzes activity logs + visit patterns to extract management signals.
+   * Runs at 07:30 UTC every Monday (15:30 CST).
+   */
+  @Cron('30 7 * * 1')
+  async analyzeUserBehavior() {
+    this.logger.log('Running weekly behavior analysis...');
+    try {
+      const client = this.supabase.getClient();
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+      // 1. Get activity logs grouped by user (capped at 10000 for safety)
+      const { data: activities } = await client
+        .from('lingtin_user_activity_log')
+        .select('user_id, role_code, action_type, method, path, created_at')
+        .gte('created_at', weekAgo)
+        .order('created_at', { ascending: true })
+        .limit(10000);
+
+      if (!activities?.length) {
+        this.logger.log('No activity logs found for the past week');
+        return;
+      }
+
+      // Group by user
+      const userMap = new Map<string, typeof activities>();
+      for (const a of activities) {
+        const key = a.user_id || 'unknown';
+        if (!userMap.has(key)) userMap.set(key, []);
+        userMap.get(key)!.push(a);
+      }
+
+      // 2. Get visit records for the week (core signal, capped at 10000)
+      const { data: visits } = await client
+        .from('lingtin_visit_records')
+        .select('restaurant_id, table_id, created_at, duration, visit_period')
+        .gte('created_at', weekAgo)
+        .order('created_at', { ascending: true })
+        .limit(10000);
+
+      // Group visits by restaurant
+      const visitsByRestaurant = new Map<string, Array<{ restaurant_id: string; table_id: string; created_at: string; duration: number | null; visit_period: string | null }>>();
+      for (const v of (visits || [])) {
+        const rid = v.restaurant_id;
+        if (!visitsByRestaurant.has(rid)) visitsByRestaurant.set(rid, []);
+        visitsByRestaurant.get(rid)!.push(v);
+      }
+
+      // 3. Compute per-restaurant visit metrics
+      let metricsWritten = 0;
+      const today = new Date().toISOString().split('T')[0];
+
+      for (const [restaurantId, rVisits] of visitsByRestaurant) {
+        const uniqueTables = new Set(rVisits.map(v => v.table_id).filter(Boolean));
+        const durations = rVisits.map(v => v.duration).filter((d): d is number => typeof d === 'number');
+        const avgDuration = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+
+        // Visit period distribution
+        const periodDist: Record<string, number> = {};
+        for (const v of rVisits) {
+          const period = v.visit_period || 'unknown';
+          periodDist[period] = (periodDist[period] || 0) + 1;
+        }
+
+        // Visit intervals (time between consecutive recordings)
+        const timestamps = rVisits.map(v => new Date(v.created_at).getTime()).sort();
+        const intervals: number[] = [];
+        for (let i = 1; i < timestamps.length; i++) {
+          intervals.push((timestamps[i] - timestamps[i - 1]) / 60000); // in minutes
+        }
+        const avgInterval = intervals.length ? intervals.reduce((a, b) => a + b, 0) / intervals.length : 0;
+
+        await this.knowledgeService.recordMetric({
+          metric_date: today,
+          restaurant_id: restaurantId,
+          metric_type: 'weekly_visit_behavior',
+          metric_value: {
+            total_visits: rVisits.length,
+            unique_tables: uniqueTables.size,
+            avg_duration_seconds: Math.round(avgDuration),
+            avg_interval_minutes: Math.round(avgInterval),
+            period_distribution: periodDist,
+            daily_avg: Math.round(rVisits.length / 7 * 10) / 10,
+          },
+        });
+        metricsWritten++;
+      }
+
+      // 4. Compute per-user feature usage distribution
+      for (const [userId, acts] of userMap) {
+        const role = acts[0]?.role_code || 'unknown';
+        const featureDist: Record<string, number> = {};
+        for (const a of acts) {
+          // Classify by path
+          const path = a.path || '';
+          let feature = 'other';
+          if (path.includes('/audio') || path.includes('/recorder')) feature = 'recording';
+          else if (path.includes('/daily-summary') || path.includes('/dashboard')) feature = 'briefing';
+          else if (path.includes('/chat')) feature = 'chat';
+          else if (path.includes('/action-items')) feature = 'action_items';
+          else if (path.includes('/meeting')) feature = 'meeting';
+          featureDist[feature] = (featureDist[feature] || 0) + 1;
+        }
+
+        await this.knowledgeService.recordMetric({
+          metric_date: today,
+          metric_type: 'weekly_user_behavior',
+          metric_value: {
+            user_id: userId,
+            role_code: role,
+            total_actions: acts.length,
+            feature_distribution: featureDist,
+          },
+        });
+      }
+
+      // 5. Management signal: feature usage rate
+      const allPaths = activities.map(a => a.path || '');
+      const featureUsed = {
+        recording: allPaths.some(p => p.includes('/audio')),
+        briefing: allPaths.some(p => p.includes('/daily-summary') || p.includes('/dashboard')),
+        chat: allPaths.some(p => p.includes('/chat')),
+        action_items: allPaths.some(p => p.includes('/action-items')),
+        meeting: allPaths.some(p => p.includes('/meeting')),
+      };
+
+      const unusedFeatures = Object.entries(featureUsed)
+        .filter(([, used]) => !used)
+        .map(([name]) => name);
+
+      if (unusedFeatures.length > 0) {
+        await this.knowledgeService.createKnowledge({
+          scope: 'global',
+          knowledge_type: 'pattern',
+          category: 'operation',
+          depth_level: 'L1',
+          title: `产品信号: ${unusedFeatures.join('/')} 功能本周无人使用`,
+          content: {
+            unused_features: unusedFeatures,
+            active_users: userMap.size,
+            total_actions: activities.length,
+            week_ending: today,
+          },
+          source_type: 'auto',
+          source_signal: 'behavior_analysis',
+          auto_approve: false,
+        });
+      }
+
+      this.logger.log(`Behavior analysis complete: ${metricsWritten} restaurant metrics, ${userMap.size} user profiles`);
+
+      await this.sendBark(
+        '📊 周度行为分析',
+        `${userMap.size} 人活跃，${metricsWritten} 店桌访数据\n${unusedFeatures.length > 0 ? `未使用功能: ${unusedFeatures.join(', ')}` : '全部功能已使用'}`,
+      );
+    } catch (e) {
+      this.logger.error('analyzeUserBehavior failed', e);
+    }
+  }
 
   private async sendBark(
     title: string,

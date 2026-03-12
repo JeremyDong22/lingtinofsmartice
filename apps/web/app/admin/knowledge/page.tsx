@@ -53,6 +53,9 @@ interface KnowledgeEntry {
   confidence: number;
   usage_count: number;
   source_type: string;
+  source_signal: string | null;
+  source_record_id: string | null;
+  source_record_type: string | null;
   review_status: ReviewStatus;
   reviewer_note: string | null;
   reviewed_by: string | null;
@@ -100,6 +103,30 @@ const SCOPE_LABELS: Record<KnowledgeScope, string> = {
   brand: '品牌',
   region: '区域',
   global: '全局',
+};
+
+// Category groupings for filter tabs
+const CATEGORY_GROUPS: { value: string; label: string; categories: string[] }[] = [
+  { value: 'ai', label: 'AI 规则', categories: ['general'] },
+  { value: 'product', label: '产品', categories: ['dish'] },
+  { value: 'customer', label: '客群', categories: ['customer'] },
+  { value: 'operation', label: '运营', categories: ['operation', 'best_practice', 'opportunity'] },
+  { value: 'service', label: '服务', categories: ['service', 'environment', 'staff'] },
+  { value: 'discovery', label: '发现', categories: ['emergent'] },
+  { value: 'all', label: '全部', categories: [] },
+];
+
+// Source type labels for display
+const SOURCE_LABELS: Record<string, string> = {
+  visit_extraction: '桌访录音',
+  visit_negative_extraction: '负面反馈',
+  meeting_extraction: '复盘会决策',
+  action_resolution: '行动项经验',
+  chat_analysis: '对话分析',
+  behavior_analysis: '行为分析',
+  bootstrap_proofread: '初始校对',
+  bootstrap_labels: '初始标注',
+  bootstrap_profile: '初始画像',
 };
 
 const DEPTH_LABELS: Record<string, { label: string; desc: string }> = {
@@ -458,6 +485,27 @@ function DashboardView() {
             endpoint="bootstrap"
             onResult={setWorkerMsg}
           />
+          <WorkerButton
+            label="对话分析"
+            desc="分析智库对话，发现知识缺口"
+            icon={MessageSquare}
+            endpoint="chat-analysis"
+            onResult={setWorkerMsg}
+          />
+          <WorkerButton
+            label="行为分析"
+            desc="分析用户使用行为，发现管理信号"
+            icon={Activity}
+            endpoint="behavior-analysis"
+            onResult={setWorkerMsg}
+          />
+          <WorkerButton
+            label="效果评估"
+            desc="评估已解决行动项的改善效果"
+            icon={CheckCircle2}
+            endpoint="impact-evaluation"
+            onResult={setWorkerMsg}
+          />
           <button
             onClick={handleReanalysis}
             disabled={reanalyze?.running}
@@ -558,8 +606,24 @@ function KnowledgeCard({
             {entry.version > 1 && <span>v{entry.version}</span>}
           </div>
           {entry.category && (
-            <div className="mt-1 text-xs text-gray-400">
-              {entry.category}
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400">{entry.category}</span>
+              {entry.source_signal && SOURCE_LABELS[entry.source_signal] && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500">
+                  来自{SOURCE_LABELS[entry.source_signal]}
+                  {entry.source_record_id ? ` #${entry.source_record_id.slice(0, 8)}` : ''}
+                </span>
+              )}
+              {Boolean((entry.content as Record<string, unknown>)?.impact_verified) && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">
+                  已验证有效 +{Math.round(Number((entry.content as Record<string, unknown>)?.impact_delta) || 0)}分
+                </span>
+              )}
+              {String((entry.content as Record<string, unknown>)?.source_type_tag) === 'experience' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-600">
+                  经验
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -660,6 +724,7 @@ function ReviewView() {
   const [activeTab, setActiveTab] = useState<ReviewStatus | 'all'>('pending_review');
   const [typeFilter, setTypeFilter] = useState<KnowledgeType | ''>('');
   const [depthFilter, setDepthFilter] = useState<string>('');
+  const [categoryGroup, setCategoryGroup] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
 
   // Build query URL
@@ -683,6 +748,14 @@ function ReviewView() {
     entries = entries.filter(e => (e.depth_level || 'L1') === depthFilter);
   }
 
+  // Client-side category group filter
+  if (categoryGroup !== 'all') {
+    const group = CATEGORY_GROUPS.find(g => g.value === categoryGroup);
+    if (group) {
+      entries = entries.filter(e => group.categories.includes(e.category || ''));
+    }
+  }
+
   const pendingUrl = '/api/knowledge/review-queue?status=pending_review';
   const { data: pendingRes } = useSWR<{ data: KnowledgeEntry[]; count?: number }>(pendingUrl);
   const pendingCount = pendingRes?.data?.length || 0;
@@ -692,7 +765,7 @@ function ReviewView() {
     mutate(pendingUrl);
   };
 
-  const activeFilterCount = (typeFilter ? 1 : 0) + (depthFilter ? 1 : 0);
+  const activeFilterCount = (typeFilter ? 1 : 0) + (depthFilter ? 1 : 0) + (categoryGroup !== 'all' ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -722,6 +795,23 @@ function ReviewView() {
             }`}
           >
             {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Category Group Tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+        {CATEGORY_GROUPS.map((group) => (
+          <button
+            key={group.value}
+            onClick={() => setCategoryGroup(group.value)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              categoryGroup === group.value
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+            }`}
+          >
+            {group.label}
           </button>
         ))}
       </div>
