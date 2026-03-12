@@ -32,4 +32,6 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-CMD ["pnpm", "--filter", "@lingtin/web", "start"]
+# Run next start directly from the web app directory (avoids pnpm filter workspace issues)
+WORKDIR /app/apps/web
+CMD ["pnpm", "start"]
