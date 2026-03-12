@@ -1,3 +1,5 @@
 {
-  "dockerfile": true
+  "app_dir": "apps/web",
+  "build_command": "pnpm --filter @lingtin/web build",
+  "start_command": "pnpm --filter @lingtin/web start"
 }
