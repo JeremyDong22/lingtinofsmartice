@@ -1,4 +1,5 @@
 // Next.js Configuration with PWA Support
+// v1.3 - Migrated from Cloudflare Pages (static export) to Zeabur (Node.js server mode)
 // v1.2 - Added Supabase audio bypass for SW to prevent playback cutoff
 
 const defaultRuntimeCaching = require('next-pwa/cache');
@@ -23,12 +24,7 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@lingtin/types'],
-  // Static export for Cloudflare Pages (no server-side code)
-  output: 'export',
-  // Disable image optimization (not supported in static export)
-  images: {
-    unoptimized: true,
-  },
+  // Node.js server mode for Zeabur deployment (supports SSR, image optimization, API routes)
 };
 
 module.exports = withPWA(nextConfig);

@@ -110,8 +110,14 @@ master_employee (1)   ──< visit_records (N)
 
 ### Zeabur 项目信息
 
-**项目 ID**: `697a5cfa06505fdd547f6889`
-**项目名称**: `lingtin-chengdu-service`
+| 用途 | 项目名称 | 项目 ID |
+|------|----------|---------|
+| 后端 API | `lingtin-backend` | `697a5cfa06505fdd547f6889` |
+| 前端 Web | `lingtin-frontend` | `69b2dddbd1eb012bec9f2b46` |
+
+- 后端 Service ID: `697a6376f2339c9e766cb99d`，root: `/apps/api`，有 Dockerfile
+- 前端 Service ID: `69b2de61d1eb012bec9f2b60`，root: `/`，Next.js 自动检测，构建命令: `pnpm --filter @lingtin/web build`，启动: `pnpm --filter @lingtin/web start`
+- ⚠️ 根目录不能有 `Dockerfile`，否则 Zeabur 会误用 API Dockerfile 构建前端
 
 ### Zeabur CLI 使用规范
 
@@ -122,7 +128,8 @@ master_employee (1)   ──< visit_records (N)
 **查看部署状态：**
 ```bash
 # 1. 切换到正确的项目 context（必须）
-zeabur context set project --id=697a5cfa06505fdd547f6889
+zeabur context set project --id=697a5cfa06505fdd547f6889  # 后端
+zeabur context set project --id=69b2dddbd1eb012bec9f2b46  # 前端
 
 # 2. 查看当前 context（确认项目正确）
 zeabur context get
