@@ -1,12 +1,15 @@
 // usePrefetchData - Prefetch critical API data on app entry for each role
-// v1.0 - Warm SWR cache in background so page navigation feels instant
+// v1.2 - Fix: wait for IndexedDB cache ready before prefetching (prevents data loss on provider switch)
+// v1.1 - Fix: use useSWRConfig().mutate to write to the custom IndexedDB cache provider
+//        (global mutate writes to a different cache instance and has no effect)
+//        Also added feedback-loop to admin prefetch keys
 
 import { useEffect } from 'react';
-import { mutate } from 'swr';
+import { useSWRConfig } from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { useManagedScope } from '@/hooks/useManagedScope';
 import { getChinaToday, getChinaYesterday, dateRangeParams } from '@/lib/date-utils';
-import { fetcher } from '@/contexts/SWRProvider';
+import { fetcher, useSWRCacheReady } from '@/contexts/SWRProvider';
 
 type Role = 'manager' | 'admin' | 'chef';
 
@@ -35,6 +38,7 @@ function getPrefetchKeys(role: Role, restaurantId: string, managedIdsParam: stri
       `/api/dashboard/restaurants-overview?${rangeParams}${managedIdsParam}`,
       `/api/dashboard/customer-profile?${rangeParams}${managedIdsParam}`,
       `/api/dashboard/execution-overview?date=${yesterday}${managedIdsParam}`,
+      `/api/dashboard/feedback-loop?${rangeParams}${managedIdsParam}`,
     ];
   }
 
@@ -52,9 +56,14 @@ export function usePrefetchData(role: Role) {
   const { user } = useAuth();
   const { managedIdsParam } = useManagedScope();
   const restaurantId = user?.restaurantId || '';
+  // Use context-bound mutate so writes go to the custom IndexedDB cache provider
+  const { mutate } = useSWRConfig();
+  // Wait for IndexedDB to be ready — prefetching before this causes data to land
+  // in the transient in-memory cache, which is discarded when the provider switches
+  const isCacheReady = useSWRCacheReady();
 
   useEffect(() => {
-    if (!user || !restaurantId) return;
+    if (!user || !restaurantId || !isCacheReady) return;
 
     const keys = getPrefetchKeys(role, restaurantId, managedIdsParam);
     if (keys.length === 0) return;
@@ -66,12 +75,12 @@ export function usePrefetchData(role: Role) {
     const promises = keys.map(key =>
       mutate(key, fetcher(key), { revalidate: false })
         .then(() => console.log(`[Prefetch] [OK] ${key.split('?')[0]}`))
-        .catch(err => console.warn(`[Prefetch] [FAIL] ${key.split('?')[0]}`, err.message))
+        .catch((err: Error) => console.warn(`[Prefetch] [FAIL] ${key.split('?')[0]}`, err.message))
     );
 
     Promise.allSettled(promises).then(() => {
       const elapsed = (performance.now() - start).toFixed(0);
       console.log(`[Prefetch] ${role} — done in ${elapsed}ms`);
     });
-  }, [role, user, restaurantId, managedIdsParam]);
+  }, [role, user, restaurantId, managedIdsParam, mutate, isCacheReady]);
 }

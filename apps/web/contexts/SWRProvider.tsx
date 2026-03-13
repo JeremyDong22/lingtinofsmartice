@@ -1,4 +1,6 @@
 // SWR Provider - Global data fetching configuration with IndexedDB persistence
+// v1.8 - Fix: expose SWRCacheReadyContext so prefetch waits for IndexedDB before writing
+// v1.7 - Fix: render with in-memory cache while IndexedDB initializes (nav bar stays interactive)
 // v1.6 - Cache: Migrated to IndexedDB for larger capacity (hundreds of MB vs 5-10MB)
 // v1.5 - Cache: smart staleTime by data type, revalidateIfStale: false for instant load
 // v1.4 - Cache: disable revalidateOnFocus, 30s periodic sync, 2MB limit, cross-day expiry
@@ -7,7 +9,7 @@
 'use client';
 
 import { SWRConfig, Cache, State, SWRConfiguration } from 'swr';
-import { ReactNode, useState } from 'react';
+import { ReactNode, createContext, useContext } from 'react';
 import { useCacheProvider } from '@piotr-cz/swr-idb-cache';
 import { getApiUrl } from '@/lib/api';
 
@@ -203,6 +205,12 @@ interface SWRProviderProps {
   children: ReactNode;
 }
 
+// Context that signals when the IndexedDB cache provider is ready.
+// Consumers (e.g. usePrefetchData) must wait for isReady before writing to cache,
+// otherwise data lands in the transient in-memory cache and is lost on provider switch.
+const SWRCacheReadyContext = createContext(false);
+export function useSWRCacheReady() { return useContext(SWRCacheReadyContext); }
+
 export function SWRProvider({ children }: SWRProviderProps) {
   // Use IndexedDB provider for better capacity and performance
   const cacheProvider = useCacheProvider({
@@ -210,15 +218,12 @@ export function SWRProvider({ children }: SWRProviderProps) {
     storeName: 'swr-data',
   });
 
-  // Show loading state while IndexedDB initializes
-  if (!cacheProvider) {
-    return <div style={{ display: 'none' }}>Initializing cache...</div>;
-  }
-
+  // Render immediately with in-memory cache while IndexedDB initializes,
+  // then switch to IndexedDB provider once ready — nav bar stays interactive
   return (
     <SWRConfig
       value={{
-        provider: cacheProvider,
+        ...(cacheProvider ? { provider: cacheProvider } : {}),
         fetcher,
         // Global defaults: show cached data immediately, no auto-revalidation
         revalidateIfStale: false,
@@ -233,7 +238,9 @@ export function SWRProvider({ children }: SWRProviderProps) {
         errorRetryInterval: 3000,
       }}
     >
-      {children}
+      <SWRCacheReadyContext.Provider value={!!cacheProvider}>
+        {children}
+      </SWRCacheReadyContext.Provider>
     </SWRConfig>
   );
 }
