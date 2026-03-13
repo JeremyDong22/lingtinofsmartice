@@ -113,11 +113,11 @@ master_employee (1)   ──< visit_records (N)
 | 用途 | 项目名称 | 项目 ID |
 |------|----------|---------|
 | 后端 API | `lingtin-backend` | `697a5cfa06505fdd547f6889` |
-| 前端 Web | `lingtin-frontend` | `69b2dddbd1eb012bec9f2b46` |
+| 前端 Web | `lingtin-frontend` | `69b38bc7520291ff1131a314` |
 
-- 后端 Service ID: `697a6376f2339c9e766cb99d`，root: `/apps/api`，有 Dockerfile (`apps/api/Dockerfile`)
-- 前端 Service ID: `69b2de61d1eb012bec9f2b60`，root: `/`，使用根目录 `Dockerfile` 部署 Next.js (Node.js server mode)
-- ⚠️ 根目录 `Dockerfile` 用于前端部署，不要删除
+- 后端 Service ID: `697a6376f2339c9e766cb99d`，root: `apps/api`，zbpack 原生构建 NestJS（ffmpeg 改用 ffmpeg-static npm 包）
+- 前端 Service ID: `69b38bdcd1eb012bec9f4bfe`，root: `apps/web`，zbpack 原生构建 Next.js (Node.js server mode)
+- ⚠️ 已移除所有 Dockerfile，前后端均使用 zbpack 原生构建（各自目录下有 zbpack.json）
 
 ### Zeabur CLI 使用规范
 
@@ -129,7 +129,7 @@ master_employee (1)   ──< visit_records (N)
 ```bash
 # 1. 切换到正确的项目 context（必须）
 zeabur context set project --id=697a5cfa06505fdd547f6889  # 后端
-zeabur context set project --id=69b2dddbd1eb012bec9f2b46  # 前端
+zeabur context set project --id=69b38bc7520291ff1131a314  # 前端
 
 # 2. 查看当前 context（确认项目正确）
 zeabur context get
