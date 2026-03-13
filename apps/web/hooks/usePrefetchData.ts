@@ -1,8 +1,9 @@
 // usePrefetchData - Prefetch critical API data on app entry for each role
+// v1.3 - Fix manager/chef prefetch keys: remove unused execution-summary,
+//        add question-templates/active (manager), add dish-ranking/sentiment-summary/
+//        action-items-pending/daily-summary (chef)
 // v1.2 - Fix: wait for IndexedDB cache ready before prefetching (prevents data loss on provider switch)
 // v1.1 - Fix: use useSWRConfig().mutate to write to the custom IndexedDB cache provider
-//        (global mutate writes to a different cache instance and has no effect)
-//        Also added feedback-loop to admin prefetch keys
 
 import { useEffect } from 'react';
 import { useSWRConfig } from 'swr';
@@ -27,7 +28,7 @@ function getPrefetchKeys(role: Role, restaurantId: string, managedIdsParam: stri
       `/api/dashboard/sentiment-summary?${yesterdayParams}`,
       `/api/dashboard/suggestions?restaurant_id=${restaurantId}&days=7`,
       `/api/action-items?restaurant_id=${restaurantId}&date=${today}`,
-      `/api/dashboard/execution-summary?restaurant_id=${restaurantId}&date=${yesterday}`,
+      `/api/question-templates/active?restaurant_id=${restaurantId}`,
     ];
   }
 
@@ -43,9 +44,14 @@ function getPrefetchKeys(role: Role, restaurantId: string, managedIdsParam: stri
   }
 
   if (role === 'chef') {
+    const todayRange = `start_date=${today}&end_date=${today}`;
     return [
       `/api/action-items?restaurant_id=${restaurantId}&date=${today}`,
       `/api/action-items?restaurant_id=${restaurantId}&date=${yesterday}`,
+      `/api/action-items/pending?restaurant_id=${restaurantId}&limit=20`,
+      `/api/daily-summary?restaurant_id=${restaurantId}&date=${today}`,
+      `/api/dashboard/dish-ranking?restaurant_id=${restaurantId}&${todayRange}&limit=20`,
+      `/api/dashboard/sentiment-summary?restaurant_id=${restaurantId}&${todayRange}`,
     ];
   }
 
