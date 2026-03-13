@@ -6,8 +6,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm and typescript (needed to build @lingtin/types devDependency)
+RUN npm install -g pnpm typescript
 
 # Copy monorepo workspace config
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

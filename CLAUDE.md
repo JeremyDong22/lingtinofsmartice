@@ -102,7 +102,7 @@ master_employee (1)   ──< visit_records (N)
 
 | 环境 | 平台 | 域名 |
 |------|------|------|
-| 前端 | Cloudflare Pages | https://lt.smartice.ai |
+| 前端 | Zeabur (Node.js) | https://lt.smartice.ai (Cloudflare 代理) |
 | 后端 | Zeabur（阿里云，计划迁移新加坡） | https://lingtinapi.preview.aliyun-zeabur.cn |
 
 > 部署配置详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，工作流详见 `.claude/rules/workflow.md`
@@ -115,9 +115,9 @@ master_employee (1)   ──< visit_records (N)
 | 后端 API | `lingtin-backend` | `697a5cfa06505fdd547f6889` |
 | 前端 Web | `lingtin-frontend` | `69b2dddbd1eb012bec9f2b46` |
 
-- 后端 Service ID: `697a6376f2339c9e766cb99d`，root: `/apps/api`，有 Dockerfile
-- 前端 Service ID: `69b2de61d1eb012bec9f2b60`，root: `/`，Next.js 自动检测，构建命令: `pnpm --filter @lingtin/web build`，启动: `pnpm --filter @lingtin/web start`
-- ⚠️ 根目录不能有 `Dockerfile`，否则 Zeabur 会误用 API Dockerfile 构建前端
+- 后端 Service ID: `697a6376f2339c9e766cb99d`，root: `/apps/api`，有 Dockerfile (`apps/api/Dockerfile`)
+- 前端 Service ID: `69b2de61d1eb012bec9f2b60`，root: `/`，使用根目录 `Dockerfile` 部署 Next.js (Node.js server mode)
+- ⚠️ 根目录 `Dockerfile` 用于前端部署，不要删除
 
 ### Zeabur CLI 使用规范
 
