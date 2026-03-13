@@ -61,10 +61,10 @@ export function prefetchChat(restaurantId: string) {
  */
 export function prefetchAdminInsights(managedIdsParam: string = '') {
   const today = getChinaToday();
-  const params = `start_date=${today}&end_date=${today}${managedIdsParam}`;
+  const params = `restaurant_id=all&start_date=${today}&end_date=${today}${managedIdsParam}`;
 
   preload(`/api/dashboard/sentiment-summary?${params}`, fetcher);
-  preload(`/api/dashboard/dish-ranking?${params}`, fetcher);
+  preload(`/api/dashboard/suggestions?restaurant_id=all&start_date=${today}&end_date=${today}${managedIdsParam}`, fetcher);
 }
 
 /**

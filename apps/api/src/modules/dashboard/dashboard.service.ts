@@ -1,5 +1,5 @@
 // Dashboard Service - Analytics business logic
-// v2.3 - Added: getReviewCompletionStats() + getMultiRestaurantReviewCompletion() for review completion tracking
+// v2.4 - Fixed: getDishRanking() + getSentimentSummary() UUID validation to prevent 500 on missing restaurant_id
 // v2.2 - Added: getBriefing() for admin daily briefing (cross-restaurant anomaly detection)
 // v2.1 - Added: getRestaurantDetail() for restaurant detail page
 // v2.0 - Added: getRestaurantsOverview() for admin dashboard with sentiment scores
@@ -301,6 +301,11 @@ export class DashboardService {
   // Get top feedback items with sentiment (from feedbacks JSONB, not dish_mentions table)
   // Note: lingtin_dish_mentions table is deprecated — AI pipeline only writes to feedbacks JSONB
   async getDishRanking(restaurantId: string, startDate: string, endDate: string, limit: number) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
+    const safeId = UUID_REGEX.test(restaurantId) ? restaurantId : DEFAULT_RESTAURANT_ID;
+    restaurantId = safeId;
+
     if (this.supabase.isMockMode()) {
       return {
         dishes: [
@@ -433,6 +438,13 @@ export class DashboardService {
   // v1.9 - Added: Support restaurant_id=all for multi-store aggregation
   // v1.10 - Added: Date range support (startDate/endDate)
   async getSentimentSummary(restaurantId: string, startDate: string, endDate: string, managedIds: string[] | null = null) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const DEFAULT_RESTAURANT_ID = '0b9e9031-4223-4124-b633-e3a853abfb8f';
+    // Normalize: undefined/invalid non-'all' values fall back to default restaurant
+    if (restaurantId !== 'all' && !UUID_REGEX.test(restaurantId)) {
+      restaurantId = DEFAULT_RESTAURANT_ID;
+    }
+
     if (this.supabase.isMockMode()) {
       return {
         positive_count: 12, neutral_count: 5, negative_count: 3,
