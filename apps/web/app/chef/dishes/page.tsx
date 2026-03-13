@@ -1,6 +1,7 @@
 // Chef Dishes Page — "Kitchen Feedback" covering all kitchen dimensions
 // (dish quality, speed, temperature, plating, freshness) with action buttons
 // Data: GET /api/dashboard/dish-ranking + GET /api/dashboard/sentiment-summary
+// v1.1 - Add getCacheConfig for consistent cache strategy
 
 'use client';
 
@@ -16,6 +17,7 @@ import { UserMenu } from '@/components/layout/UserMenu';
 import { getChinaToday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, useStorePresets } from '@/components/shared/DatePicker';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 
 interface FeedbackContext {
   visitId: string;
@@ -186,6 +188,7 @@ export default function ChefDishesPage() {
 
   const { data: dishData, isLoading } = useSWR<DishRankingResponse>(
     params ? `/api/dashboard/dish-ranking?${params}` : null,
+    { ...getCacheConfig('statistics') }
   );
 
   // Also fetch sentiment summary for non-dish kitchen problems
@@ -194,6 +197,7 @@ export default function ChefDishesPage() {
     : null;
   const { data: sentimentData } = useSWR<SentimentSummaryResponse>(
     sentimentParams ? `/api/dashboard/sentiment-summary?${sentimentParams}` : null,
+    { ...getCacheConfig('statistics') }
   );
 
   const dishes = dishData?.dishes ?? [];

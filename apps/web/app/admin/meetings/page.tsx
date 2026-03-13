@@ -1,5 +1,6 @@
 // Admin Meetings Page - Cross-store meeting overview + my meetings
 // Default shows yesterday's data, with date picker
+// v1.1 - Add getCacheConfig for consistent cache strategy
 
 'use client';
 
@@ -17,6 +18,7 @@ import { DatePicker, useAdminPresets } from '@/components/shared/DatePicker';
 import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
 import type { MeetingRecord, MeetingType, MeetingStatus } from '@/hooks/useMeetingStore';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 
 // --- Types ---
 interface ApiMeeting {
@@ -245,7 +247,8 @@ export default function AdminMeetingsPage() {
   const { playingKey, currentTime, duration, isBuffering, stopAudio, handleAudioToggle, seekTo } = useAudioPlayback();
 
   const { data: apiData, isLoading, error } = useSWR<AdminOverviewResponse>(
-    `/api/meeting/admin-overview?${dateRangeParams(dateRange)}${user?.id ? `&employee_id=${user.id}` : ''}${managedIdsParam}`
+    `/api/meeting/admin-overview?${dateRangeParams(dateRange)}${user?.id ? `&employee_id=${user.id}` : ''}${managedIdsParam}`,
+    { ...getCacheConfig('historical') }
   );
   const data = apiData;
   const hasData = !!data;

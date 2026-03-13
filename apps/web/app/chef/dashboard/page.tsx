@@ -1,5 +1,5 @@
 // Chef Dashboard - Action items with required response notes
-// v2.0 - Rework: mandatory response_note, voice input, polite copy, no "acknowledge" button
+// v2.1 - Add getCacheConfig for consistent cache strategy
 
 'use client';
 
@@ -13,6 +13,7 @@ import { getAuthHeaders } from '@/contexts/AuthContext';
 import { getDateForSelection } from '@/lib/date-utils';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
 import { CATEGORY_LABELS, PRIORITY_CONFIG, STATUS_CONFIG } from '@/lib/action-item-constants';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 
 // Filter: kitchen-relevant items — prefer assigned_role, fallback to keyword matching for legacy data
 function isKitchenRelevant(item: ActionItem): boolean {
@@ -46,9 +47,11 @@ export default function ChefDashboardPage() {
 
   const { data: todayData, isLoading: todayLoading, mutate: mutateToday } = useSWR<ActionItemsResponse>(
     todayParams ? `/api/action-items?${todayParams}` : null,
+    { ...getCacheConfig('statistics') }
   );
   const { data: yesterdayData, isLoading: yesterdayLoading, mutate: mutateYesterday } = useSWR<ActionItemsResponse>(
     yesterdayParams ? `/api/action-items?${yesterdayParams}` : null,
+    { ...getCacheConfig('historical') }
   );
 
   const todayActions = (todayData?.actions ?? []).filter(isKitchenRelevant);

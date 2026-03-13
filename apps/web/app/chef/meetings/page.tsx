@@ -1,5 +1,6 @@
 // Chef Meetings Page - Kitchen meeting recording + daily summary agenda
 // Reuses recorder components: RecordButton, WaveformVisualizer, MeetingHistory, MeetingDetail
+// v1.1 - Add getCacheConfig for consistent cache strategy
 
 'use client';
 
@@ -22,6 +23,7 @@ import type { MeetingRecord } from '@/hooks/useMeetingStore';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
 import { PRIORITY_CONFIG } from '@/lib/action-item-constants';
 import { getDateForSelection, getChinaToday } from '@/lib/date-utils';
+import { getCacheConfig } from '@/contexts/SWRProvider';
 
 // Types matching API response
 interface AgendaItem {
@@ -309,6 +311,7 @@ export default function ChefMeetingsPage() {
     : null;
   const { data: pendingData, isLoading: pendingLoading, mutate: mutatePending } = useSWR<ActionItemsResponse>(
     pendingParams ? `/api/action-items/pending?${pendingParams}` : null,
+    { ...getCacheConfig('statistics') }
   );
   const allPendingItems = pendingData?.actions ?? [];
   const kitchenPendingItems = allPendingItems.filter(item => isKitchenRelevant(item));
@@ -339,6 +342,7 @@ export default function ChefMeetingsPage() {
     : null;
   const { data: summaryData, isLoading: summaryLoading } = useSWR<DailySummaryResponse>(
     params ? `/api/daily-summary?${params}` : null,
+    { ...getCacheConfig('statistics') }
   );
   const summary = summaryData?.summary;
   const agendaItems = summary?.agenda_items ?? [];
