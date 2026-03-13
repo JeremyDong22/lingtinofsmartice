@@ -1,5 +1,5 @@
 // 讯飞 Speech-to-Text Service - 方言识别大模型 (SLM) + 中文识别大模型 fallback
-// v2.5 - Returns SttResult with model identifier for provenance tracking
+// v2.6 - Use ffmpeg-static npm package instead of system ffmpeg (no Dockerfile needed)
 // API文档(方言): https://www.xfyun.cn/doc/spark/spark_slm_iat.html
 // API文档(中文): https://www.xfyun.cn/doc/asr/voicedictation/API.html
 
@@ -13,6 +13,9 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 import * as WebSocket from 'ws';
 import { fetchWithRetry } from '../../common/utils/fetch-with-retry';
+
+// Use ffmpeg-static for bundled ffmpeg binary (no system install needed)
+const ffmpegPath = require('ffmpeg-static');
 
 const execAsync = promisify(exec);
 
@@ -146,7 +149,7 @@ export class XunfeiSttService {
 
     try {
       fs.writeFileSync(inputFile, audioBuffer);
-      const ffmpegCmd = `ffmpeg -i "${inputFile}" -ar 16000 -ac 1 -f s16le "${outputFile}" -y 2>/dev/null`;
+      const ffmpegCmd = `"${ffmpegPath}" -i "${inputFile}" -ar 16000 -ac 1 -f s16le "${outputFile}" -y 2>/dev/null`;
       await execAsync(ffmpegCmd);
       return fs.readFileSync(outputFile);
     } finally {
