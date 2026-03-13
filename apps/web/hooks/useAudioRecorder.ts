@@ -1,5 +1,5 @@
 // Audio Recorder Hook - Handle browser audio recording
-// v1.7 - Increased audioBitsPerSecond to 96kbps for better STT accuracy in noisy environments
+// v1.8 - Added Screen Wake Lock, improved interruption recovery (interrupted state, pagehide, foreground health check)
 
 'use client';
 
@@ -73,8 +73,12 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
   const WAVEFORM_UPDATE_INTERVAL = 50; // Update every 50ms (20fps) instead of every frame (60fps)
   // Store visibilitychange handler ref for proper cleanup
   const visibilityHandlerRef = useRef<(() => void) | null>(null);
-  // Wake Lock to prevent screen off during recording (HarmonyOS/Android)
+  // Screen Wake Lock to prevent screen dimming during recording (iOS 16.4+, all modern browsers)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  // Store pagehide handler ref for cleanup (iOS PWA may skip visibilitychange on eviction)
+  const pagehideHandlerRef = useRef<(() => void) | null>(null);
+  // Store devicechange handler ref for cleanup (Android: Bluetooth headset connect/disconnect)
+  const deviceChangeHandlerRef = useRef<(() => void) | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -94,15 +98,47 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       if (visibilityHandlerRef.current) {
         document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
       }
+      if (pagehideHandlerRef.current) {
+        window.removeEventListener('pagehide', pagehideHandlerRef.current);
+      }
       if (wakeLockRef.current) {
         wakeLockRef.current.release().catch(() => {});
+      }
+      if (deviceChangeHandlerRef.current) {
+        navigator.mediaDevices?.removeEventListener('devicechange', deviceChangeHandlerRef.current);
       }
     };
   }, []);
 
+  // --- Screen Wake Lock helpers ---
+  // Keeps screen on during recording; auto-released by browser on tab hide, re-acquired on visible
+
+  const acquireWakeLock = useCallback(async () => {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen');
+      console.log('[useAudioRecorder] Wake Lock acquired');
+      wakeLockRef.current.addEventListener('release', () => {
+        console.log('[useAudioRecorder] Wake Lock released by system');
+      });
+    } catch (err) {
+      // Non-fatal: recording still works, screen may just dim
+      console.warn('[useAudioRecorder] Wake Lock request failed:', err);
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+      } catch { /* already released */ }
+      wakeLockRef.current = null;
+    }
+  }, []);
+
   // --- Interruption recovery helpers ---
 
-  // Shared cleanup: release mic, stop timer/animation, close AudioContext
+  // Shared cleanup: release mic, stop timer/animation, close AudioContext, release Wake Lock
   const cleanupResources = useCallback(() => {
     isRecordingRef.current = false;
     isPausedRef.current = false;
@@ -126,15 +162,20 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       audioContextRef.current = null;
     }
     setAnalyserData(null);
-    if (wakeLockRef.current) {
-      wakeLockRef.current.release().catch(() => {});
-      wakeLockRef.current = null;
-    }
     if (visibilityHandlerRef.current) {
       document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
       visibilityHandlerRef.current = null;
     }
-  }, []);
+    if (pagehideHandlerRef.current) {
+      window.removeEventListener('pagehide', pagehideHandlerRef.current);
+      pagehideHandlerRef.current = null;
+    }
+    if (deviceChangeHandlerRef.current) {
+      navigator.mediaDevices?.removeEventListener('devicechange', deviceChangeHandlerRef.current);
+      deviceChangeHandlerRef.current = null;
+    }
+    releaseWakeLock();
+  }, [releaseWakeLock]);
 
   // Emergency save: salvage already-recorded chunks when recording is interrupted
   const emergencySave = useCallback((recorder: MediaRecorder | null) => {
@@ -174,27 +215,51 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
     setError('录音被中断，已保存已录制部分');
   }, [cleanupResources]);
 
-  // Wake Lock: prevent screen off during recording
-  const acquireWakeLock = useCallback(async () => {
-    if (!('wakeLock' in navigator)) return;
-    try {
-      wakeLockRef.current = await navigator.wakeLock.request('screen');
-      console.log('[useAudioRecorder] Wake Lock acquired');
-    } catch (err) {
-      console.warn('[useAudioRecorder] Wake Lock failed:', err);
-    }
-  }, []);
-
-  // Detect app going to background — if MediaRecorder was silently killed, emergency-save
+  // Detect app going to background / returning to foreground during recording
   const handleVisibilityChange = useCallback(() => {
-    if (document.hidden && isRecordingRef.current) {
+    if (!isRecordingRef.current) return;
+
+    if (document.hidden) {
+      // Going to background — check if MediaRecorder was silently killed
       console.warn('[useAudioRecorder] App went to background during recording');
       const recorder = mediaRecorderRef.current;
       if (recorder && recorder.state === 'inactive') {
         emergencySave(recorder);
       }
-    } else if (!document.hidden && isRecordingRef.current && !wakeLockRef.current) {
-      // Re-acquire wake lock when returning to foreground (lock auto-releases on tab switch)
+    } else {
+      // Returning to foreground — run health checks and try to recover
+      console.log('[useAudioRecorder] App returned to foreground during recording');
+
+      const recorder = mediaRecorderRef.current;
+      const ctx = audioContextRef.current;
+
+      // Check if MediaRecorder was killed while in background
+      if (recorder && recorder.state === 'inactive') {
+        console.warn('[useAudioRecorder] MediaRecorder died in background');
+        emergencySave(recorder);
+        return;
+      }
+
+      // Check if any mic track ended (OS revoked mic access during call/background)
+      const tracks = streamRef.current?.getAudioTracks() ?? [];
+      if (tracks.length === 0 || tracks.some((t) => t.readyState === 'ended')) {
+        console.warn('[useAudioRecorder] Mic track ended while in background');
+        emergencySave(recorder);
+        return;
+      }
+
+      // Try to resume AudioContext if it was suspended/interrupted (iOS phone call scenario)
+      if (ctx && (ctx.state === 'suspended' || ctx.state === ('interrupted' as AudioContextState))) {
+        ctx.resume().then(() => {
+          console.log('[useAudioRecorder] AudioContext resumed after foreground return');
+        }).catch(() => {
+          // AudioContext unrecoverable — recording audio is likely silent, emergency save
+          console.warn('[useAudioRecorder] AudioContext resume failed on foreground return');
+          emergencySave(recorder);
+        });
+      }
+
+      // Re-acquire Wake Lock (browser auto-releases on tab hide)
       acquireWakeLock();
     }
   }, [emergencySave, acquireWakeLock]);
@@ -251,16 +316,16 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       source.connect(analyserRef.current);
 
       // iOS: AudioContext enters 'interrupted'/'suspended' on incoming calls
+      // Both states need recovery attempts; 'interrupted' is a Safari-specific non-standard state
       audioContextRef.current.addEventListener('statechange', () => {
         const ctx = audioContextRef.current;
-        if (!ctx) return;
-        if (ctx.state === 'interrupted' || ctx.state === 'suspended') {
-          console.warn(`[useAudioRecorder] AudioContext ${ctx.state}`);
-          if (ctx.state === 'suspended' && isRecordingRef.current) {
-            ctx.resume().catch(() => {
-              emergencySave(mediaRecorderRef.current);
-            });
-          }
+        if (!ctx || !isRecordingRef.current) return;
+        if (ctx.state === 'suspended' || ctx.state === ('interrupted' as AudioContextState)) {
+          console.warn(`[useAudioRecorder] AudioContext ${ctx.state}, attempting resume`);
+          ctx.resume().catch(() => {
+            console.warn('[useAudioRecorder] AudioContext resume failed, emergency saving');
+            emergencySave(mediaRecorderRef.current);
+          });
         }
       });
 
@@ -326,11 +391,44 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       visibilityHandlerRef.current = handleVisibilityChange;
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
+      // pagehide: iOS PWA may skip visibilitychange when system evicts the page
+      const handlePageHide = () => {
+        if (isRecordingRef.current) {
+          console.warn('[useAudioRecorder] pagehide fired during recording');
+          emergencySave(mediaRecorderRef.current);
+        }
+      };
+      pagehideHandlerRef.current = handlePageHide;
+      window.addEventListener('pagehide', handlePageHide);
+
+      // Keep screen on during recording (prevents dimming/lock)
+      await acquireWakeLock();
+
+      // Android/all: detect mic track ending (Bluetooth disconnect, mic unplug, OS revokes mic)
+      // This fires immediately — much faster than the 1s health check interval
+      stream.getAudioTracks().forEach((track) => {
+        track.addEventListener('ended', () => {
+          if (!isRecordingRef.current) return;
+          console.warn(`[useAudioRecorder] Audio track ended: ${track.label}`);
+          emergencySave(mediaRecorderRef.current);
+        });
+      });
+
+      // Android/all: detect audio device changes (Bluetooth headset connect/disconnect)
+      // If our mic track died after a device change, emergency save
+      const handleDeviceChange = () => {
+        if (!isRecordingRef.current) return;
+        const tracks = streamRef.current?.getAudioTracks() ?? [];
+        if (tracks.length === 0 || tracks.every((t) => t.readyState === 'ended')) {
+          console.warn('[useAudioRecorder] All mic tracks ended after device change');
+          emergencySave(mediaRecorderRef.current);
+        }
+      };
+      deviceChangeHandlerRef.current = handleDeviceChange;
+      navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
+
       // Start visualization (now refs are already set)
       startVisualization();
-
-      // Prevent screen from turning off during recording
-      acquireWakeLock();
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法访问麦克风');
       console.error('Recording error:', err);
