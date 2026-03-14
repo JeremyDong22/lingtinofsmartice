@@ -20,7 +20,7 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '2.5.2',
+    version: '2.5.3',
     date: '2026-03-14',
     roles: ['manager', 'administrator', 'head_chef'],
     title: '录音体验优化',
@@ -31,9 +31,9 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         value: '录音更稳定，不再因息屏丢失宝贵的桌访录音。',
       },
       {
-        title: '录音保存确认',
-        howToUse: '停止录音后会显示「保存」和「丢弃」按钮，误触停止可直接丢弃重录。30秒无操作自动保存。',
-        value: '误触不再焦虑，可以从容选择保存或重来。',
+        title: '恢复自动保存',
+        howToUse: '停止录音后自动保存上传，无需手动操作。如需删除误录，在历史列表中左滑即可删除。',
+        value: '保持无感采集体验，不中断工作流。',
       },
     ],
   },
