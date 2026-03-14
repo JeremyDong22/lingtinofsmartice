@@ -1,7 +1,7 @@
 // Chat Service - AI assistant with tool use for database queries
 // v5.0 - Arch: materialized views (ai_visits/ai_actions/ai_feedbacks) — AI only queries views, DB-level security
 // v4.2 - Fix: added lingtin_action_items full schema to all 3 role prompts + action items strategy hints
-// v4.1 - Perf: briefing model → qwen-turbo, max_tokens 512, timeout 30s, prompt slimmed (no lingtin:// links)
+// v4.2 - Model: → google/gemini-3-flash-preview, minimum thinking (budget_tokens 512/256), server migrated to Singapore
 // IMPORTANT: Never return raw_transcript to avoid context explosion
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -802,8 +802,9 @@ this.logger.log(`Messages in context: ${messages.length}`);
     }
 
     const requestBody: Record<string, any> = {
-      model: 'moonshotai/kimi-k2.5',
+      model: 'google/gemini-3-flash-preview',
       max_tokens: 2048,
+      thinking: { type: 'enabled', budget_tokens: 512 },
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages,
@@ -860,8 +861,9 @@ this.logger.log(`Messages in context: ${messages.length}`);
     if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
 
     const requestBody = {
-      model: 'qwen/qwen-turbo',
+      model: 'google/gemini-3-flash-preview',
       max_tokens: 1024,
+      thinking: { type: 'enabled', budget_tokens: 256 },
       temperature: 0,
       stream: true,
       messages: [

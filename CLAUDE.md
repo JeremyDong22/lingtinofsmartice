@@ -51,6 +51,13 @@ pnpm build:api        # 构建后端
 # 注意: rebase 时 sw.js 冲突直接接受任一版本，pnpm build:web 会重新生成
 ```
 
+## Git 分支规范
+
+- **`main` 分支受保护** — 禁止直接 push，所有改动必须通过 `develop` 分支 PR 合并
+- **日常开发在 `develop` 分支** — 提交前先确认当前在 `develop`，不在 `main`
+- **分支对应环境**：`develop` → Staging（测试）/ `main` → Production（生产）
+- **Claude 不得直接 push main** — 即使用户要求，也应提醒先合并到 develop 再走 PR 流程
+
 ## 开发规范摘要
 
 - **迭代开发，不是重构** — 渐进增强，不做大规模重写
@@ -115,9 +122,23 @@ master_employee (1)   ──< visit_records (N)
 | 后端 API | `lingtin-backend` | `697a5cfa06505fdd547f6889` |
 | 前端 Web | `lingtin-frontend` | `69b38bc7520291ff1131a314` |
 
-- 后端 Service ID: `697a6376f2339c9e766cb99d`，root: `apps/api`，zbpack 原生构建 NestJS（ffmpeg 改用 ffmpeg-static npm 包）
-- 前端 Service ID: `69b38bdcd1eb012bec9f4bfe`，root: `apps/web`，zbpack 原生构建 Next.js (Node.js server mode)
+- 后端 Service ID: `697a6376f2339c9e766cb99d`，zbpack 原生构建 NestJS（ffmpeg 改用 ffmpeg-static npm 包）
+- 前端 Service ID: `69b38bdcd1eb012bec9f4bfe`，zbpack 原生构建 Next.js (Node.js server mode)
 - ⚠️ 已移除所有 Dockerfile，前后端均使用 zbpack 原生构建（各自目录下有 zbpack.json）
+
+### Zeabur Monorepo 部署规范
+
+**⚠️ 关键：pnpm monorepo 禁止使用 Zeabur 的 Root Directory 设置**
+
+Zeabur 的 Root Directory 会先 cd 到子目录再交给 zbpack，导致 zbpack 看不到根目录的 `pnpm-workspace.yaml` 和 `pnpm-lock.yaml`，monorepo 依赖解析失败，报 "Root Directory does not exist" 错误。
+
+正确做法：
+- Root Directory **留空**（Zeabur Dashboard → Settings → Root Directory 清空）
+- 通过环境变量 `ZBPACK_APP_DIR` 指定子 app 路径：
+  - 后端：`ZBPACK_APP_DIR=apps/api`
+  - 前端：`ZBPACK_APP_DIR=apps/web`
+- zbpack 从根目录出发，自动识别 pnpm workspace 并构建指定子 app
+- 不需要 Dockerfile，zbpack 会自动生成构建计划
 
 ### Zeabur CLI 使用规范
 
