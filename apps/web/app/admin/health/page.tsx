@@ -1,5 +1,5 @@
 // Admin Health Dashboard - System health monitoring
-// Restricted to username 'hr901027'
+// Restricted to system admin whitelist
 
 'use client';
 
@@ -187,7 +187,7 @@ export default function HealthPage() {
   const router = useRouter();
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
 
-  const isAuthorized = user?.username === 'hr901027';
+  const isAuthorized = ['hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue', 'chenhua', 'xuguangquan', 'fanshucen', 'geyi'].includes(user?.username ?? '');
 
   // SWR queries
   const { data: latestRes, isLoading: latestLoading } = useSWR<{ data: LatestData }>(

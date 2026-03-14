@@ -33,8 +33,13 @@ export class KnowledgeController {
     private readonly bootstrapService: KnowledgeBootstrapService,
   ) {}
 
+  private static readonly SYSTEM_ADMIN_USERS = [
+    'hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue',
+    'chenhua', 'xuguangquan', 'fanshucen', 'geyi',
+  ];
+
   private assertKnowledgeAdmin(user: AuthUser) {
-    if (!user || user.username !== 'hr901027') {
+    if (!user || !KnowledgeController.SYSTEM_ADMIN_USERS.includes(user.username)) {
       throw new ForbiddenException('知识引擎管理权限未开放');
     }
   }

@@ -194,7 +194,7 @@ export default function SignupsPage() {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const isAuthorized = user?.username === 'hr901027';
+  const isAuthorized = ['hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue', 'chenhua', 'xuguangquan', 'fanshucen', 'geyi'].includes(user?.username ?? '');
 
   const { data: resp, isLoading } = useSWR<SignupsResponse>(
     isAuthorized ? '/api/beta-signup' : null,

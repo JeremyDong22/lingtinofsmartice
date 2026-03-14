@@ -16,6 +16,10 @@ import {
 } from 'lucide-react';
 
 const GUIDE_SEEN_KEY = 'lingtin_guide_seen_version';
+const SYSTEM_ADMIN_USERS = [
+  'hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue',
+  'chenhua', 'xuguangquan', 'fanshucen', 'geyi',
+];
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -171,8 +175,8 @@ export function UserMenu() {
             </button>
           )}
 
-          {/* User Activity (hr901027 only) */}
-          {user.username === 'hr901027' && (
+          {/* User Activity (system admin only) */}
+          {SYSTEM_ADMIN_USERS.includes(user.username) && (
             <button
               onClick={() => {
                 setIsOpen(false);
@@ -185,8 +189,8 @@ export function UserMenu() {
             </button>
           )}
 
-          {/* System Health (hr901027 only) */}
-          {user.username === 'hr901027' && (
+          {/* System Health (system admin only) */}
+          {SYSTEM_ADMIN_USERS.includes(user.username) && (
             <button
               onClick={() => {
                 setIsOpen(false);
@@ -199,8 +203,8 @@ export function UserMenu() {
             </button>
           )}
 
-          {/* Beta Signups (hr901027 only) */}
-          {user.username === 'hr901027' && (
+          {/* Beta Signups (system admin only) */}
+          {SYSTEM_ADMIN_USERS.includes(user.username) && (
             <button
               onClick={() => {
                 setIsOpen(false);
@@ -213,8 +217,8 @@ export function UserMenu() {
             </button>
           )}
 
-          {/* Knowledge Engine (hr901027 only) */}
-          {user.username === 'hr901027' && (
+          {/* Knowledge Engine (system admin only) */}
+          {SYSTEM_ADMIN_USERS.includes(user.username) && (
             <button
               onClick={() => {
                 setIsOpen(false);

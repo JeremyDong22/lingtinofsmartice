@@ -15,8 +15,13 @@ export class HealthController {
 
   constructor(private readonly healthService: HealthService) {}
 
+  private static readonly SYSTEM_ADMIN_USERS = [
+    'hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue',
+    'chenhua', 'xuguangquan', 'fanshucen', 'geyi',
+  ];
+
   private checkAccess(user: AuthUser) {
-    if (user.username !== 'hr901027') {
+    if (!HealthController.SYSTEM_ADMIN_USERS.includes(user.username)) {
       throw new ForbiddenException('Access denied');
     }
   }

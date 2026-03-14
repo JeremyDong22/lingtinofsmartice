@@ -1,5 +1,5 @@
 // Activity Controller - User activity tracking endpoints
-// v1.0 - Overview + user timeline, restricted to hr901027
+// v1.1 - Whitelist-based access control (was hr901027-only)
 
 import {
   Controller,
@@ -19,8 +19,13 @@ export class ActivityController {
 
   constructor(private readonly activityService: ActivityService) {}
 
+  private static readonly SYSTEM_ADMIN_USERS = [
+    'hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue',
+    'chenhua', 'xuguangquan', 'fanshucen', 'geyi',
+  ];
+
   private checkAccess(user: AuthUser) {
-    if (user.username !== 'hr901027') {
+    if (!ActivityController.SYSTEM_ADMIN_USERS.includes(user.username)) {
       throw new ForbiddenException('Access denied');
     }
   }
