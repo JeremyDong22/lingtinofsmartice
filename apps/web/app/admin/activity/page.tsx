@@ -142,7 +142,7 @@ export default function ActivityPage() {
   const [selectedUser, setSelectedUser] = useState<UserOverviewItem | null>(null);
   const [timelinePage, setTimelinePage] = useState(1);
 
-  const isAuthorized = user?.username === 'hr901027';
+  const isAuthorized = ['hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue', 'chenhua', 'xuguangquan', 'fanshucen', 'geyi'].includes(user?.username ?? '');
 
   // Fetch overview (skip if not authorized)
   const { data: overview, isLoading } = useSWR<OverviewResponse>(

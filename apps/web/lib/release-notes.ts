@@ -20,6 +20,19 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.6.1',
+    date: '2026-03-15',
+    roles: ['administrator'],
+    title: '系统管理页面开放',
+    items: [
+      {
+        title: '用户活动、系统健康、知识引擎等页面开放',
+        howToUse: '点击右上角头像 → 菜单中可看到用户活动、系统健康、报名管理、知识引擎入口。',
+        value: '核心管理人员可直接查看系统运行状态和用户行为数据',
+      },
+    ],
+  },
+  {
     version: '2.6.0',
     date: '2026-03-14',
     roles: ['manager', 'administrator', 'head_chef'],

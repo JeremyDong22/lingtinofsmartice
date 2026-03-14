@@ -921,7 +921,7 @@ export default function KnowledgeReviewPage() {
   const router = useRouter();
   const [view, setView] = useState<PageView>('dashboard');
 
-  const isAuthorized = user?.username === 'hr901027';
+  const isAuthorized = ['hr901027', 'Jeremy', 'hengwu', 'liuyun', 'yangxue', 'chenhua', 'xuguangquan', 'fanshucen', 'geyi'].includes(user?.username ?? '');
 
   // Access guard
   if (user && !isAuthorized) {
