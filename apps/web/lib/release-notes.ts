@@ -20,6 +20,19 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.5.4',
+    date: '2026-03-14',
+    roles: ['manager', 'administrator', 'head_chef'],
+    title: '错误页面优化',
+    items: [
+      {
+        title: '错误恢复按钮',
+        howToUse: '遇到页面异常时会显示「重试」和「清除缓存并刷新」按钮，点击即可恢复。',
+        value: '不再卡在白屏页面，可自助解决缓存导致的加载问题。',
+      },
+    ],
+  },
+  {
     version: '2.5.3',
     date: '2026-03-14',
     roles: ['manager', 'administrator', 'head_chef'],
