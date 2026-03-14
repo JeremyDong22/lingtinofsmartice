@@ -1,7 +1,7 @@
 // Action Items Controller - API endpoints for AI action suggestions
-// v2.0 - Removed generate endpoint; action items now come from meeting processing only
+// v3.1 - Added batch-create for guided review, fixed route ordering
 
-import { Controller, Get, Patch, Query, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Query, Param, Body } from '@nestjs/common';
 import { ActionItemsService } from './action-items.service';
 import { getChinaDateString } from '../../common/utils/date';
 
@@ -35,13 +35,68 @@ export class ActionItemsController {
     );
   }
 
-  // PATCH /api/action-items/:id — update status
-  // body: { status, note?, response_note? }
+  // POST /api/action-items/batch-create — create multiple action items at once (guided review)
+  // Must be declared before @Post() to avoid route shadowing
+  @Post('batch-create')
+  async batchCreateActionItems(
+    @Body() body: {
+      restaurant_id: string;
+      items: Array<{
+        suggestion_text: string;
+        assigned_role?: string;
+        deadline?: string;
+        category?: string;
+        priority?: string;
+      }>;
+      source_meeting_id?: string;
+    },
+  ) {
+    return this.actionItemsService.batchCreateActionItems(body);
+  }
+
+  // POST /api/action-items/batch-confirm — confirm multiple action items at once
+  @Post('batch-confirm')
+  async batchConfirmActionItems(
+    @Body() body: { ids: string[] },
+  ) {
+    return this.actionItemsService.batchConfirmActionItems(body.ids);
+  }
+
+  // POST /api/action-items — create a single action item
+  @Post()
+  async createActionItem(
+    @Body() body: {
+      restaurant_id: string;
+      suggestion_text: string;
+      assigned_role?: string;
+      deadline?: string;
+      category?: string;
+      priority?: string;
+      source_meeting_id?: string;
+    },
+  ) {
+    return this.actionItemsService.createActionItem(body);
+  }
+
+  // PATCH /api/action-items/:id — update status or edit content
   @Patch(':id')
   async updateActionItem(
     @Param('id') id: string,
-    @Body() body: { status: string; note?: string; response_note?: string },
+    @Body() body: {
+      status?: string;
+      suggestion_text?: string;
+      assigned_role?: string;
+      deadline?: string;
+      note?: string;
+      response_note?: string;
+    },
   ) {
-    return this.actionItemsService.updateActionItem(id, body.status, body.note, body.response_note);
+    return this.actionItemsService.updateActionItem(id, body);
+  }
+
+  // DELETE /api/action-items/:id — delete an action item
+  @Delete(':id')
+  async deleteActionItem(@Param('id') id: string) {
+    return this.actionItemsService.deleteActionItem(id);
   }
 }
