@@ -20,6 +20,29 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.6.0',
+    date: '2026-03-14',
+    roles: ['manager', 'administrator', 'head_chef'],
+    title: '引导式每日复盘',
+    items: [
+      {
+        title: '4 步引导式复盘流程',
+        howToUse: '录音页 → 切换到「会议」模式 → 选择「每日复盘」→ 自动进入引导流程。',
+        value: '不再需要凭经验组织会议，系统引导你先看数据和议题，再录音讨论，最后确认行动项。',
+      },
+      {
+        title: '会前简报一页看完',
+        howToUse: '进入引导流程后第一页展示今日数据、上次待办完成情况、待讨论问题清单。',
+        value: '开会前 30 秒掌握全局，不遗漏任何需要讨论的问题。',
+      },
+      {
+        title: '行动项确认与编辑',
+        howToUse: '录音结束后 AI 自动提取行动项，你可以编辑、删除或手动添加，确认后一键提交。',
+        value: '确保每次复盘都产出可追踪的明确行动，不再"讨论完就忘"。',
+      },
+    ],
+  },
+  {
     version: '2.5.4',
     date: '2026-03-14',
     roles: ['manager', 'administrator', 'head_chef'],

@@ -1,5 +1,5 @@
 // Recorder Page - Dual mode: table visit recording + meeting recording
-// v5.0 - Added daily ops loop: agenda card for daily_review, reminder for pre_meal
+// v6.0 - Added guided review flow for daily_review meeting type
 
 'use client';
 
@@ -24,6 +24,7 @@ import { MeetingDetail } from '@/components/recorder/MeetingDetail';
 import { useAudioPlayback } from '@/components/shared/FeedbackWidgets';
 import { MotivationBanner } from '@/components/recorder/MotivationBanner';
 import { ExecutionPanel } from '@/components/recorder/ExecutionPanel';
+import { GuidedReviewFlow } from '@/components/recorder/guided-review/GuidedReviewFlow';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_VERSION } from '@/components/layout/UpdatePrompt';
 import { BarChart3, CloudUpload } from 'lucide-react';
@@ -79,6 +80,7 @@ export default function RecorderPage() {
   // Meeting mode state
   const [meetingType, setMeetingType] = useState<MeetingType | ''>('');
   const [detailMeeting, setDetailMeeting] = useState<MeetingRecord | null>(null);
+  const [showGuidedReview, setShowGuidedReview] = useState(false);
   const { playingKey: detailPlayingKey, currentTime: detailCurrentTime, duration: detailDuration, isBuffering: detailIsBuffering, stopAudio: detailStopAudio, handleAudioToggle: detailAudioToggle, seekTo: detailSeekTo } = useAudioPlayback();
 
   // Refs
@@ -372,6 +374,54 @@ export default function RecorderPage() {
     return stuckRecordings.length + stuckMeetings.length;
   }, [recordings, meetings]);
 
+  // Guided review flow handlers
+  const handleGuidedSaveMeeting = useCallback(async (dur: number, blob: Blob) => {
+    return await saveMeeting('daily_review' as MeetingType, dur, blob);
+  }, [saveMeeting]);
+
+  const handleGuidedProcessMeeting = useCallback((meeting: MeetingRecord) => {
+    processingIdsRef.current.add(meeting.id);
+    processMeetingInBackground(meeting, {
+      onStatusChange: (id, status, data) => {
+        updateMeeting(id, { status, ...data });
+        if (status === 'completed') {
+          processingIdsRef.current.delete(id);
+        }
+      },
+      onError: (id, errorMsg) => {
+        processingIdsRef.current.delete(id);
+        updateMeeting(id, { status: 'error', errorMessage: errorMsg });
+      },
+    }, restaurantId);
+  }, [updateMeeting, restaurantId]);
+
+  const handleGuidedExit = useCallback(() => {
+    setShowGuidedReview(false);
+    setMeetingType('');
+    resetRecording();
+  }, [resetRecording]);
+
+  const handleGoReview = useCallback(() => {
+    setMode('meeting');
+    setMeetingType('daily_review' as MeetingType);
+    setShowGuidedReview(true);
+  }, []);
+
+  // When guided review is active, render the full-screen wizard
+  if (showGuidedReview) {
+    return (
+      <GuidedReviewFlow
+        restaurantId={restaurantId}
+        recorderState={recorderState}
+        recorderActions={recorderActions}
+        onSaveMeeting={handleGuidedSaveMeeting}
+        onProcessMeeting={handleGuidedProcessMeeting}
+        onExit={handleGuidedExit}
+        meetings={meetings}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen">
       {/* Stealth Mode Overlay - fake WeChat interface */}
@@ -475,7 +525,7 @@ export default function RecorderPage() {
         {!isRecording && (
           <ExecutionPanel
             restaurantId={restaurantId}
-            onGoReview={() => { setMode('meeting'); setMeetingType('daily_review' as MeetingType); }}
+            onGoReview={handleGoReview}
           />
         )}
 
@@ -561,12 +611,18 @@ export default function RecorderPage() {
               {/* Meeting Type Selector */}
               <MeetingTypeSelector
                 value={meetingType}
-                onChange={setMeetingType}
+                onChange={(type) => {
+                  setMeetingType(type);
+                  // Auto-launch guided review for daily_review
+                  if (type === 'daily_review') {
+                    setShowGuidedReview(true);
+                  }
+                }}
                 disabled={isRecording}
               />
 
-              {/* Context cards based on meeting type */}
-              {meetingType === 'daily_review' && (
+              {/* Context cards based on meeting type (non-daily_review types) */}
+              {meetingType === 'daily_review' && !showGuidedReview && (
                 <MeetingAgendaCard restaurantId={restaurantId} />
               )}
               {meetingType === 'pre_meal' && (
