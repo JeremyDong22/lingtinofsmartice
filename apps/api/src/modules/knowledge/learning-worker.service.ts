@@ -20,9 +20,9 @@ export class LearningWorkerService {
 
   /**
    * Daily quality score decay + auto-archive stale knowledge.
-   * Runs at 03:00 UTC (11:00 CST).
+   * Runs at 14:00 UTC (22:00 CST) — after restaurant closing.
    */
-  @Cron('0 3 * * *')
+  @Cron('0 14 * * *')
   async runDailyDecay() {
     this.logger.log('Running daily knowledge decay...');
     const decay = await this.knowledgeService.decayKnowledgeScores();
@@ -35,9 +35,9 @@ export class LearningWorkerService {
   /**
    * Process pending revisions: detect revision_requested items,
    * re-generate content based on reviewer notes.
-   * Runs at 04:00 UTC (12:00 CST).
+   * Runs at 14:30 UTC (22:30 CST) — after decay, before distillation.
    */
-  @Cron('0 4 * * *')
+  @Cron('30 14 * * *')
   async processRevisions() {
     const revisions = await this.knowledgeService.getPendingRevisions();
     if (!revisions.length) return;
@@ -67,21 +67,21 @@ export class LearningWorkerService {
   }
 
   /**
-   * Weekly exploratory distillation.
-   * Runs at 05:00 UTC every Sunday (13:00 CST).
+   * Exploratory distillation — cross-store/cross-region knowledge correlation.
+   * Runs every 2 days at 16:00 UTC (00:00 CST next day).
    */
-  @Cron('0 5 * * 0')
+  @Cron('0 16 */2 * *')
   async runWeeklyExploration() {
-    this.logger.log('Running weekly exploratory distillation...');
+    this.logger.log('Running exploratory distillation (every 2 days)...');
     const result = await this.runExploratoryDistillation();
     this.logger.log(`Exploratory distillation complete: ${result.discovered} discoveries`);
   }
 
   /**
    * Daily auto-distillation: L1→L2 vertical, L2→L3 horizontal, L3→L4 action.
-   * Runs at 04:30 UTC (12:30 CST), after revisions processing.
+   * Runs at 15:00 UTC (23:00 CST) — after closing, processes full day's data.
    */
-  @Cron('30 4 * * *')
+  @Cron('0 15 * * *')
   async runAutoDistill() {
     this.logger.log('Running daily auto-distillation...');
     const result = await this.triggerDistillation();
@@ -94,9 +94,9 @@ export class LearningWorkerService {
   /**
    * Daily action item impact evaluation.
    * Checks resolved items 3-7 days ago and evaluates sentiment change.
-   * Runs at 06:00 UTC (14:00 CST).
+   * Runs at 15:30 UTC (23:30 CST) — after distillation.
    */
-  @Cron('0 6 * * *')
+  @Cron('30 15 * * *')
   async evaluateActionImpact() {
     this.logger.log('Evaluating action item impact...');
     try {
@@ -759,22 +759,22 @@ ${entry.reviewer_note}
   // ─── Bark Notification ────────────────────────────────────────────
 
   /**
-   * Weekly chat pattern analysis — discover knowledge gaps from user questions.
-   * Runs at 07:00 UTC every Monday (15:00 CST).
+   * Chat pattern analysis — discover knowledge gaps from user questions.
+   * Runs every 2 days (odd days) at 17:00 UTC (01:00 CST next day).
    */
-  @Cron('0 7 * * 1')
+  @Cron('0 17 1-31/2 * *')
   async analyzeChatPatterns() {
-    this.logger.log('Running weekly chat pattern analysis...');
+    this.logger.log('Running chat pattern analysis (every 2 days)...');
     try {
       const client = this.supabase.getClient();
-      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const sinceDate = new Date(Date.now() - 2 * 86400000).toISOString(); // past 2 days
 
-      // Get user messages from past week, grouped by restaurant
+      // Get user messages from past 2 days, grouped by restaurant
       const { data: messages } = await client
         .from('lingtin_chat_history')
         .select('restaurant_id, content, created_at')
         .eq('role', 'user')
-        .gte('created_at', weekAgo)
+        .gte('created_at', sinceDate)
         .order('created_at', { ascending: true });
 
       if (!messages?.length) {
@@ -782,7 +782,7 @@ ${entry.reviewer_note}
         return;
       }
 
-      // Group by restaurant, only analyze restaurants with 5+ messages
+      // Group by restaurant, only analyze restaurants with 3+ messages (lowered from 5 for 2-day window)
       const byRestaurant = new Map<string, string[]>();
       for (const m of messages) {
         const rid = m.restaurant_id || 'unknown';
@@ -793,11 +793,11 @@ ${entry.reviewer_note}
       let gapsCreated = 0;
 
       for (const [restaurantId, msgs] of byRestaurant) {
-        if (msgs.length < 5) continue;
+        if (msgs.length < 3) continue;
 
         // Use Gemini Flash to identify repeated question themes
         const sampleMsgs = msgs.slice(0, 50).map((m, i) => `${i + 1}. ${m}`).join('\n');
-        const prompt = `你是餐饮SaaS产品分析师。以下是某门店店长/管理者在智库对话中提出的问题（最近一周）。
+        const prompt = `你是餐饮SaaS产品分析师。以下是某门店店长/管理者在智库对话中提出的问题（最近2天）。
 
 请归纳出反复出现的问题主题，这些主题代表系统知识库的缺口——用户需要但系统目前没有主动提供的信息。
 
@@ -840,7 +840,7 @@ ${sampleMsgs}
               frequency: gap.frequency,
               example_questions: gap.example_questions,
               gap_description: gap.gap_description,
-              analysis_period: `${weekAgo.split('T')[0]} ~ ${new Date().toISOString().split('T')[0]}`,
+              analysis_period: `${sinceDate.split('T')[0]} ~ ${new Date().toISOString().split('T')[0]}`,
               total_messages: msgs.length,
             },
             source_type: 'auto',
@@ -865,27 +865,27 @@ ${sampleMsgs}
   }
 
   /**
-   * Weekly user behavior analysis.
+   * User behavior analysis.
    * Analyzes activity logs + visit patterns to extract management signals.
-   * Runs at 07:30 UTC every Monday (15:30 CST).
+   * Runs every 3 days at 17:30 UTC (01:30 CST next day).
    */
-  @Cron('30 7 * * 1')
+  @Cron('30 17 */3 * *')
   async analyzeUserBehavior() {
-    this.logger.log('Running weekly behavior analysis...');
+    this.logger.log('Running behavior analysis (every 3 days)...');
     try {
       const client = this.supabase.getClient();
-      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const sinceDate = new Date(Date.now() - 3 * 86400000).toISOString(); // past 3 days
 
       // 1. Get activity logs grouped by user (capped at 10000 for safety)
       const { data: activities } = await client
         .from('lingtin_user_activity_log')
         .select('user_id, role_code, action_type, method, path, created_at')
-        .gte('created_at', weekAgo)
+        .gte('created_at', sinceDate)
         .order('created_at', { ascending: true })
         .limit(10000);
 
       if (!activities?.length) {
-        this.logger.log('No activity logs found for the past week');
+        this.logger.log('No activity logs found for the past 3 days');
         return;
       }
 
@@ -897,11 +897,11 @@ ${sampleMsgs}
         userMap.get(key)!.push(a);
       }
 
-      // 2. Get visit records for the week (core signal, capped at 10000)
+      // 2. Get visit records for past 3 days (core signal, capped at 10000)
       const { data: visits } = await client
         .from('lingtin_visit_records')
         .select('restaurant_id, table_id, created_at, duration, visit_period')
-        .gte('created_at', weekAgo)
+        .gte('created_at', sinceDate)
         .order('created_at', { ascending: true })
         .limit(10000);
 
