@@ -73,6 +73,8 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
   const WAVEFORM_UPDATE_INTERVAL = 50; // Update every 50ms (20fps) instead of every frame (60fps)
   // Store visibilitychange handler ref for proper cleanup
   const visibilityHandlerRef = useRef<(() => void) | null>(null);
+  // Wake Lock to prevent screen off during recording (HarmonyOS/Android)
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -91,6 +93,9 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       }
       if (visibilityHandlerRef.current) {
         document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
+      }
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
       }
     };
   }, []);
@@ -121,6 +126,10 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       audioContextRef.current = null;
     }
     setAnalyserData(null);
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
     if (visibilityHandlerRef.current) {
       document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
       visibilityHandlerRef.current = null;
@@ -165,6 +174,17 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
     setError('录音被中断，已保存已录制部分');
   }, [cleanupResources]);
 
+  // Wake Lock: prevent screen off during recording
+  const acquireWakeLock = useCallback(async () => {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen');
+      console.log('[useAudioRecorder] Wake Lock acquired');
+    } catch (err) {
+      console.warn('[useAudioRecorder] Wake Lock failed:', err);
+    }
+  }, []);
+
   // Detect app going to background — if MediaRecorder was silently killed, emergency-save
   const handleVisibilityChange = useCallback(() => {
     if (document.hidden && isRecordingRef.current) {
@@ -173,8 +193,11 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
       if (recorder && recorder.state === 'inactive') {
         emergencySave(recorder);
       }
+    } else if (!document.hidden && isRecordingRef.current && !wakeLockRef.current) {
+      // Re-acquire wake lock when returning to foreground (lock auto-releases on tab switch)
+      acquireWakeLock();
     }
-  }, [emergencySave]);
+  }, [emergencySave, acquireWakeLock]);
 
   // Animation loop for waveform visualization (uses refs to avoid stale closures)
   // Uses getByteTimeDomainData for evenly distributed amplitude data (not frequency)
@@ -305,13 +328,16 @@ export function useAudioRecorder(): [AudioRecorderState, AudioRecorderActions] {
 
       // Start visualization (now refs are already set)
       startVisualization();
+
+      // Prevent screen from turning off during recording
+      acquireWakeLock();
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法访问麦克风');
       console.error('Recording error:', err);
     } finally {
       isStartingRef.current = false;
     }
-  }, [startVisualization, emergencySave, handleVisibilityChange]);
+  }, [startVisualization, emergencySave, handleVisibilityChange, acquireWakeLock]);
 
   const stopRecording = useCallback(() => {
     // Guard against duplicate stops using ref (more reliable than state)

@@ -20,6 +20,24 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.5.2',
+    date: '2026-03-14',
+    roles: ['manager', 'administrator', 'head_chef'],
+    title: '录音体验优化',
+    items: [
+      {
+        title: '录音防息屏',
+        howToUse: '开始录音后屏幕将保持常亮，无需担心手机自动息屏导致录音中断。',
+        value: '录音更稳定，不再因息屏丢失宝贵的桌访录音。',
+      },
+      {
+        title: '录音保存确认',
+        howToUse: '停止录音后会显示「保存」和「丢弃」按钮，误触停止可直接丢弃重录。30秒无操作自动保存。',
+        value: '误触不再焦虑，可以从容选择保存或重来。',
+      },
+    ],
+  },
+  {
     version: '2.5.1',
     date: '2026-03-12',
     roles: ['manager', 'administrator', 'head_chef'],

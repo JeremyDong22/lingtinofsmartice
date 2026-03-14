@@ -21,6 +21,7 @@ import { PreMealReminder } from '@/components/recorder/PreMealReminder';
 import { MeetingHistory } from '@/components/recorder/MeetingHistory';
 import { StealthOverlay } from '@/components/recorder/StealthOverlay';
 import { MeetingDetail } from '@/components/recorder/MeetingDetail';
+import { RecordingConfirmation } from '@/components/recorder/RecordingConfirmation';
 import { useAudioPlayback } from '@/components/shared/FeedbackWidgets';
 import { MotivationBanner } from '@/components/recorder/MotivationBanner';
 import { ExecutionPanel } from '@/components/recorder/ExecutionPanel';
@@ -70,6 +71,7 @@ export default function RecorderPage() {
   const [mode, setMode] = useState<RecorderMode>('visit');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
+  const [pendingConfirmation, setPendingConfirmation] = useState(false);
   const [selectedDate, setSelectedDate] = useState('今日');
   const [stealthMode, setStealthMode] = useState(false);
 
@@ -86,6 +88,7 @@ export default function RecorderPage() {
   const isRetryingRef = useRef(false);
   const pendingTableIdRef = useRef<string>('');
   const pendingMeetingTypeRef = useRef<MeetingType | ''>('');
+  const stoppedDurationRef = useRef<number>(0);
 
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
@@ -234,10 +237,11 @@ export default function RecorderPage() {
 
   const handleVisitStop = useCallback(async () => {
     pendingTableIdRef.current = tableId;
+    stoppedDurationRef.current = duration;
     stopRecording();
-    setPendingSave(true);
+    setPendingConfirmation(true);
     setTableId('');
-  }, [stopRecording, tableId]);
+  }, [stopRecording, tableId, duration]);
 
   // --- Meeting mode handlers ---
   const handleMeetingStart = useCallback(async () => {
@@ -250,14 +254,29 @@ export default function RecorderPage() {
 
   const handleMeetingStop = useCallback(async () => {
     pendingMeetingTypeRef.current = meetingType;
+    stoppedDurationRef.current = duration;
     stopRecording();
-    setPendingSave(true);
+    setPendingConfirmation(true);
     setMeetingType('');
-  }, [stopRecording, meetingType]);
+  }, [stopRecording, meetingType, duration]);
 
   // Unified start/stop based on mode
   const handleStart = mode === 'visit' ? handleVisitStart : handleMeetingStart;
   const handleStop = mode === 'visit' ? handleVisitStop : handleMeetingStop;
+
+  // Post-stop confirmation handlers
+  const handleConfirmSave = useCallback(() => {
+    setPendingConfirmation(false);
+    setPendingSave(true);
+  }, []);
+
+  const handleConfirmDiscard = useCallback(() => {
+    setPendingConfirmation(false);
+    pendingTableIdRef.current = '';
+    pendingMeetingTypeRef.current = '';
+    resetRecording();
+    showToast('录音已丢弃', 'info');
+  }, [resetRecording, showToast]);
 
   // When audioBlob is ready after stopping, save and process
   useEffect(() => {
@@ -500,6 +519,15 @@ export default function RecorderPage() {
               {formatDuration(duration)}
             </p>
           </div>
+        )}
+
+        {/* Post-stop confirmation: save or discard */}
+        {pendingConfirmation && !isRecording && (
+          <RecordingConfirmation
+            duration={stoppedDurationRef.current}
+            onSave={handleConfirmSave}
+            onDiscard={handleConfirmDiscard}
+          />
         )}
 
         {/* Mode-specific content */}
