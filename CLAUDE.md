@@ -5,6 +5,7 @@
 餐饮行业语音智能管理平台，以消费者反馈驱动管理闭环：**说了 → 记了 → 做了 → 验了**。当前阶段聚焦**店长单店闭环**（桌访录音 + AI 分析 + 行动建议）。
 
 > 完整产品定义见 [docs/PRD.md](docs/PRD.md)，开发规范见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)，产品反馈与需求记录见 [docs/FEEDBACK-LOG.md](docs/FEEDBACK-LOG.md)。
+> 产品迭代路线图见 [docs/ROADMAP.md](docs/ROADMAP.md)。
 
 ## 技术栈
 
