@@ -8,6 +8,7 @@ import { DashScopeSttService } from './dashscope-stt.service';
 import { DiarizationStatus, SttModel, SttResult } from '../../common/types/stt';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { KnowledgeExtractorService } from '../knowledge/knowledge-extractor.service';
+import { FeedbackIssuesService } from '../feedback-issues/feedback-issues.service';
 
 // OpenRouter API Configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -46,6 +47,7 @@ export class AiProcessingService {
     private readonly dashScopeStt: DashScopeSttService,
     private readonly knowledgeService: KnowledgeService,
     private readonly knowledgeExtractor: KnowledgeExtractorService,
+    private readonly feedbackIssues: FeedbackIssuesService,
   ) {}
 
   /**
@@ -155,6 +157,16 @@ export class AiProcessingService {
         aiSummary: aiResult.aiSummary,
         tableId,
       }).catch(e => this.logger.warn('Knowledge extraction failed (non-fatal)', e));
+
+      // Step 6: Aggregate feedbacks into issues (fire-and-forget)
+      this.feedbackIssues.aggregateSingleVisit({
+        id: recordingId,
+        restaurant_id: restaurantId,
+        table_id: tableId,
+        audio_url: audioUrl,
+        feedbacks: aiResult.feedbacks,
+        created_at: new Date().toISOString(),
+      }).catch(e => this.logger.warn('Feedback issue aggregation failed (non-fatal)', e));
 
       const totalTime = Date.now() - startTime;
       this.logger.log(`Pipeline: ${tableId} 完成 (${(totalTime / 1000).toFixed(1)}s)`);

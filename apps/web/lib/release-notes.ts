@@ -20,6 +20,34 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.7.0',
+    date: '2026-03-15',
+    roles: ['manager', 'administrator', 'head_chef', 'ceo', 'brand_director'],
+    title: '反馈聚合问题追踪系统',
+    items: [
+      {
+        title: '问题追踪看板',
+        howToUse: '打开看板页面，在"顾客反馈"下方查看"问题追踪"区块。系统自动将同类反馈聚合为问题，展示频次趋势',
+        value: '不再逐条看反馈，聚合后一眼看到哪些问题最严重、趋势如何',
+      },
+      {
+        title: '三种分类操作',
+        howToUse: '对每个问题点击"已处理"记录措施、"待办"标记跟进、"忽略"标注原因。待办超3天黄色提醒，超7天红色',
+        value: '明确区分已处理/待办/忽略，待办自动累积天数提醒不遗忘',
+      },
+      {
+        title: '管理层反馈透明度',
+        howToUse: '管理层在简报页查看"反馈透明度"区块，点击门店展开查看问题详情和操作记录，可回复意见',
+        value: '一屏看完所有门店问题状态，发现异常立刻回复指示',
+      },
+      {
+        title: '厨房问题趋势',
+        howToUse: '厨师长打开看板，顶部显示活跃问题数和趋势，下方列出厨房相关问题，支持语音录入处理措施',
+        value: '专注厨房相关反馈，趋势图验证改善效果',
+      },
+    ],
+  },
+  {
     version: '2.6.4',
     date: '2026-03-15',
     roles: ['manager', 'administrator', 'head_chef', 'ceo', 'brand_director'],

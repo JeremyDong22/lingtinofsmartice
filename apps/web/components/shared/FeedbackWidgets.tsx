@@ -138,6 +138,40 @@ export function useAudioPlayback() {
   return { playingKey, currentTime, duration, isBuffering, stopAudio, handleAudioToggle, seekTo };
 }
 
+// --- Sparkline for daily counts (7-day trend bar chart) ---
+export function DailyCountsSparkline({ dailyCounts }: { dailyCounts: Array<{ date: string; count: number }> }) {
+  const now = Date.now();
+  const countMap = new Map(dailyCounts.map(d => [d.date, d.count]));
+  const bars: string[] = [];
+  let max = 1;
+  const values: number[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now - i * 86400000);
+    const v = countMap.get(d.toISOString().slice(0, 10)) ?? 0;
+    values.push(v);
+    if (v > max) max = v;
+  }
+  for (const v of values) {
+    const r = v / max;
+    bars.push(r === 0 ? '▁' : r <= 0.25 ? '▂' : r <= 0.5 ? '▃' : r <= 0.75 ? '▅' : '▇');
+  }
+  return <span className="text-xs text-gray-400 font-mono">{bars.join('')}</span>;
+}
+
+// --- Helper: count occurrences in last 7 days ---
+export function getWeekCount(dailyCounts: Array<{ date: string; count: number }>): number {
+  const cutoff = Date.now() - 7 * 86400000;
+  return dailyCounts
+    .filter(d => new Date(d.date).getTime() >= cutoff)
+    .reduce((s, d) => s + d.count, 0);
+}
+
+// --- Helper: days elapsed since a date string ---
+export function daysSince(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+}
+
 // --- Inline audio player with progress bar ---
 function formatTime(s: number): string {
   if (!isFinite(s) || s < 0) return '0:00';
