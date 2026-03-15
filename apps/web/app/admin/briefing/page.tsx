@@ -12,6 +12,7 @@ import { getCacheConfig } from '@/contexts/SWRProvider';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { BenchmarkPanel } from '@/components/admin/BenchmarkPanel';
 import { ExecutionStatus } from '@/components/admin/ExecutionStatus';
+import { FeedbackTransparency } from '@/components/admin/FeedbackTransparency';
 import type { FeedbackLoopResponse } from '@/components/admin/ExecutionStatus';
 import { getChinaYesterday, singleDay, dateRangeParams } from '@/lib/date-utils';
 import type { DateRange } from '@/lib/date-utils';
@@ -237,6 +238,12 @@ export default function AdminBriefingPage() {
             managedIdsParam={managedIdsParam}
           />
         </div>
+
+        {/* Feedback Transparency - cross-store issue tracking */}
+        <FeedbackTransparency
+          managedIdsParam={managedIdsParam}
+          userName={user?.employeeName || user?.username || '管理层'}
+        />
 
         {/* Brand-level KPI charts are now inside ExecutionStatus per brand */}
 

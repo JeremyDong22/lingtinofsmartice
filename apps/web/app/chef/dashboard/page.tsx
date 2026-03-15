@@ -14,6 +14,7 @@ import { getDateForSelection } from '@/lib/date-utils';
 import type { ActionItem, ActionItemsResponse } from '@/lib/action-item-constants';
 import { CATEGORY_LABELS, PRIORITY_CONFIG, STATUS_CONFIG } from '@/lib/action-item-constants';
 import { getCacheConfig } from '@/contexts/SWRProvider';
+import { ChefIssuesSection } from '@/components/chef/ChefIssuesSection';
 
 // Filter: kitchen-relevant items — prefer assigned_role, fallback to keyword matching for legacy data
 function isKitchenRelevant(item: ActionItem): boolean {
@@ -138,6 +139,14 @@ export default function ChefDashboardPage() {
           </div>
         )}
 
+        {/* Kitchen Issues - aggregated feedback tracking */}
+        {restaurantId && (
+          <ChefIssuesSection
+            restaurantId={restaurantId}
+            userName={user?.employeeName}
+          />
+        )}
+
         {/* Priority items — top 2 most critical */}
         {!isLoading && priorityItems.length > 0 && (
           <section>
@@ -181,7 +190,7 @@ export default function ChefDashboardPage() {
         {!isLoading && (
           <section>
             <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> 其他待办
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> 会议待办
             </h2>
             {otherTodayActions.length === 0 && priorityItems.length === 0 && otherYesterdayUnresolved.length === 0 ? (
               <div className="glass-card rounded-xl p-6 text-center">

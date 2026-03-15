@@ -26,7 +26,7 @@ function isCacheableKey(key: string): boolean {
   return key.includes('/api/dashboard/') || key.includes('/api/audio/') ||
     key.includes('/api/action-items') || key.includes('/api/meeting/') ||
     key.includes('/api/daily-summary') || key.includes('/api/feedback/') ||
-    key.includes('/api/question-templates');
+    key.includes('/api/feedback-issues') || key.includes('/api/question-templates');
 }
 
 // Get today's date string in YYYY-MM-DD (China time)

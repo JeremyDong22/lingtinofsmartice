@@ -8,9 +8,10 @@ import { AiProcessingService } from './ai-processing.service';
 import { XunfeiSttService } from './xunfei-stt.service';
 import { DashScopeSttService } from './dashscope-stt.service';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { FeedbackIssuesModule } from '../feedback-issues/feedback-issues.module';
 
 @Module({
-  imports: [KnowledgeModule],
+  imports: [KnowledgeModule, FeedbackIssuesModule],
   controllers: [AudioController],
   providers: [AudioService, AiProcessingService, XunfeiSttService, DashScopeSttService],
   exports: [AudioService, AiProcessingService, XunfeiSttService, DashScopeSttService],

@@ -13,6 +13,8 @@ import { getChinaToday, singleDay, dateRangeParams, isMultiDay, shiftDate } from
 import type { DateRange } from '@/lib/date-utils';
 import { DatePicker, useStorePresets } from '@/components/shared/DatePicker';
 import { FeedbackSection } from '@/components/dashboard/FeedbackSection';
+import { IssuesCard } from '@/components/dashboard/IssuesCard';
+import type { FeedbackIssuesResponse } from '@/lib/feedback-issues-api';
 import { useT } from '@/lib/i18n';
 import { getCacheConfig } from '@/contexts/SWRProvider';
 
@@ -127,6 +129,15 @@ export default function DashboardPage() {
     : null;
   const { data: kitchenActionsData } = useSWR<{ actions: { id: string; category: string; suggestion_text: string; status: string; response_note?: string | null; priority: string }[] }>(
     kitchenActionsParams ? `/api/action-items?${kitchenActionsParams}` : null,
+    { ...getCacheConfig('statistics') }
+  );
+
+  // Feedback issues (aggregated problem tracking)
+  const issuesSWRKey = restaurantId
+    ? `/api/feedback-issues?restaurant_id=${restaurantId}`
+    : null;
+  const { data: issuesData, isLoading: issuesLoading } = useSWR<FeedbackIssuesResponse>(
+    issuesSWRKey,
     { ...getCacheConfig('statistics') }
   );
 
@@ -259,6 +270,15 @@ export default function DashboardPage() {
           positiveFeedbacks={sentiment?.positive_feedbacks ?? []}
           suggestions={suggestions}
           loading={loading}
+        />
+
+        {/* Feedback Issues - aggregated problem tracking */}
+        <IssuesCard
+          issues={issuesData?.issues ?? []}
+          loading={issuesLoading}
+          role="manager"
+          userName={user?.employeeName}
+          swrKey={issuesSWRKey || ''}
         />
 
         {/* Kitchen Response Section */}
