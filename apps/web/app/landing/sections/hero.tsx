@@ -31,7 +31,7 @@ export function HeroSection() {
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center px-4 sm:px-0">
           <a
-            href="#flow"
+            href="#content"
             className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 glass-card rounded-xl font-medium text-base text-gray-700 hover:text-primary-600 transition-colors"
           >
             了解详情
