@@ -148,7 +148,7 @@ export function GuidedReviewFlow({
       </header>
 
       {/* Step content */}
-      <main className="flex-1 px-4 py-4 island-page-top island-page-bottom">
+      <main className="flex-1 px-4 py-4 pt-[108px] island-page-bottom">
         {currentStep === 'briefing' && (
           <ReviewStepBriefing
             summary={summary}
