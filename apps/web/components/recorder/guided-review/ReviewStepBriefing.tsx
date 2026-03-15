@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   BarChart3, CheckCircle2, Circle, AlertTriangle,
   ChevronDown, MessageSquareQuote, Mic,
@@ -13,6 +13,15 @@ import { getApiUrl } from '@/lib/api';
 import { getAuthHeaders } from '@/contexts/AuthContext';
 import type { DailySummaryData, ActionItemData, AgendaItem } from './types';
 import { SEVERITY_CONFIG, CATEGORY_LABELS, ROLE_LABELS } from './types';
+
+// Role grouping order matches meeting flow: chef speaks first, then front-of-house, manager, everyone
+const ROLE_ORDER = ['head_chef', 'front_of_house', 'manager', 'all'] as const;
+const ROLE_ICONS: Record<string, string> = {
+  head_chef: '👨‍🍳',
+  front_of_house: '🙋',
+  manager: '📋',
+  all: '👥',
+};
 
 interface ReviewStepBriefingProps {
   summary: DailySummaryData | null;
@@ -82,6 +91,50 @@ export function ReviewStepBriefing({
     }
   }, [completedIds, updatingId]);
 
+  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set());
+
+  const toggleRole = useCallback((role: string) => {
+    setExpandedRoles(prev => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  }, []);
+
+  const groupedActions = useMemo(() => {
+    const groups: { role: string; label: string; icon: string; items: ActionItemData[] }[] = [];
+    const byRole = new Map<string, ActionItemData[]>();
+    for (const action of pendingActions) {
+      const role = action.assigned_role || 'all';
+      if (!byRole.has(role)) byRole.set(role, []);
+      byRole.get(role)!.push(action);
+    }
+    for (const role of ROLE_ORDER) {
+      const items = byRole.get(role);
+      if (items && items.length > 0) {
+        groups.push({
+          role,
+          label: ROLE_LABELS[role] ?? role,
+          icon: ROLE_ICONS[role] ?? '📋',
+          items,
+        });
+      }
+    }
+    // Any roles not in ROLE_ORDER
+    for (const [role, items] of Array.from(byRole.entries())) {
+      if (!ROLE_ORDER.includes(role as typeof ROLE_ORDER[number]) && items.length > 0) {
+        groups.push({
+          role,
+          label: ROLE_LABELS[role] ?? role,
+          icon: '📋',
+          items,
+        });
+      }
+    }
+    return groups;
+  }, [pendingActions]);
+
   const agendaItems = summary?.agenda_items ?? [];
   const isLoading = summaryLoading || pendingLoading;
 
@@ -134,7 +187,7 @@ export function ReviewStepBriefing({
           )}
         </section>
 
-        {/* ── Section 2: Pending Actions ── */}
+        {/* ── Section 2: Pending Actions (grouped by role) ── */}
         {pendingLoading ? (
           <section>
             <div className="flex items-center gap-2 mb-3">
@@ -159,39 +212,76 @@ export function ReviewStepBriefing({
                 </span>
               )}
             </div>
-            <div className="space-y-1.5">
-              {pendingActions.map(action => {
-                const isCompleted = completedIds.has(action.id);
-                const isUpdating = updatingId === action.id;
+            <div className="space-y-2">
+              {groupedActions.map(group => {
+                const isExpanded = expandedRoles.has(group.role);
+                const groupCompleted = group.items.filter(a => completedIds.has(a.id)).length;
                 return (
-                  <button
-                    key={action.id}
-                    onClick={() => toggleComplete(action.id)}
-                    disabled={isUpdating}
-                    className={`w-full glass-card rounded-xl px-3 py-2.5 flex items-center gap-2.5 text-left transition-all ${
-                      isCompleted ? 'opacity-50' : ''
-                    }`}
-                  >
-                    {isCompleted ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                    ) : (
-                      <Circle className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                    )}
-                    <span className={`text-sm flex-1 ${isCompleted ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                      {action.suggestion_text}
-                    </span>
-                    {action.assigned_role && (
-                      <span className="text-xs text-gray-400 flex-shrink-0">
-                        {ROLE_LABELS[action.assigned_role] ?? ''}
+                  <div key={group.role} className="glass-card rounded-xl overflow-hidden">
+                    {/* Group header */}
+                    <button
+                      onClick={() => toggleRole(group.role)}
+                      className="w-full px-3 py-2.5 flex items-center gap-2 text-left"
+                    >
+                      <span className="text-base">{group.icon}</span>
+                      <span className="text-sm font-medium text-gray-900 flex-1">
+                        {group.label}
                       </span>
-                    )}
-                  </button>
+                      <span className="text-xs text-gray-400">
+                        {group.items.length}项
+                      </span>
+                      {groupCompleted > 0 && (
+                        <span className="text-xs text-green-600">
+                          已完成{groupCompleted}
+                        </span>
+                      )}
+                      <ChevronDown
+                        className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {/* Expandable items */}
+                    <div
+                      className="transition-all duration-200 overflow-hidden"
+                      style={{ maxHeight: isExpanded ? `${group.items.length * 56}px` : '0px' }}
+                    >
+                      <div className="px-2 pb-2 space-y-1">
+                        {group.items.map(action => {
+                          const isCompleted = completedIds.has(action.id);
+                          const isUpdating = updatingId === action.id;
+                          const categoryLabel = action.category ? CATEGORY_LABELS[action.category] : null;
+                          return (
+                            <button
+                              key={action.id}
+                              onClick={() => toggleComplete(action.id)}
+                              disabled={isUpdating}
+                              className={`w-full rounded-lg px-2.5 py-2 flex items-center gap-2 text-left transition-all ${
+                                isCompleted ? 'opacity-50 bg-gray-50' : 'bg-white/60'
+                              }`}
+                            >
+                              {isCompleted ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                              ) : (
+                                <Circle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                              )}
+                              <span className={`text-sm flex-1 ${isCompleted ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                {action.suggestion_text}
+                              </span>
+                              {categoryLabel && (
+                                <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                                  {categoryLabel}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
             </div>
           </section>
         ) : null}
-        {/* When no pending actions, skip section entirely — no noise */}
 
         {/* ── Section 3: Agenda (problems to discuss) ── */}
         <section>

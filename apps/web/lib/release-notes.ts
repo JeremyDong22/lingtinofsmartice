@@ -20,6 +20,19 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.6.2',
+    date: '2026-03-15',
+    roles: ['manager', 'head_chef'],
+    title: '复盘待办分组优化',
+    items: [
+      {
+        title: '上次待办按角色分组折叠',
+        howToUse: '每日复盘 → 会前简报页 → 待办自动按厨师长/前厅/店长/全员分组，点击展开查看。',
+        value: '会议中逐人点名确认待办更高效，不用在一堆待办里翻找。',
+      },
+    ],
+  },
+  {
     version: '2.6.1',
     date: '2026-03-15',
     roles: ['administrator'],
