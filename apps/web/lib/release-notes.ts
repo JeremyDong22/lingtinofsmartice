@@ -20,6 +20,19 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.6.4',
+    date: '2026-03-15',
+    roles: ['manager', 'administrator', 'head_chef', 'ceo', 'brand_director'],
+    title: 'Landing Page 移动端适配',
+    items: [
+      {
+        title: '产品介绍页移动端排版优化',
+        howToUse: '在手机或微信中打开 /landing 页面，各板块布局已适配小屏幕',
+        value: '微信/手机端浏览体验大幅提升，卡片双列排布、表格可横滑、按钮更易点击',
+      },
+    ],
+  },
+  {
     version: '2.6.3',
     date: '2026-03-15',
     roles: ['manager', 'administrator', 'head_chef', 'ceo', 'brand_director'],

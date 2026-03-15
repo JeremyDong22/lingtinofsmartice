@@ -60,7 +60,7 @@ export function ShareButton({ onShare }: { onShare: () => void }) {
   return (
     <button
       onClick={handleShare}
-      className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-primary-600 text-white shadow-lg shadow-primary-600/30 flex items-center justify-center hover:bg-primary-700 transition-colors"
+      className="fixed z-50 w-12 h-12 rounded-full bg-primary-600 text-white shadow-lg shadow-primary-600/30 flex items-center justify-center hover:bg-primary-700 transition-colors bottom-[calc(24px+env(safe-area-inset-bottom,0px))] right-[calc(16px+env(safe-area-inset-right,0px))]"
       aria-label="分享"
     >
       {copied ? (

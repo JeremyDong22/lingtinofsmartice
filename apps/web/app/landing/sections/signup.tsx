@@ -138,7 +138,7 @@ export function SignupSection({ track }: { track: (type: 'form_start' | 'form_su
             <textarea
               value={form.help_text}
               onChange={(e) => updateField('help_text', e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white/60 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent text-gray-800 placeholder-gray-400 resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/60 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent text-base text-gray-800 placeholder-gray-400 resize-none"
               rows={3}
               placeholder="例：顾客反馈无法系统化利用、多店管理标准难统一..."
             />
@@ -185,7 +185,7 @@ function FormField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white/60 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent text-gray-800 placeholder-gray-400"
+        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/60 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent text-base text-gray-800 placeholder-gray-400"
       />
     </div>
   );
@@ -202,7 +202,7 @@ function SelectField({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white/60 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent text-gray-800 appearance-none"
+        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/60 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent text-base text-gray-800 appearance-none"
       >
         <option value="">请选择</option>
         {options.map((opt) => (

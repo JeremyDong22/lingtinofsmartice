@@ -51,7 +51,7 @@ export function ProblemSection() {
                   </span>
                 </div>
                 <h3 className="text-lg font-bold text-gray-800 mb-2">信息{item.label}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed text-justify">{item.desc}</p>
+                <p className="text-sm text-gray-500 leading-relaxed">{item.desc}</p>
               </div>
               {i < entropy.length - 1 && (
                 <div className="hidden lg:flex absolute top-1/2 -right-2.5 -translate-y-1/2 z-10 text-gray-300">
@@ -76,7 +76,7 @@ export function ProblemSection() {
               <h3 className="text-xl font-bold text-gray-900 mb-2">
                 用智能驱动替代人力驱动
               </h3>
-              <p className="text-gray-600 text-[15px] leading-relaxed text-justify">
+              <p className="text-gray-600 text-sm sm:text-[15px] leading-relaxed">
                 信息在产生的瞬间即被系统捕获、结构化、分析并分发至对应决策者。
                 无人工中转、无层级过滤、无记忆衰减——从源头消除信息熵增。
               </p>
