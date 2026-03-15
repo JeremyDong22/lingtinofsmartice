@@ -20,6 +20,19 @@ export interface ReleaseNote {
 // All release notes, newest first
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.6.3',
+    date: '2026-03-15',
+    roles: ['manager', 'administrator', 'head_chef', 'ceo', 'brand_director'],
+    title: 'Landing Page V2 内容扩展',
+    items: [
+      {
+        title: '产品介绍页新增三大板块',
+        howToUse: '访问 /landing 页面查看完整产品介绍，包含闭环流程、核心能力、价值时间线',
+        value: '更全面地展示产品价值，助力品牌合作伙伴快速了解系统能力',
+      },
+    ],
+  },
+  {
     version: '2.6.2',
     date: '2026-03-15',
     roles: ['manager', 'head_chef'],
