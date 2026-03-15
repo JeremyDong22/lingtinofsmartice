@@ -16,9 +16,9 @@ export function ValueTimelineSection() {
           </p>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
           {VALUE_TIMELINE.map((phase) => (
-            <div key={phase.tag} className={`glass-card rounded-2xl p-6 border-t-4 ${phase.borderColor}`}>
+            <div key={phase.tag} className={`glass-card rounded-2xl p-5 sm:p-6 border-t-4 ${phase.borderColor}`}>
               <div className="flex items-center gap-3 mb-4">
                 <span className="inline-flex items-center justify-center px-3 py-1 rounded-lg bg-primary-50 text-primary-600 text-xs font-bold uppercase tracking-wider">
                   {phase.tag}

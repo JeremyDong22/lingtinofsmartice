@@ -16,9 +16,9 @@ export function ProvenCapabilitiesSection() {
           </p>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {PROVEN_CAPABILITIES.map((cap) => (
-            <div key={cap.tag} className="glass-card rounded-2xl p-5">
+            <div key={cap.tag} className="glass-card rounded-2xl p-3.5 sm:p-5">
               <div className="flex items-center gap-2 mb-3">
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-50 text-primary-600 text-xs font-bold">
                   {cap.num}
@@ -28,7 +28,7 @@ export function ProvenCapabilitiesSection() {
                 </span>
               </div>
               <h3 className="text-base font-semibold text-gray-800 mb-2">{cap.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed text-justify">{cap.desc}</p>
+              <p className="text-sm text-gray-500 leading-relaxed">{cap.desc}</p>
             </div>
           ))}
         </div>

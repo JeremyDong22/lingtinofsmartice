@@ -31,8 +31,8 @@ export function CapabilitiesSection() {
                 </span>
               </div>
               <h3 className="text-lg font-semibold text-gray-800 mb-3">{cap.title}</h3>
-              <p className="text-gray-600 text-[15px] leading-relaxed mb-3 text-justify">{cap.desc}</p>
-              <p className="text-xs text-gray-400 border-t border-gray-100/60 pt-3 text-justify">{cap.detail}</p>
+              <p className="text-gray-600 text-sm sm:text-[15px] leading-relaxed mb-3">{cap.desc}</p>
+              <p className="text-xs text-gray-400 border-t border-gray-100/60 pt-3">{cap.detail}</p>
             </div>
           ))}
         </div>

@@ -17,9 +17,9 @@ export function ClosedLoopSection() {
         </div>
 
         {/* 5-step flow */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="mt-12 grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
           {FLOW_STEPS.map((step, i) => (
-            <div key={step.tag} className="glass-card rounded-2xl p-5 text-center relative">
+            <div key={step.tag} className={`glass-card rounded-2xl p-4 md:p-5 text-center relative${i === FLOW_STEPS.length - 1 ? ' col-span-2 md:col-span-1' : ''}`}>
               <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center mx-auto mb-3">
                 <span className="text-primary-600 font-bold text-sm">{step.num}</span>
               </div>
@@ -27,7 +27,7 @@ export function ClosedLoopSection() {
                 {step.tag}
               </span>
               <h3 className="text-base font-semibold text-gray-800 mt-1 mb-2">{step.title}</h3>
-              <p className="text-xs text-gray-500 leading-relaxed text-justify">{step.desc}</p>
+              <p className="text-xs text-gray-500 leading-relaxed">{step.desc}</p>
               {i < FLOW_STEPS.length - 1 && (
                 <div className="hidden md:block absolute top-1/2 -right-3 -translate-y-1/2 text-gray-300 z-10">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -40,17 +40,17 @@ export function ClosedLoopSection() {
         </div>
 
         {/* Data stats bar */}
-        <div className="mt-10 grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="mt-10 grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
           {DATA_STATS.map((stat, i) => (
             <div
               key={stat.label}
-              className={`glass-card rounded-xl px-4 py-3 text-center${i === DATA_STATS.length - 1 ? ' col-span-2 sm:col-span-1' : ''}`}
+              className={`glass-card rounded-xl px-2 sm:px-4 py-2.5 sm:py-3 text-center${i >= 3 ? ' col-span-1' : ''}${i === 3 ? ' col-start-1' : ''}`}
             >
-              <p className="text-2xl font-bold text-primary-600">
+              <p className="text-xl sm:text-2xl font-bold text-primary-600">
                 {stat.value}
-                {stat.suffix && <span className="text-sm">{stat.suffix}</span>}
+                {stat.suffix && <span className="text-xs sm:text-sm">{stat.suffix}</span>}
               </p>
-              <p className="text-[11px] text-gray-400 mt-1">{stat.label}</p>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 mt-1">{stat.label}</p>
             </div>
           ))}
         </div>

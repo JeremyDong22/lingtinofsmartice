@@ -29,16 +29,16 @@ export function HeroSection() {
           重新定义餐饮运营范式：从经验驱动到智能驱动
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center px-4 sm:px-0">
           <a
             href="#flow"
-            className="inline-flex items-center justify-center px-8 py-3.5 glass-card rounded-xl font-medium text-base text-gray-700 hover:text-primary-600 transition-colors"
+            className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 glass-card rounded-xl font-medium text-base text-gray-700 hover:text-primary-600 transition-colors"
           >
             了解详情
           </a>
           <a
             href="#signup"
-            className="inline-flex items-center justify-center px-8 py-3.5 bg-primary-600 text-white rounded-xl font-medium text-base hover:bg-primary-700 transition-colors shadow-lg shadow-primary-600/20"
+            className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 bg-primary-600 text-white rounded-xl font-medium text-base hover:bg-primary-700 transition-colors shadow-lg shadow-primary-600/20"
           >
             申请内测合作
           </a>
