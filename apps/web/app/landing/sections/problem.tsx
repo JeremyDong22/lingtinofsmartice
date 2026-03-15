@@ -23,7 +23,7 @@ export function ProblemSection() {
   ];
 
   return (
-    <section className="py-20 px-4">
+    <section id="content" className="py-20 px-4">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-6">
           <span className="inline-block text-xs font-semibold tracking-widest text-primary-500 uppercase mb-3">
